@@ -105,6 +105,11 @@ void app_reinit(ff_app *a)
     SetEvent(a->wake);
 }
 
+void app_wake(ff_app *a)
+{
+    SetEvent(a->wake);
+}
+
 void app_set_fast(ff_app *a, int on)
 {
     InterlockedExchange(&a->fast, on ? 1 : 0);

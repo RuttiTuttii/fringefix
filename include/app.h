@@ -10,6 +10,7 @@
 #define WM_APP_UPDATE_INFO (WM_APP + 2)
 #define WM_APP_INSTALL_DONE (WM_APP + 3)
 #define WM_APP_GFX_ERROR (WM_APP + 4)
+#define WM_APP_STATE (WM_APP + 5)
 
 #define PROFILE_NAME_LEN 64
 
@@ -28,6 +29,8 @@ typedef struct {
     volatile LONG reinit;
     volatile LONG quit;
     volatile LONG fast;
+    /* оверлей приостановлен автопаузой: идёт игра или полноэкранное приложение */
+    volatile LONG suspended;
 } ff_app;
 
 /* пути, конфиг и событие пробуждения; 0 или -1 */
@@ -46,6 +49,9 @@ void app_set_enabled(ff_app *a, int on);
 
 /* сменили монитор: захват надо пересоздать */
 void app_reinit(ff_app *a);
+
+/* параметры вида поменялись без пересоздания захвата, например режим автопаузы */
+void app_wake(ff_app *a);
 
 /* окно настроек открыто: поток захвата отвечает на правки чаще */
 void app_set_fast(ff_app *a, int on);

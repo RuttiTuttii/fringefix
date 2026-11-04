@@ -3,13 +3,18 @@
 #include <string.h>
 
 #include "app.h"
+#include "gamedetect.h"
 #include "gfx.h"
+#include "output.h"
 
 #define FRAME_WAIT_MS 100
 #define FRAME_WAIT_UI_MS 16
 #define RETRY_MS 500
 #define STOP_WAIT_MS 5000
 #define REASSERT_MS 2000
+#define DETECT_MS 500
+/* пауза снимается после стольких подряд проверок без игры: alt-tab туда и обратно не должен пересоздавать устройство */
+#define RESUME_CHECKS 2
 
 static void pump_messages(void)
 {
@@ -31,6 +36,37 @@ static void report_error(ff_app *a, const char *err)
     }
 }
 
+/* смена паузы сообщается интерфейсу: значок в трее серый, пока идёт игра */
+static void set_paused(ff_app *a, int *paused, int now)
+{
+    if (now == *paused) {
+        return;
+    }
+    *paused = now;
+    InterlockedExchange(&a->suspended, now);
+    PostMessageW(a->hwnd, WM_APP_STATE, 0, 0);
+}
+
+/* раз в DETECT_MS спрашивает, не игра ли на переднем плане; true, пока оверлей должен молчать */
+static int auto_pause(ff_app *a, const RECT *mon, int *paused, int *clear, ULONGLONG *next)
+{
+    ULONGLONG now = GetTickCount64();
+
+    if (a->cfg.auto_pause == 0) {
+        set_paused(a, paused, 0);
+        *clear = 0;
+    } else if (now >= *next) {
+        *next = now + DETECT_MS;
+        if (game_detect(a->cfg.auto_pause, mon) != GAME_NONE) {
+            *clear = 0;
+            set_paused(a, paused, 1);
+        } else if (*paused && ++*clear >= RESUME_CHECKS) {
+            set_paused(a, paused, 0);
+        }
+    }
+    return *paused;
+}
+
 static DWORD WINAPI capture_main(LPVOID arg)
 {
     ff_app *a = arg;
@@ -39,6 +75,10 @@ static DWORD WINAPI capture_main(LPVOID arg)
     int started_ok = 0;
     int force = 0;
     ULONGLONG last_assert = 0;
+    ULONGLONG next_detect = 0;
+    int paused = 0;
+    int clear = 0;
+    RECT mon = { 0, 0, 0, 0 };
 
     memset(&g, 0, sizeof g);
     while (!a->quit) {
@@ -54,6 +94,13 @@ static DWORD WINAPI capture_main(LPVOID arg)
             continue;
         }
 
+        /* на паузе устройство и окно не держим: полноэкранная игра снова получает прямой вывод без композиции */
+        if (auto_pause(a, &mon, &paused, &clear, &next_detect)) {
+            gfx_shutdown(&g);
+            WaitForSingleObject(a->wake, DETECT_MS);
+            continue;
+        }
+
         if (!g.alive) {
             if (gfx_init(&g, a->cfg.monitor, err) != 0) {
                 /* ошибку при первом запуске показываем, потеря захвата на UAC или смене режима тихо лечится повтором */
@@ -66,6 +113,7 @@ static DWORD WINAPI capture_main(LPVOID arg)
                 continue;
             }
             started_ok = 1;
+            ff_output_rect(a->cfg.monitor, &mon);
             InterlockedExchange(&a->dirty, 1);
         }
 
