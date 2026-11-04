@@ -4,7 +4,7 @@
 
 A Windows overlay that shifts the colour channels of the finished frame by fractions of a pixel to cancel colour fringing on QD-OLED panels with the triangular subpixel layout (4th generation and earlier). Lives in the tray, tuned with sliders, updates from GitHub Releases.
 
-> limitations: the project builds with mingw-w64 without warnings and the portable-module tests pass (`make test`). Version 0.1.0 ran on one machine with a 4K QD-OLED in SDR: the tray, settings window and overlay worked. The HDR path, updater, dark theme, typed values, profiles, the wizard and auto-pause are unverified. Requires Windows 10 2004 or newer. Updates work only with a public repository: for a private one the GitHub API answers 404 without a token.
+> limitations: the project builds with mingw-w64 without warnings and the portable-module tests pass (`make test`). Version 0.1.0 ran on one machine with a 4K QD-OLED in SDR: the tray, settings window and overlay worked. The HDR path, updater, version picker, dark theme, typed values, profiles, the wizard, auto-pause and light mode are unverified. Requires Windows 10 2004 or newer. Updates work only with a public repository: for a private one the GitHub API answers 404 without a token.
 
 ## running
 
@@ -65,6 +65,23 @@ a fullscreen app is an active window with no title bar or frame that covers the 
 - the rest of the latency is built into the scheme: the desktop is captured after DWM composition, the overlay is drawn and composed again, at least one or two frames. For games the answer is auto-pause
 - I did not measure values in milliseconds
 
+## games
+
+the Image card of the settings window has two rows, both work with auto-pause:
+
+- "Auto-pause": when to consider a game running (off, fullscreen, fullscreen and 3D apps)
+- "Action in games": "Pause" releases the device and the overlay window, "Light mode" keeps the overlay but the shader does one shift per channel without the laplacian and sharpness and costs almost nothing. Light mode does not remove DWM composition, so only a pause lifts the game latency
+
+more in `fringefix.ini`:
+
+- `pause_apps = game.exe;other.exe` always treat as a game even when the window is not fullscreen; a name without `.exe` also fits, case is ignored
+- `ignore_apps = player.exe` never treat as a game, for example a fullscreen video player
+- `gpu_priority = -3` GPU priority of the overlay thread from -7 to 7; below zero the overlay yields the GPU to the game, which reduces the FPS cost in light mode
+
+## versions and rollback
+
+the "Versions..." button in the settings window opens a list of the repository releases (up to the latest 30 that have `fringefix.exe` and `fringefix.exe.sha256`). Picking a version newer than the current one installs an update, older installs a rollback. Versions are not compared during installation: the hash check and the exe swap are the same as in a normal update, settings in `%APPDATA%` stay. Old releases are not overwritten: to go back to a version it must stay in Releases.
+
 ## profiles
 
 - "Save profile..." and "Load profile..." work with JSON files, the default folder is `%APPDATA%\fringefix\profiles`
@@ -95,7 +112,8 @@ Out-of-range values are clamped, broken ones are skipped, a file without the `fo
 ```
 main.c ─ ui_tray.c ─ ui_settings.c ─ ui_controls.c, ui_paint.c, slider.c, theme.c
   │         │            └─ ui_profile.c, ui_wizard.c ─ layout.c, pattern.c
-  │         └─ ui_update.c ─ update.c ─ http.c, sha256.c, release.c
+  │         │            └─ ui_versions.c
+  │         └─ ui_update.c ─ update.c, update_install.c ─ http.c, sha256.c, release.c
   └─ app.c ─ config.c, profile.c, profile_io.c, i18n.c
        └─ capture.c (own thread) ─ gamedetect.c ─ applist.c
             └─ gfx.c, gfx_frame.c, gfx_sig.c ─ shader.c, output.c
@@ -128,6 +146,11 @@ make test
 ```
 
 ```bash
+# the same tests under ASan and UBSan, warnings as errors; CC=clang works too
+make test SAN=1 WERROR=1
+```
+
+```bash
 # Windows build with the mingw-w64 cross compiler, REPO enables update checks
 make win REPO=owner/fringefix
 ```
@@ -141,6 +164,15 @@ make win CC_WIN=gcc WINDRES=windres REPO=owner/fringefix
 # release: a vX.Y.Z tag runs the GitHub Actions build and publishes the exe with its sha256 file
 git tag v0.1.0 && git push origin v0.1.0
 ```
+
+## CI on GitHub Actions
+
+- `linux`: tests of the portable modules on Ubuntu with two compilers (gcc and clang) under ASan and UBSan, warnings as errors
+- `cross`: a full exe build with the mingw-w64 cross compiler on Ubuntu, warnings as errors, the imported DLL list in the log, the exe in artifacts
+- `build`: the release build in msys2 UCRT64 on a Windows runner
+- `release`: on a `vX.Y.Z` tag, only if all three previous jobs are green
+
+the application runs on Windows only: capture through DXGI Desktop Duplication and output through Direct3D 11 do not port to Linux. On Linux the CI checks the code and builds the exe but does not run it.
 
 ## not done
 
