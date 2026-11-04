@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="wizard">
+  <style>
+    .ink { fill: none; stroke: #94a3b8; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    .fill { fill: #94a3b8; }
+    .bg { fill: #131a2a; }
+    .t1 { fill: #f1f4fb; }
+    .t2 { fill: #9aa5bd; }
+    .box { fill: #1c2538; stroke: #31405e; }
+    .chip { fill: #1c2538; stroke: #31405e; }
+    .arrow { fill: none; stroke: #6b7a99; stroke-width: 2.5; }
+    @media (prefers-color-scheme: light) {
+      .ink { stroke: #475569; }
+      .fill { fill: #475569; }
+      .bg { fill: #eef1f8; }
+      .t1 { fill: #131a2a; }
+      .t2 { fill: #566079; }
+      .box { fill: #ffffff; stroke: #cfd7e6; }
+      .chip { fill: #ffffff; stroke: #cfd7e6; }
+      .arrow { stroke: #7a88a6; }
+    }
+  </style>
+  <path class="ink" d="M13 51L38 26"/><path d="M38 26l5 5" stroke="#3b82f6" stroke-width="7" stroke-linecap="round"/><path d="M46 6L48.24 11.76L54 14L48.24 16.240000000000002L46 22L43.76 16.240000000000002L38 14L43.76 11.76Z" fill="#22c55e"/><path d="M54 25L55.4 28.6L59 30L55.4 31.4L54 35L52.6 31.4L49 30L52.6 28.6Z" fill="#ef4444"/><path d="M24 8L25.68 12.32L30 14L25.68 15.68L24 20L22.32 15.68L18 14L22.32 12.32Z" fill="#3b82f6"/>
+</svg>

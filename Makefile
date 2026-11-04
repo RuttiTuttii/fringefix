@@ -51,7 +51,13 @@ build/test_profile: src/config.c
 icons:
 	python3 -I tools/make_icons.py
 
+# рисунки для README: симуляция, макеты окон, баннер, значки и схема
+docs-assets:
+	python3 -I tools/make_demo.py
+	python3 -I tools/make_screens.py
+	python3 -I tools/make_readme_assets.py
+
 clean:
 	rm -rf build
 
-.PHONY: win test icons clean
+.PHONY: win test icons docs-assets clean

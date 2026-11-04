@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300" role="img" aria-label="fringefix">
+  <style>
+    .ink { fill: none; stroke: #94a3b8; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    .fill { fill: #94a3b8; }
+    .bg { fill: #131a2a; }
+    .t1 { fill: #f1f4fb; }
+    .t2 { fill: #9aa5bd; }
+    .box { fill: #1c2538; stroke: #31405e; }
+    .chip { fill: #1c2538; stroke: #31405e; }
+    .arrow { fill: none; stroke: #6b7a99; stroke-width: 2.5; }
+    @media (prefers-color-scheme: light) {
+      .ink { stroke: #475569; }
+      .fill { fill: #475569; }
+      .bg { fill: #eef1f8; }
+      .t1 { fill: #131a2a; }
+      .t2 { fill: #566079; }
+      .box { fill: #ffffff; stroke: #cfd7e6; }
+      .chip { fill: #ffffff; stroke: #cfd7e6; }
+      .arrow { stroke: #7a88a6; }
+    }
+  </style>
+  <rect class="bg" width="1200" height="300" rx="22"/>
+  <circle cx="108" cy="188" r="50" fill="#ef4444"/><circle cx="212" cy="188" r="50" fill="#3b82f6"/><circle cx="160" cy="96" r="50" fill="#22c55e"/>
+  <text class="t1" x="330" y="142" font-family="system-ui, 'Segoe UI', sans-serif" font-size="76" font-weight="700">fringefix</text>
+  <text class="t2" x="332" y="190" font-family="system-ui, 'Segoe UI', sans-serif" font-size="22">A Windows overlay that removes colour fringing from text on QD-OLED</text>
+  <rect class="chip" x="330" y="214" width="152" height="36" rx="18"/><text class="t2" x="406" y="238" font-family="system-ui, 'Segoe UI', sans-serif" font-size="15" text-anchor="middle">Windows 10 2004+</text><rect class="chip" x="495.6" y="214" width="186" height="36" rx="18"/><text class="t2" x="589" y="238" font-family="system-ui, 'Segoe UI', sans-serif" font-size="15" text-anchor="middle">DXGI and Direct3D 11</text><rect class="chip" x="695.6" y="214" width="91" height="36" rx="18"/><text class="t2" x="741" y="238" font-family="system-ui, 'Segoe UI', sans-serif" font-size="15" text-anchor="middle">RU and EN</text>
+</svg>
