@@ -1,1 +1,3 @@
 1 24 "src/res/fringefix.manifest"
+1 ICON "src/res/fringefix.ico"
+2 ICON "src/res/fringefix_off.ico"
