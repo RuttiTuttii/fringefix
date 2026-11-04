@@ -20,6 +20,10 @@ static const wchar_t *const NONGAME[] = {
     L"epicgameslauncher.exe", L"claude.exe", L"blender.exe",
     /* панель NVIDIA App на Electron грузит d3d11 и без этой строки считалась бы игрой */
     L"nvidia app.exe", L"nvcplui.exe",
+    /* IDE на Java2D, WinUI и XAML-программы Windows 11, запись экрана: грузят d3d9 или d3d11 ради интерфейса */
+    L"idea64.exe", L"pycharm64.exe", L"rider64.exe", L"clion64.exe", L"goland64.exe",
+    L"webstorm64.exe", L"phpstorm64.exe", L"datagrip64.exe", L"taskmgr.exe", L"mspaint.exe",
+    L"snippingtool.exe", L"obs64.exe",
 };
 
 /* имя файла без папки в нижнем регистре; слишком длинное имя не может быть в списке */
@@ -82,7 +86,8 @@ static void narrow(const wchar_t *w, char *out, size_t n)
 
 static int item_matches(const char *item, size_t len, const char *name)
 {
-    char buf[NAME_MAX_W];
+    /* имя до NAME_MAX_W - 1 символов плюс ".exe" для элемента без точки */
+    char buf[NAME_MAX_W + 5];
     size_t i;
 
     if (len == 0 || len + 5 >= sizeof buf) {

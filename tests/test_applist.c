@@ -1,4 +1,5 @@
 #include <string.h>
+#include <wchar.h>
 
 #include "applist.h"
 #include "test.h"
@@ -35,6 +36,24 @@ int main(void)
     CHECK(!ff_app_list_has("game.exe", NULL));
     /* точка у элемента значит имя целиком: "game.exe" не совпадает с "game" */
     CHECK(!ff_app_list_has("game.exe", L"game"));
+    /* длинное имя: то, что добавилось, должно и находиться, и убираться */
+    {
+        char list[128] = "";
+        wchar_t longname[64];
+        int i;
+
+        for (i = 0; i < 59; i++) {
+            longname[i] = L'a';
+        }
+        longname[59] = L'\0';
+        wcscat(longname, L".exe");
+        CHECK(wcslen(longname) == 63);
+        CHECK(ff_app_list_add(list, sizeof list, longname) == 1);
+        CHECK(ff_app_list_has(list, longname));
+        CHECK(ff_app_list_add(list, sizeof list, longname) == 0);
+        CHECK(ff_app_list_remove(list, sizeof list, longname) == 1 && list[0] == '\0');
+    }
+    CHECK(ff_app_is_known_nongame(L"idea64.exe") && ff_app_is_known_nongame(L"C:\\Windows\\System32\\Taskmgr.exe"));
     /* добавление: имя в нижнем регистре, повтор и путь не дублируют, не-ASCII и точка с запятой отвергаются */
     {
         char list[20] = "";

@@ -13,6 +13,11 @@ static const wchar_t *const SHELL_CLASSES[] = {
     L"Progman", L"WorkerW", L"Shell_TrayWnd", L"Shell_SecondaryTrayWnd",
 };
 
+/* оболочка Windows: Win+Tab, экран блокировки и оверлей «Ножниц» закрывают монитор без заголовка,
+ * но играми не являются; список в формате ff_app_list_has */
+static const char SHELL_APPS[] = "explorer.exe;lockapp.exe;screenclippinghost.exe;searchhost.exe;"
+                                 "startmenuexperiencehost.exe;shellexperiencehost.exe";
+
 static const wchar_t *const GFX_MODULES[] = {
     L"d3d9.dll", L"d3d11.dll", L"d3d12.dll", L"vulkan-1.dll", L"opengl32.dll",
 };
@@ -168,6 +173,9 @@ int game_detect(const ff_config *cfg, const RECT *monitor, char exe[64])
     }
     if (path[0] && ff_app_list_has(cfg->pause_apps, path)) {
         return GAME_LISTED;
+    }
+    if (path[0] && ff_app_list_has(SHELL_APPS, path)) {
+        return GAME_NONE;
     }
     /* режимы: 1 полный экран, 2 полный экран и 3D, 3 только 3D */
     if (cfg->auto_pause != 3 && covers_monitor(fg, monitor)) {
