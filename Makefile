@@ -13,7 +13,7 @@ SAN_ON := -fsanitize=address,undefined -fno-omit-frame-pointer -g
 WARN = -Wall -Wextra -Wpedantic $(if $(WERROR),-Werror)
 INC = -Iinclude
 
-PORTABLE = src/config.c src/release.c src/sha256.c src/profile.c src/i18n.c src/layout.c src/applist.c src/stats.c src/report.c
+PORTABLE = src/config.c src/release.c src/sha256.c src/profile.c src/i18n.c src/layout.c src/applist.c src/stats.c src/report.c src/urllist.c
 WIN_SRC = src/main.c src/app.c src/capture.c src/gfx.c src/gfx_frame.c src/gfx_sig.c src/shader.c \
 	src/output.c src/pattern.c src/ui_tray.c src/ui_settings.c src/ui_controls.c src/ui_paint.c src/ui_profile.c \
 	src/ui_update.c src/ui_wizard.c src/ui_versions.c src/ui_app.c src/ui_prefs.c src/ui_report.c src/report_send.c src/report_actions.c src/stats_store.c src/sysinfo.c src/gamedetect.c src/slider.c src/theme.c src/profile_io.c src/update.c src/update_install.c src/http.c $(PORTABLE)
@@ -23,7 +23,7 @@ WIN_FLAGS = -std=gnu99 -O2 $(WARN) -fvisibility=hidden $(INC) -D_WIN32_WINNT=0x0
 	-DFF_VERSION='"$(VERSION)"' -DFF_REPO='"$(REPO)"' \
 	-DFF_REPORT_URL='"$(REPORT_URL)"'
 
-TESTS = config release sha256 profile i18n layout applist stats report
+TESTS = config release sha256 profile i18n layout applist stats report urllist
 
 # собирается под Windows кросс-компилятором mingw-w64 или нативно в msys2 (CC_WIN=gcc WINDRES=windres)
 win: build/fringefix.exe

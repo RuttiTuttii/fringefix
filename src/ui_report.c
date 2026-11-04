@@ -109,7 +109,9 @@ static void do_send(void)
     }
     set_status(ff_tr(S_REP_SENDING));
     EnableWindow(GetDlgItem(g_win, ID_R_SEND), FALSE);
-    report_send_async(ui.app->hwnd, FF_REPORT_URL, g_payload, (size_t)g_len);
+    /* английскому интерфейсу первым идёт европейский сервер, русскому московский */
+    report_send_async(ui.app->hwnd, FF_REPORT_URL, g_payload, (size_t)g_len,
+                      ff_i18n_get() == FF_LANG_EN);
 }
 
 static void on_command(int id, int code)
