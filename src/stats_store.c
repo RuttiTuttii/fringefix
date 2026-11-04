@@ -74,9 +74,13 @@ void stats_store_set_enabled(int on)
     EnterCriticalSection(&g_lock);
     if (on && !g_enabled) {
         g_started = GetTickCount64();
+        /* разбор файла прибавляет к g_stats, а в памяти уже лежит прежнее: начинаем с нуля, иначе счётчики удвоятся */
+        ff_stats_init(&g_stats);
         load_file();
-    } else if (!on) {
-        g_game[0] = '\0';
+    } else if (!on && g_enabled) {
+        /* итог уходит в файл до выключения: набранное с последнего сохранения иначе потерялось бы */
+        end_game_locked();
+        stats_store_save();
     }
     g_enabled = on;
     LeaveCriticalSection(&g_lock);
