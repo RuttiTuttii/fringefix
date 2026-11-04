@@ -1,5 +1,5 @@
 	# приём отчётов fringefix: Caddy снимает префикс и сам передаёт адрес клиента в X-Forwarded-For;
 	# блока log в Caddyfile нет, поэтому адреса не пишутся и в журнал доступа
 	handle_path /fringefix/api/* {
-		reverse_proxy 127.0.0.1:8791
+		reverse_proxy @UPSTREAM@
 	}

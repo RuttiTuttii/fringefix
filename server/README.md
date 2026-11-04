@@ -17,20 +17,48 @@
 
 по файлу на отчёт в `/var/lib/fringefix-reports/ГГГГ-ММ/` с правами 0600. В имени только месяц и случайный номер. В файле только поля из `fringefix_reports/validate.py`, всё остальное отбрасывается при приёме. Ни адреса, ни точного времени, ни заголовков запроса в файле нет.
 
+## как это развёрнуто
+
+оба публичных адреса, `moscow.fragmentzal.store` и `frankfurt.fragmentzal.store`, обслуживает один Caddy в docker на европейском сервере: публичные порты российского сервера по правилам nftables пробрасываются туда по туннелю WireGuard. Поэтому приёмник стоит рядом с этим Caddy, а не на российском сервере.
+
+```
+клиент ─ https ─> moscow.fragmentzal.store ──┐
+клиент ─ https ─> frankfurt.fragmentzal.store ┴─> Caddy (docker, Frankfurt) ─> 172.18.0.1:8791 приёмник (systemd)
+```
+
+- клиент знает оба адреса и пробует их по очереди: русскому интерфейсу первым идёт московский, английскому европейский. При сбое сети или ответе 5xx и 429 берётся следующий, ответ 4xx перебор прерывает
+- два адреса дают запасной путь, если до одного из них пользователь не дотягивается, хранилище одно
+- приёмник слушает только адрес моста docker, наружу и в туннель не смотрит; файрвол не менялся
+- Caddy ничего не пишет в журнал доступа, адрес клиента приёмнику передаётся в `X-Forwarded-For`
+
 ## развернуть
 
 ```bash
-# из папки server: выложить пакет, юнит systemd и блок в Caddy, проверить снаружи
-./deploy/deploy.sh msk_direct moscow.fragmentzal.store
+# приёмник как юнит systemd на сервере с docker-мостом; "-" значит, что Caddy этим скриптом не правится
+./deploy/deploy.sh frankfurt - 172.18.0.1 "https://frankfurt.fragmentzal.store/"
 ```
 
-скрипт делает копию `Caddyfile`, вставляет блок `handle_path /fringefix/api/*` в сайт, проверяет `caddy validate` и при ошибке возвращает копию. Сервис работает под временным пользователем с изоляцией systemd (`DynamicUser`, `ProtectSystem=strict`, пустой набор capabilities).
+```bash
+# маршрут в Caddy внутри docker: копия Caddyfile, вставка блока, проверка, мягкое перечитывание, сравнение кодов ответа до и после
+./deploy/relay-frankfurt.sh frankfurt "frankfurt.fragmentzal.store moscow.fragmentzal.store" /opt/vpn/caddy/Caddyfile caddy-sub 172.18.0.1:8791 "https://frankfurt.fragmentzal.store/ https://moscow.fragmentzal.store/"
+```
 
-после выкладки в репозитории GitHub нужна переменная `REPORT_URL`, её CI подставляет в сборку:
+`deploy.sh` умеет и вариант с Caddy на самом сервере: вместо `-` указывается имя сайта из Caddyfile. Оба скрипта делают копию конфига до правки, при провале проверки или смене кодов ответа возвращают её и ничего не перезапускают, кроме нового юнита. Тесты запускаются на самом сервере, у него Python 3.10.
+
+## проверка работающего адреса
 
 ```bash
-# адрес приёма попадает в exe при сборке; в исходниках его нет
-gh variable set REPORT_URL --body "https://moscow.fragmentzal.store/fringefix/api/v1/reports"
+# health и один принятый отчёт расходуют 1 из 5 в час на адрес; --full добавляет отказы на плохие запросы
+python3 check_endpoint.py https://frankfurt.fragmentzal.store/fringefix/api --full
+```
+
+тестовый отчёт помечен комментарием `endpoint-check`; после проверки его удаляют с сервера (`grep -Rl endpoint-check /var/lib/private/fringefix-reports | xargs rm`).
+
+после выкладки в репозитории GitHub нужна переменная `REPORT_URL` с адресами через пробел, её CI подставляет в сборку:
+
+```bash
+# адреса приёма попадают в exe при сборке; в исходниках их нет
+gh variable set REPORT_URL --body "https://moscow.fragmentzal.store/fringefix/api/v1/reports https://frankfurt.fragmentzal.store/fringefix/api/v1/reports"
 ```
 
 ## сводка по отчётам

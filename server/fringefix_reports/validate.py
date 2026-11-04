@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 from typing import Any
 
 MAX_COMMENT_BYTES = 1000
@@ -19,15 +18,13 @@ _ACTIONS = {"pause", "light"}
 _LANGUAGES = {"ru", "en"}
 
 
-@dataclass(frozen=True)
 class ReportError(Exception):
     """Отчёт не прошёл проверку: code идёт в ответ клиенту, message для логов и тестов."""
 
-    code: str
-    message: str
-
-    def __str__(self) -> str:
-        return f"{self.code}: {self.message}"
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(f"{code}: {message}")
+        self.code = code
+        self.message = message
 
 
 def _fail(code: str, message: str) -> ReportError:

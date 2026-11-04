@@ -6,7 +6,7 @@ import json
 import os
 import secrets
 import threading
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +30,7 @@ class ReportStore:
     def save(self, report: dict[str, Any]) -> str:
         """Пишет отчёт и возвращает его номер вида 202611-a1b2c3d4e5f6."""
         data = json.dumps(report, ensure_ascii=False, indent=2).encode("utf-8")
-        month = datetime.now(UTC).strftime("%Y%m")
+        month = datetime.now(timezone.utc).strftime("%Y%m")
         report_id = f"{month}-{secrets.token_hex(6)}"
         folder = self._root / f"{month[:4]}-{month[4:]}"
         with self._lock:

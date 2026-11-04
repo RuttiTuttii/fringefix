@@ -1,6 +1,7 @@
 [Unit]
 Description=fringefix anonymous report receiver
-After=network.target
+After=network-online.target docker.service
+Wants=network-online.target
 
 [Service]
 # отдельный пользователь создаётся на лету, ему принадлежит только папка с отчётами
@@ -10,13 +11,15 @@ StateDirectoryMode=0700
 WorkingDirectory=/opt/fringefix-reports
 Environment=PYTHONPATH=/opt/fringefix-reports
 Environment=FRINGEFIX_REPORTS_DIR=/var/lib/fringefix-reports
+# адрес привязки подставляет deploy.sh: адрес моста docker, чтобы до приёмника дотягивался только Caddy в контейнере
 Environment=FRINGEFIX_BIND=127.0.0.1
 Environment=FRINGEFIX_PORT=8791
 ExecStart=/usr/bin/python3 -m fringefix_reports
-Restart=on-failure
+# мост docker может подняться позже сервиса, поэтому при сбое привязки пробуем снова
+Restart=always
 RestartSec=5
 
-# изоляция: сервис не видит остальную систему и не может ничего, кроме приёма на локальном порту
+# изоляция: сервис не видит остальную систему и не может ничего, кроме приёма на своём порту
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true

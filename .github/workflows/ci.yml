@@ -40,11 +40,16 @@ jobs:
   # приёмник отчётов на Python: ruff и тесты
   server:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # на серверах Python 3.10, поэтому проверяется и он
+        python: ['3.10', '3.12']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ matrix.python }}
       - run: pip install pytest ruff
       - run: ruff check server
       - run: cd server && python -m pytest -q
