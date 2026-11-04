@@ -10,7 +10,7 @@ WARN = -Wall -Wextra -Wpedantic
 INC = -Iinclude
 
 PORTABLE = src/config.c src/release.c src/sha256.c
-WIN_SRC = src/main.c src/app.c src/capture.c src/gfx.c src/gfx_frame.c src/shader.c \
+WIN_SRC = src/main.c src/app.c src/capture.c src/gfx.c src/gfx_frame.c src/gfx_sig.c src/shader.c \
 	src/output.c src/pattern.c src/ui_tray.c src/ui_settings.c src/ui_update.c \
 	src/update.c src/http.c $(PORTABLE)
 WIN_LIBS = -ld3d11 -ldxgi -ld3dcompiler -ldxguid -luuid -luser32 -lgdi32 -lcomctl32 \

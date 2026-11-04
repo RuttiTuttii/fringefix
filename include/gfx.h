@@ -31,6 +31,16 @@ typedef struct {
     ID3D11PixelShader *ps;
     ID3D11Buffer *cb;
     ID3D11SamplerState *smp;
+    /* подпись кадра: разреженный хеш на GPU, чтобы отличить настоящее изменение от эха собственного оверлея */
+    ID3D11PixelShader *sig_ps;
+    ID3D11Texture2D *sig_tex;
+    ID3D11RenderTargetView *sig_rtv;
+    ID3D11Texture2D *sig_stage;
+    unsigned sig;
+    int sig_valid;
+    /* буфер метаданных dirty и move прямоугольников */
+    unsigned char *meta;
+    size_t meta_cap;
 } ff_gfx;
 
 /* поднимает всё сразу или ничего; при ошибке кладёт текст в err (GFX_ERR_LEN байт) и возвращает -1 */
@@ -44,5 +54,12 @@ void gfx_upload(ff_gfx *g, const ff_config *c);
 
 /* ждёт кадр до timeout_ms и рисует, если экран изменился или force; 0 при потере захвата */
 int gfx_pump(ff_gfx *g, UINT timeout_ms, int force);
+
+/* возвращает окно в самый верх: полноэкранные приложения и блокировка экрана сбивают z-порядок */
+void gfx_reassert(ff_gfx *g);
+
+/* ресурсы подписи кадра и её чтение: рендер хеша в текстуру 1x1 и считывание четырёх байт */
+int gfx_sig_open(ff_gfx *g, char *err);
+int gfx_sig_read(ff_gfx *g, unsigned *out);
 
 #endif

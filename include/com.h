@@ -10,4 +10,21 @@
         }                                                            \
     } while (0)
 
+/* внутренние помощники gfx*.c: ждут в области видимости hr, err (GFX_ERR_LEN байт) и метку done,
+ * поэтому gfx.h подключается раньше */
+#define FAILMSG(text)                           \
+    do {                                        \
+        snprintf(err, GFX_ERR_LEN, "%s", text); \
+        goto done;                              \
+    } while (0)
+
+#define TRY(call, what)                                                                 \
+    do {                                                                                \
+        hr = (call);                                                                    \
+        if (FAILED(hr)) {                                                               \
+            snprintf(err, GFX_ERR_LEN, "%s failed (0x%08lx)", what, (unsigned long)hr); \
+            goto done;                                                                  \
+        }                                                                               \
+    } while (0)
+
 #endif

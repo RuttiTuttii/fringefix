@@ -9,6 +9,7 @@
 #define FRAME_WAIT_UI_MS 16
 #define RETRY_MS 500
 #define STOP_WAIT_MS 5000
+#define REASSERT_MS 2000
 
 static void pump_messages(void)
 {
@@ -37,6 +38,7 @@ static DWORD WINAPI capture_main(LPVOID arg)
     char err[GFX_ERR_LEN];
     int started_ok = 0;
     int force = 0;
+    ULONGLONG last_assert = 0;
 
     memset(&g, 0, sizeof g);
     while (!a->quit) {
@@ -77,6 +79,11 @@ static DWORD WINAPI capture_main(LPVOID arg)
             gfx_shutdown(&g);
         }
         force = 0;
+        /* полноэкранное приложение или блокировка экрана могут увести окно из верха z-порядка */
+        if (g.alive && GetTickCount64() - last_assert >= REASSERT_MS) {
+            last_assert = GetTickCount64();
+            gfx_reassert(&g);
+        }
     }
     gfx_shutdown(&g);
     return 0;

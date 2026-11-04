@@ -35,9 +35,11 @@ main.c ─ ui_tray.c ─ ui_settings.c ─ pattern.c
 ```
 
 - the frame comes from `IDXGIOutput6::DuplicateOutput1`, format follows the desktop mode: 8-bit in SDR, FP16 scRGB in HDR
-- the window uses `WDA_EXCLUDEFROMCAPTURE`, so capture never sees the overlay and no feedback loop forms
+- the window uses `WDA_EXCLUDEFROMCAPTURE`, so it does not appear in the desktop snapshot
 - capture and overlay run in their own thread: menus, dialogs and window dragging do not freeze the picture
-- the shader runs only when the frame has a non-zero `LastPresentTime`, so cursor-only movement leaves the GPU idle
+- the overlay still wakes capture: per comments in the original's source, DWM recomposes the desktop after every `Present`. Without a guard each draw would trigger the next one at full refresh rate
+- so each frame is classified first: cursor-only is skipped, scrolls and small areas (under 1/50 of the screen) are drawn at once, anything else is compared by a signature (a hash over a 32 by 24 point grid computed on the GPU, 4 bytes read on the CPU) and skipped if unchanged
+- every 2 seconds the window is put back on top of the z-order
 - each channel costs one hardware bilinear read plus 5 laplacian reads, 18 reads per pixel; at 4K 240 Hz that is about 36 billion reads per second (calculated, not measured)
 
 ## updates

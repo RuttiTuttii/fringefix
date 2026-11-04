@@ -2,10 +2,11 @@
 #include <windows.h>
 #include <d3dcompiler.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-#include "com.h"
 #include "gfx.h"
+#include "com.h"
 #include "output.h"
 #include "shader.h"
 
@@ -15,26 +16,16 @@
 
 static const wchar_t OVERLAY_CLASS[] = L"fringefix_overlay";
 
-#define FAILMSG(text)                                  \
-    do {                                               \
-        snprintf(err, GFX_ERR_LEN, "%s", text);        \
-        goto done;                                     \
-    } while (0)
-
-#define TRY(call, what)                                                               \
-    do {                                                                              \
-        hr = (call);                                                                  \
-        if (FAILED(hr)) {                                                             \
-            snprintf(err, GFX_ERR_LEN, "%s failed (0x%08lx)", what, (unsigned long)hr); \
-            goto done;                                                                \
-        }                                                                             \
-    } while (0)
-
 void gfx_shutdown(ff_gfx *g)
 {
     if (g->ctx) {
         ID3D11DeviceContext_ClearState(g->ctx);
     }
+    free(g->meta);
+    FF_REL(g->sig_stage);
+    FF_REL(g->sig_rtv);
+    FF_REL(g->sig_tex);
+    FF_REL(g->sig_ps);
     FF_REL(g->cb);
     FF_REL(g->smp);
     FF_REL(g->ps);
@@ -237,7 +228,8 @@ int gfx_init(ff_gfx *g, int monitor, char *err)
     memset(g, 0, sizeof *g);
     err[0] = '\0';
     if (open_capture(g, monitor, &rect, err) != 0 || open_window(g, &rect, err) != 0
-        || open_swapchain(g, err) != 0 || open_pipeline(g, err) != 0) {
+        || open_swapchain(g, err) != 0 || open_pipeline(g, err) != 0
+        || gfx_sig_open(g, err) != 0) {
         gfx_shutdown(g);
         return -1;
     }
