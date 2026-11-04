@@ -134,10 +134,15 @@ static int open_swapchain(ff_gfx *g, char *err)
     IDXGIDevice *dxdev = NULL;
     IDXGIAdapter *ad = NULL;
     IDXGIFactory2 *fac = NULL;
+    IDXGIDevice1 *dev1 = NULL;
     IDXGISwapChain3 *sc3 = NULL;
     DXGI_SWAP_CHAIN_DESC1 sd;
 
     TRY(ID3D11Device_QueryInterface(g->dev, &IID_IDXGIDevice, (void **)&dxdev), "IDXGIDevice");
+    /* по умолчанию драйвер копит до трёх кадров в очереди, это прямая задержка; один кадр достаточно */
+    if (SUCCEEDED(IDXGIDevice_QueryInterface(dxdev, &IID_IDXGIDevice1, (void **)&dev1))) {
+        IDXGIDevice1_SetMaximumFrameLatency(dev1, 1);
+    }
     TRY(IDXGIDevice_GetAdapter(dxdev, &ad), "GetAdapter");
     TRY(IDXGIAdapter_GetParent(ad, &IID_IDXGIFactory2, (void **)&fac), "GetParent");
 
@@ -162,6 +167,7 @@ static int open_swapchain(ff_gfx *g, char *err)
     rc = 0;
 
 done:
+    FF_REL(dev1);
     FF_REL(sc3);
     FF_REL(fac);
     FF_REL(ad);
