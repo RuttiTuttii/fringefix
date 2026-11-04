@@ -6,7 +6,7 @@
 
 A Windows overlay that shifts the colour channels of the finished frame by fractions of a pixel to cancel colour fringing on QD-OLED panels with the triangular subpixel layout (4th generation and earlier). Lives in the tray, tuned with sliders, updates from GitHub Releases.
 
-> limitations: the project builds with mingw-w64 without warnings, the portable-module tests (10 suites) pass under ASan and UBSan, the report receiver was checked from outside on both addresses. Version 0.1.0 ran on one machine with a 4K QD-OLED in SDR: the tray, settings window and overlay worked. Everything added later has not run on Windows: the HDR path, the updater and version picker, the wizard, auto-pause and light mode, the dark theme, language and theme choice, statistics and report sending. Requires Windows 10 2004 or newer.
+> limitations: the project builds with mingw-w64 without warnings, the portable-module tests (10 suites) pass under ASan and UBSan, the report receiver was checked from outside on both addresses. Version 0.1.0 ran on one machine with a 4K QD-OLED in SDR: the tray, settings window and overlay worked. Everything added later has not run on Windows: the HDR path, the updater and version picker, the wizard, auto-pause and light mode, the dark theme, language and theme choice, statistics and report sending, the filter switch, the new test pattern, four auto-pause modes, the always-apply list, start with Windows and the bundled profile. Requires Windows 10 2004 or newer.
 
 ## what the problem looks like
 
@@ -17,8 +17,8 @@ on first-to-fourth generation QD-OLED the subpixels form a triangle: green above
 ## features
 
 <table>
-<tr><td width="50%" valign="top"><img src="assets/icons/shift.svg" width="44" height="44" alt=""><br><b>Channel shift</b><br>The shader moves red, green and blue by fractions of a pixel: 18 texture reads per pixel, redrawn only when the screen changes.</td><td width="50%" valign="top"><img src="assets/icons/wizard.svg" width="44" height="44" alt=""><br><b>Setup wizard</b><br>Three steps by panel type: shifts are computed from the subpixel geometry, then two strengths with the test pattern.</td></tr>
-<tr><td width="50%" valign="top"><img src="assets/icons/games.svg" width="44" height="44" alt=""><br><b>Auto-pause in games</b><br>Fullscreen and 3D apps: the overlay releases the device or switches to a light mode.</td><td width="50%" valign="top"><img src="assets/icons/profiles.svg" width="44" height="44" alt=""><br><b>JSON profiles</b><br>Shifts and sharpness are saved to a file and switched from the tray menu.</td></tr>
+<tr><td width="50%" valign="top"><img src="assets/icons/shift.svg" width="44" height="44" alt=""><br><b>Channel shift</b><br>The shader moves red, green and blue by fractions of a pixel: 18 texture reads per pixel, redrawn only when the screen changes.</td><td width="50%" valign="top"><img src="assets/icons/wizard.svg" width="44" height="44" alt=""><br><b>Setup wizard</b><br>Three steps by panel type. Removed from the window until statistics from different panels arrive, the code stays in the build.</td></tr>
+<tr><td width="50%" valign="top"><img src="assets/icons/games.svg" width="44" height="44" alt=""><br><b>Auto-pause in games</b><br>Four modes: fullscreen apps, 3D apps, both, off. A list of programs the filter is always applied to.</td><td width="50%" valign="top"><img src="assets/icons/profiles.svg" width="44" height="44" alt=""><br><b>JSON profiles</b><br>Shifts and sharpness are saved to a file and switched from the tray menu. A profile for QD-OLED gen 3 and 4 is built into the exe.</td></tr>
 <tr><td width="50%" valign="top"><img src="assets/icons/versions.svg" width="44" height="44" alt=""><br><b>Versions and rollback</b><br>A release list, install of any version, SHA-256 check.</td><td width="50%" valign="top"><img src="assets/icons/privacy.svg" width="44" height="44" alt=""><br><b>Privacy</b><br>Statistics are local and off until you turn them on. The report is shown in full before sending.</td></tr>
 <tr><td width="50%" valign="top"><img src="assets/icons/theme.svg" width="44" height="44" alt=""><br><b>Language and theme</b><br>Russian and English, light and dark theme, auto from the system or by hand.</td><td width="50%" valign="top"><img src="assets/icons/report.svg" width="44" height="44" alt=""><br><b>Reports</b><br>To the project server, through a GitHub issue or to a file.</td></tr>
 </table>
@@ -32,12 +32,7 @@ on first-to-fourth generation QD-OLED the subpixels form a triangle: green above
 
 <p align="center"><picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screens/program-en-dark.svg">
-  <img src="assets/screens/program-en-light.svg" alt="Program settings window: language, theme, games, updates" width="520">
-</picture></p>
-
-<p align="center"><picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/screens/wizard-en-dark.svg">
-  <img src="assets/screens/wizard-en-light.svg" alt="Setup wizard, step 2" width="520">
+  <img src="assets/screens/program-en-light.svg" alt="Program settings window: language, theme, auto-pause, updates, start with Windows" width="520">
 </picture></p>
 
 <p align="center"><picture>
@@ -67,19 +62,23 @@ check the network before sending: a transfer to the wrong network cannot be reco
 - download `fringefix.exe` from the latest release and put it in any folder
 - start it, a tray icon of three balls in a triangle appears (black and white means off or paused)
 - double click opens settings, right click opens the menu with profiles
+- the "Filter" switch at the bottom left of the settings window does the same as `Ctrl+Alt+F`; with the filter off the picture is left unchanged
 - `Ctrl+Alt+F` toggles the overlay, `Ctrl+Alt+Q` quits
 - settings live in `%APPDATA%\fringefix\fringefix.ini`, the Save button writes them
+- the "Start with Windows" checkbox in the Startup card (the "Settings" button) writes `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, no administrator rights needed. The state is read from the registry: if the exe moved to another folder the checkbox is off, turning it on again updates the path
 
 ## tuning
 
 
-1. press the test pattern button: lines on the left and text in the middle open on the chosen monitor
+1. press the test pattern button: the pattern window opens to the right of the settings window, keep the settings window on the monitor the overlay corrects. The button and a click on the pattern close it
 2. move the vertical green slider until horizontal edges turn grey
 3. move the horizontal red and blue sliders in opposite directions until vertical edges turn grey
 4. the other shifts are usually unneeded on this panel: red and blue subpixels sit at the same height and green sits midway between them horizontally
 5. press save
 
 The window is split into cards by colour: red, green and blue each have a horizontal and a vertical shift, the Image card holds sharpness and the monitor choice. Everything is at zero until you change it.
+
+The test pattern is as tall as the settings window and half as wide. The top half is light (black on white), the bottom half is dark (white on black). Each half has three bands: thin lines (1 pixel, 14 pixel pitch), thick lines (5 pixels, 10 pixel pitch) and the alphabet, lowercase letters first, then capitals. In the first two bands horizontal lines are on the left and vertical lines on the right. Line thickness is in physical pixels and does not follow Windows scaling: a one pixel line is the subpixel probe. The pitch is given for 100% and grows with the scaling of the settings window (at 150% a pitch of 14 becomes 21). The pattern moves with the settings window.
 
 - a positive value moves the channel content right and down, range is -2 to 2 pixels, step 0.01
 - a value can be typed into the field right of the slider, dot and comma both work, the change applies at once
@@ -91,10 +90,12 @@ A sub-pixel shift goes through bilinear interpolation, which blurs. The shader r
 ## setup wizard
 
 
-the "Setup wizard..." button in the window. Three steps:
+> there is no wizard button in the window now: it was removed until statistics from different panels arrive. The `ui_wizard.c` file builds but is not called from the interface.
+
+three steps:
 
 1. panel type: QD-OLED with triangular subpixels (gen 1-4) or RGB stripes where no correction is needed
-2. vertical strength with the test pattern open: look at the horizontal lines in the right half
+2. vertical strength with the test pattern open: look at the horizontal lines
 3. horizontal strength: look at the vertical lines in the left half
 
 for the triangular layout the shifts are computed from the geometry: red and blue sit side by side at the bottom, green above them in the middle, offsets from the pixel centre are 0.25 each. A channel must show the picture where it physically sits, so the shift is minus the offset: green vertical +0.25, red and blue vertical -0.25, red horizontal +0.25, blue -0.25. The vertical signs match the values the original's author found by hand (green plus, red and blue minus).
@@ -106,13 +107,16 @@ the calculation follows a panel model, not a measurement: there is no automatic 
 ## auto-pause
 
 
-the mode is chosen in the Image card, the `auto_pause` key in the ini:
+the mode is chosen in the Auto-pause rules card of the program settings window (the "Settings" button), the `auto_pause` key in the ini:
 
 - 0 off
 - 1 in fullscreen apps (default)
 - 2 in fullscreen and 3D apps
+- 3 in 3D apps only
 
-a fullscreen app is an active window with no title bar or frame that covers the whole overlay monitor (2 pixel slack): a borderless game, exclusive fullscreen, F11 video in a browser. A 3D app is the active window's process that loaded d3d9, d3d11, d3d12, vulkan-1 or opengl32 and is not in the built-in list of known non-games (browsers, editors, messengers, office, the shell). A process protected from reading (anti-cheat) is detected by fullscreen only.
+the list shows the modes in this order: fullscreen, 3D, both, off.
+
+a fullscreen app is an active window with no title bar or frame that covers the whole overlay monitor (2 pixel slack): a borderless game, exclusive fullscreen, F11 video in a browser. A 3D app is the active window's process that loaded d3d9, d3d11, d3d12, vulkan-1 or opengl32 and is not in the built-in list of known non-games (browsers, editors, messengers, office, the shell). Windows built on the Chromium engine (Electron, CEF) are never counted as 3D apps: they load d3d11 for compositing but are not games. A process protected from reading (anti-cheat) is detected by fullscreen only, so in mode 3 it is not detected at all.
 
 - the check runs every 0.5 seconds, the pause is lifted after two consecutive checks without a game so alt-tab back and forth does not recreate the device
 - while paused the D3D device and the overlay window are released and the tray icon is grey
@@ -125,13 +129,14 @@ a fullscreen app is an active window with no title bar or frame that covers the 
 - the rest of the latency is built into the scheme: the desktop is captured after DWM composition, the overlay is drawn and composed again, at least one or two frames. For games the answer is auto-pause
 - I did not measure values in milliseconds
 
-## games
+## auto-pause rules
 
 
-the Image card of the settings window has two rows, both work with auto-pause:
+the Auto-pause rules card of the program settings window has three items:
 
-- "Auto-pause": when to consider a game running (off, fullscreen, fullscreen and 3D apps)
-- "Action in games": "Pause" releases the device and the overlay window, "Light mode" keeps the overlay but the shader does one shift per channel without the laplacian and sharpness and costs almost nothing. Light mode does not remove DWM composition, so only a pause lifts the game latency
+- "Auto-pause": when to consider a game running (fullscreen, 3D, fullscreen and 3D, off)
+- "Action in games": it can be changed only while auto-pause is off, in any other mode it shows a locked "Pause". "Pause" releases the device and the overlay window, "Light mode" keeps the overlay but the shader does one shift per channel without the laplacian and sharpness and costs almost nothing. Light mode does not remove DWM composition, so only a pause lifts the game latency. With auto-pause off and light mode, games are looked for as in the "fullscreen and 3D apps" mode and light mode is used instead of a pause; with auto-pause off and "Pause" nothing is looked for
+- "Add an app that always gets the filter...": picks an exe that goes into `ignore_apps`. The filter is always applied to it, whatever auto-pause is set to: photo viewers, players. Picking the same exe again offers to remove it from the list. The file name must be Latin and the list is limited to 256 characters
 
 more in `fringefix.ini`:
 
@@ -150,6 +155,7 @@ the "Versions..." button in the settings window opens a list of the repository r
 - "Save profile..." and "Load profile..." work with JSON files, the default folder is `%APPDATA%\fringefix\profiles`
 - the tray menu item "Profiles" lists the files from that folder, picking one applies it at once
 - a profile holds only the look of the picture: the three channel shifts and sharpness, the monitor and the update check stay as they were
+- the bundled profile "QD-OLED gen 3 4" is built into the exe and put into the profiles folder at start if that file is not there: an edited file is not overwritten, a deleted one comes back at the next start. The files live in `profiles/`, a new profile is a line in `src/res/fringefix.rc`, a number in `include/resource.h` and an entry in the `BUNDLED` table in `src/profile_io.c`
 
 ```json
 {
@@ -167,8 +173,8 @@ Out-of-range values are clamped, broken ones are skipped, a file without the `fo
 ## language, theme and icons
 
 
-- "Program..." in the settings window opens a window with the language and theme choice
-- language: "Auto" follows the Windows display language (Russian or English), "Русский" and "English" are picked by hand; every list item has a flag
+- "Settings" in the settings window opens the program settings window: language, theme, auto-pause, updates, start with Windows
+- language: "Auto" follows the Windows display language: Russian only on a Russian Windows, English on any other, European languages included, "Русский" and "English" are picked by hand; every list item has a flag
 - theme: "Auto" follows the Windows "app mode" setting, "Light" and "Dark" are set by hand; a change applies to open windows at once
 - a language change recreates the windows, settings are kept
 - the slider accent colour comes from the system one
@@ -181,7 +187,7 @@ Out-of-range values are clamped, broken ones are skipped, a file without the `fo
 
 everything below is off until you turn it on yourself. Nothing is sent on its own.
 
-- in the "Program..." window the "Report and statistics..." button opens the report window
+- in the program settings window the "Report and statistics..." button opens the report window
 - the "Keep statistics on this computer" checkbox turns on local counters: frames, skipped echo frames, device recreations, pauses, overlay errors and the games that caused a pause. The `stats.txt` file sits next to the settings in `%APPDATA%\fringefix` and goes nowhere
 - the window shows exactly the JSON text that would go over the network; you can untick the System, Settings and Statistics sections and add a comment
 - there are three ways to send: to the project server with the Send button (with a confirmation), through a new GitHub issue (the report is copied to the clipboard and you paste it into the issue yourself), or just save it to a file
@@ -201,7 +207,7 @@ the receiver on the server checks the report against a whitelist of fields, limi
 ```
 main.c ─ ui_tray.c ─ ui_settings.c ─ ui_controls.c, ui_paint.c, slider.c, theme.c
   │         │            └─ ui_profile.c, ui_wizard.c ─ layout.c, pattern.c
-  │         │            └─ ui_versions.c, ui_app.c, ui_prefs.c
+  │         │            └─ ui_versions.c, ui_app.c, ui_prefs.c, autostart.c
   │         │            └─ ui_report.c ─ report_actions.c, report_send.c, report.c
   │         └─ ui_update.c ─ update.c, update_install.c ─ http.c, sha256.c, release.c
   └─ app.c ─ config.c, profile.c, profile_io.c, i18n.c, stats.c, stats_store.c
@@ -275,7 +281,6 @@ the application runs on Windows only: capture through DXGI Desktop Duplication a
 - layouts other than the QD-OLED triangle: WOLED, for example, arranges subpixels differently
 - text-only mask for sharpening: sharpening applies to the whole screen
 - rotated monitors
-- start with Windows
 - code signing and release signing
 - a Linux version: planned (a GNOME Shell extension, a KWin effect or a Hyprland shader), capture through DXGI does not port to Linux
 - languages other than Russian and English
