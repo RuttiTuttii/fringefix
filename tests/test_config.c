@@ -10,7 +10,7 @@ static void test_defaults(void)
     ff_config_defaults(&c);
     CHECK(c.shift[0][0] == 0.0f && c.shift[2][1] == 0.0f);
     CHECK(c.sharpen == 0.0f && c.monitor == 0 && c.check_updates == 1 && c.auto_pause == 1);
-    CHECK(c.game_action == 0 && c.gpu_priority == 0 && c.pause_apps[0] == '\0' && c.ignore_apps[0] == '\0');
+    CHECK(c.game_action == 0 && c.gpu_priority == 0 && c.language == 0 && c.theme == 0 && c.stats == 0 && c.pause_apps[0] == '\0' && c.ignore_apps[0] == '\0');
 }
 
 static void test_values(void)
@@ -52,6 +52,9 @@ static void test_game_keys(void)
     CHECK(c.game_action == 1 && c.gpu_priority == -3);
     CHECK(strcmp(c.pause_apps, "a.exe;b.exe") == 0 && strcmp(c.ignore_apps, "c.exe") == 0);
     /* зажим диапазонов */
+    CHECK(ff_config_parse("language=2\ntheme=1\nstats=1\n", &c) == 3);
+    CHECK(c.language == 2 && c.theme == 1 && c.stats == 1);
+    CHECK(ff_config_parse("language=9\ntheme=-4\n", &c) == 2 && c.language == 2 && c.theme == 0);
     CHECK(ff_config_parse("game_action=9\ngpu_priority=-99\n", &c) == 2);
     CHECK(c.game_action == 1 && c.gpu_priority == -7);
     /* слишком длинный список отбрасывается целиком, а не режется, прежнее значение остаётся */
@@ -110,13 +113,16 @@ static void test_roundtrip(void)
     a.auto_pause = 2;
     a.game_action = 1;
     a.gpu_priority = -4;
+    a.language = 1;
+    a.theme = 2;
+    a.stats = 1;
     strcpy(a.pause_apps, "game.exe;x.exe");
     strcpy(a.ignore_apps, "y.exe");
 
     n = ff_config_format(&a, buf, sizeof buf);
     CHECK(n > 0);
     ff_config_defaults(&b);
-    CHECK(ff_config_parse(buf, &b) == 14);
+    CHECK(ff_config_parse(buf, &b) == 17);
     CHECK(memcmp(&a, &b, sizeof a) == 0);
     /* маленький буфер не должен молча обрезать файл */
     CHECK(ff_config_format(&a, tiny, sizeof tiny) == -1);

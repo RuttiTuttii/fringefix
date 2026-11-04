@@ -119,6 +119,20 @@ static int parse_line(char *line, ff_config *cfg)
         cfg->gpu_priority = (int)v;
         return 1;
     }
+    if (strcmp(key, "language") == 0 || strcmp(key, "theme") == 0) {
+        if (!parse_number(val, 0.0, 2.0, &v)) {
+            return 0;
+        }
+        *(key[0] == 'l' ? &cfg->language : &cfg->theme) = (int)v;
+        return 1;
+    }
+    if (strcmp(key, "stats") == 0) {
+        if (!parse_number(val, 0.0, 1.0, &v)) {
+            return 0;
+        }
+        cfg->stats = v >= 0.5;
+        return 1;
+    }
     if (strcmp(key, "pause_apps") == 0) {
         return copy_string(val, cfg->pause_apps, sizeof cfg->pause_apps);
     }
@@ -174,12 +188,15 @@ int ff_config_format(const ff_config *cfg, char *buf, size_t n)
         "\n; автопауза: 0 выключена, 1 в полноэкранных приложениях, 2 ещё и в 3D-приложениях\nauto_pause = %d\n"
         "\n; что делать в игре: 0 пауза, 1 облегчённый режим без резкости и лапласиана\ngame_action = %d\n"
         "\n; приоритет GPU оверлея от -7 до 7, ниже ноля уступает видеокарту игре\ngpu_priority = %d\n"
-        "\n; имена exe через точку с запятой: всегда на паузу и никогда не на паузу\npause_apps = %s\nignore_apps = %s\n",
+        "\n; имена exe через точку с запятой: всегда на паузу и никогда не на паузу\npause_apps = %s\nignore_apps = %s\n"
+        "\n; язык интерфейса: 0 как в системе, 1 русский, 2 английский\nlanguage = %d\n"
+        "\n; тема окон: 0 как в системе, 1 светлая, 2 тёмная\ntheme = %d\n"
+        "\n; локальная статистика для отчёта, сама ничего не отправляет: 0 или 1\nstats = %d\n",
         (double)cfg->shift[0][0], (double)cfg->shift[0][1],
         (double)cfg->shift[1][0], (double)cfg->shift[1][1],
         (double)cfg->shift[2][0], (double)cfg->shift[2][1],
         (double)cfg->sharpen, cfg->monitor, cfg->check_updates, cfg->auto_pause, cfg->game_action, cfg->gpu_priority,
-        cfg->pause_apps, cfg->ignore_apps);
+        cfg->pause_apps, cfg->ignore_apps, cfg->language, cfg->theme, cfg->stats);
 
     return (w < 0 || (size_t)w >= n) ? -1 : w;
 }
