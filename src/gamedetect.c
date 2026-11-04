@@ -68,7 +68,7 @@ static int has_gfx_module(HANDLE proc)
     DWORD i;
     size_t k;
 
-    if (!EnumProcessModulesEx(proc, mods, sizeof mods, &need, LIST_MODULES_64BIT)) {
+    if (!EnumProcessModulesEx(proc, mods, sizeof mods, &need, LIST_MODULES_ALL)) {
         return 0;
     }
     n = need / sizeof(HMODULE);
