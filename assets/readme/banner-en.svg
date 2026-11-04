@@ -20,7 +20,7 @@
     }
   </style>
   <rect class="bg" width="1200" height="300" rx="22"/>
-  <circle cx="108" cy="188" r="50" fill="#ef4444"/><circle cx="212" cy="188" r="50" fill="#3b82f6"/><circle cx="160" cy="96" r="50" fill="#22c55e"/>
+  <circle cx="108" cy="96" r="50" fill="#ef4444"/><circle cx="212" cy="96" r="50" fill="#3b82f6"/><circle cx="160" cy="188" r="50" fill="#22c55e"/>
   <text class="t1" x="330" y="142" font-family="system-ui, 'Segoe UI', sans-serif" font-size="76" font-weight="700">fringefix</text>
   <text class="t2" x="332" y="190" font-family="system-ui, 'Segoe UI', sans-serif" font-size="22">A Windows overlay that removes colour fringing from text on QD-OLED</text>
   <rect class="chip" x="330" y="214" width="152" height="36" rx="18"/><text class="t2" x="406" y="238" font-family="system-ui, 'Segoe UI', sans-serif" font-size="15" text-anchor="middle">Windows 10 2004+</text><rect class="chip" x="495.6" y="214" width="186" height="36" rx="18"/><text class="t2" x="589" y="238" font-family="system-ui, 'Segoe UI', sans-serif" font-size="15" text-anchor="middle">DXGI and Direct3D 11</text><rect class="chip" x="695.6" y="214" width="91" height="36" rx="18"/><text class="t2" x="741" y="238" font-family="system-ui, 'Segoe UI', sans-serif" font-size="15" text-anchor="middle">RU and EN</text>

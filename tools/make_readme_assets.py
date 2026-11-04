@@ -51,8 +51,8 @@ def star(cx: float, cy: float, r: float, color: str) -> str:
 
 def icons() -> None:
     # сдвиг каналов: пучок шариков и две стрелки
-    icon("shift", f'<circle cx="32" cy="17" r="10" fill="{G}"/><circle cx="19" cy="38" r="10" fill="{R}"/>'
-                  f'<circle cx="45" cy="38" r="10" fill="{B}"/><path class="ink" d="M10 56h14M20 51l-5 5 5 5M54 56H40M44 51l5 5-5 5"/>')
+    icon("shift", f'<circle cx="32" cy="38" r="10" fill="{G}"/><circle cx="19" cy="17" r="10" fill="{R}"/>'
+                  f'<circle cx="45" cy="17" r="10" fill="{B}"/><path class="ink" d="M10 56h14M20 51l-5 5 5 5M54 56H40M44 51l5 5-5 5"/>')
     # мастер: палочка и искры
     icon("wizard", f'<path class="ink" d="M13 51L38 26"/><path d="M38 26l5 5" stroke="{B}" stroke-width="7" stroke-linecap="round"/>'
                    f'{star(46, 14, 8, G)}{star(54, 30, 5, R)}{star(24, 14, 6, B)}')
@@ -86,7 +86,7 @@ def banner(lang: str) -> str:
     return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300" role="img" aria-label="fringefix">
   {STYLE}
   <rect class="bg" width="1200" height="300" rx="22"/>
-  <circle cx="108" cy="188" r="50" fill="{R}"/><circle cx="212" cy="188" r="50" fill="{B}"/><circle cx="160" cy="96" r="50" fill="{G}"/>
+  <circle cx="108" cy="96" r="50" fill="{R}"/><circle cx="212" cy="96" r="50" fill="{B}"/><circle cx="160" cy="188" r="50" fill="{G}"/>
   <text class="t1" x="330" y="142" font-family="{FONT}" font-size="76" font-weight="700">fringefix</text>
   <text class="t2" x="332" y="190" font-family="{FONT}" font-size="22">{tagline}</text>
   {''.join(chip_svg)}

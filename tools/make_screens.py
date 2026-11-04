@@ -155,7 +155,7 @@ def window(c: Canvas, title: str, w: int, h: int) -> str:
     p = c.p
     chrome = [
         f'<rect x=".5" y=".5" width="{w - 1}" height="{h + 31}" rx="9" fill="{p.window}" stroke="{p.border}"/>',
-        '<g transform="translate(10 8)"><circle cx="5" cy="12" r="3.6" fill="#ef4444"/><circle cx="13" cy="12" r="3.6" fill="#3b82f6"/><circle cx="9" cy="5" r="3.6" fill="#22c55e"/></g>',
+        '<g transform="translate(10 8)"><circle cx="5" cy="5" r="3.6" fill="#ef4444"/><circle cx="13" cy="5" r="3.6" fill="#3b82f6"/><circle cx="9" cy="12" r="3.6" fill="#22c55e"/></g>',
         f'<text x="34" y="21" fill="{p.fg}" font-family="{FONT}" font-size="12">{esc(title)}</text>',
         f'<path d="M{w - 126} 16h10M{w - 80} 11h9v9h-9z" fill="none" stroke="{p.fg}" stroke-width="1"/>',
         f'<path d="M{w - 34} 11l9 9m0-9l-9 9" stroke="{p.fg}" stroke-width="1.1"/>',
