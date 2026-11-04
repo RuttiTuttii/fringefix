@@ -29,13 +29,25 @@ jobs:
         with:
           fetch-depth: 0
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mingw-w64
-      - run: make win WERROR=1 REPO="${{ github.repository }}" VERSION="$(git describe --tags --always)"
+      - run: make win WERROR=1 REPO="${{ github.repository }}" REPORT_URL="${{ vars.REPORT_URL }}" VERSION="$(git describe --tags --always)"
       # exe должен тянуть только ожидаемые библиотеки: сети в нём нет, кроме WinHTTP для обновлений
       - run: x86_64-w64-mingw32-objdump -p build/fringefix.exe | grep "DLL Name" | sort -u
       - uses: actions/upload-artifact@v4
         with:
           name: fringefix-windows-mingw-linux
           path: build/fringefix.exe
+
+  # приёмник отчётов на Python: ruff и тесты
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pytest ruff
+      - run: ruff check server
+      - run: cd server && python -m pytest -q
 
   # сборка для релиза: msys2 на Windows-раннере со свежими заголовками
   build:
@@ -58,7 +70,7 @@ jobs:
       # тесты разбора конфига, версий, ссылок релиза и sha256
       - run: make test CC=gcc
       # exe со вшитой версией и репозиторием для обновлений
-      - run: make win CC_WIN=gcc WINDRES=windres VERSION="${{ env.VERSION }}" REPO="${{ github.repository }}"
+      - run: make win CC_WIN=gcc WINDRES=windres VERSION="${{ env.VERSION }}" REPO="${{ github.repository }}" REPORT_URL="${{ vars.REPORT_URL }}"
       # хеш лежит рядом с exe, по нему обновлятор сверяет загрузку
       - run: cd build && sha256sum fringefix.exe > fringefix.exe.sha256
       - uses: actions/upload-artifact@v4
@@ -68,10 +80,10 @@ jobs:
             build/fringefix.exe
             build/fringefix.exe.sha256
 
-  # релиз только из тега и только если зелёные и Linux, и Windows
+  # релиз только из тега и только если зелёные Linux, Windows и сервер
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build, linux, cross]
+    needs: [build, linux, cross, server]
     runs-on: ubuntu-latest
     permissions:
       contents: write
