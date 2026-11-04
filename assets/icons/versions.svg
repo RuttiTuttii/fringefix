@@ -19,5 +19,5 @@
       .arrow { stroke: #7a88a6; }
     }
   </style>
-  <path class="ink" d="M52 32a20 20 0 1 1-6-14.2"/><path class="ink" d="M48 8v10H38"/><circle cx="32" cy="32" r="6" fill="#22c55e"/>
+  <path class="ink" d="M14 32a18 18 0 1 0 5.3-12.7"/><path class="ink" d="M19.3 11.3v8h8"/><circle cx="32" cy="32" r="5" fill="#22c55e"/>
 </svg>

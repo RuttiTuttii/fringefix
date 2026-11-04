@@ -19,5 +19,5 @@
       .arrow { stroke: #7a88a6; }
     }
   </style>
-  <rect class="ink" x="10" y="14" width="34" height="38" rx="6"/><rect class="ink" x="22" y="22" width="34" height="34" rx="6"/><path d="M35 31q-4 0-4 4v2q0 3-3 3 3 0 3 3v2q0 4 4 4M44 31q4 0 4 4v2q0 3 3 3-3 0-3 3v2q0 4-4 4" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linecap="round"/>
+  <path class="ink" d="M11 41V15q0-4 4-4h26q4 0 4 4v4"/><rect class="ink" x="19" y="19" width="34" height="34" rx="6"/><path d="M33 27q-4 0-4 4v2q0 3-3 3 3 0 3 3v2q0 4 4 4M39 27q4 0 4 4v2q0 3 3 3-3 0-3 3v2q0 4-4 4" fill="none" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

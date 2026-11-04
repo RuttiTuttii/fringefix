@@ -53,24 +53,23 @@ def icons() -> None:
     # сдвиг каналов: пучок шариков и две стрелки
     icon("shift", f'<circle cx="32" cy="38" r="10" fill="{G}"/><circle cx="19" cy="17" r="10" fill="{R}"/>'
                   f'<circle cx="45" cy="17" r="10" fill="{B}"/><path class="ink" d="M10 56h14M20 51l-5 5 5 5M54 56H40M44 51l5 5-5 5"/>')
-    # мастер: палочка и искры
-    icon("wizard", f'<path class="ink" d="M13 51L38 26"/><path d="M38 26l5 5" stroke="{B}" stroke-width="7" stroke-linecap="round"/>'
-                   f'{star(46, 14, 8, G)}{star(54, 30, 5, R)}{star(24, 14, 6, B)}')
-    # игры: геймпад
-    icon("games", f'<rect class="ink" x="7" y="22" width="50" height="28" rx="14"/><path class="ink" d="M21 30v12M15 36h12"/>'
-                  f'<circle cx="43" cy="32" r="3.4" fill="{R}"/><circle cx="50" cy="39" r="3.4" fill="{B}"/>'
-                  f'<path d="M24 12h6M34 12h6" stroke="{G}" stroke-width="5" stroke-linecap="round"/>')
-    # профили: две карточки и фигурные скобки
-    icon("profiles", '<rect class="ink" x="10" y="14" width="34" height="38" rx="6"/><rect class="ink" x="22" y="22" width="34" height="34" rx="6"/>'
-                     f'<path d="M35 31q-4 0-4 4v2q0 3-3 3 3 0 3 3v2q0 4 4 4M44 31q4 0 4 4v2q0 3 3 3-3 0-3 3v2q0 4-4 4" fill="none" stroke="{B}" stroke-width="3" stroke-linecap="round"/>')
-    # версии: стрелка отката вокруг метки
-    icon("versions", f'<path class="ink" d="M52 32a20 20 0 1 1-6-14.2"/><path class="ink" d="M48 8v10H38"/><circle cx="32" cy="32" r="6" fill="{G}"/>')
+    # мастер: палочка с синим кончиком и три искры вокруг
+    icon("wizard", f'<path class="ink" d="M11 53L33 31"/><path d="M33 31l8-8" stroke="{B}" stroke-width="7" stroke-linecap="round"/>'
+                   f'{star(53, 14, 9, G)}{star(56, 37, 6, R)}{star(27, 12, 7, B)}')
+    # игры: геймпад с крестовиной и двумя кнопками
+    icon("games", f'<rect class="ink" x="6" y="17" width="52" height="30" rx="15"/><path class="ink" d="M20 26v12M14 32h12"/>'
+                  f'<circle cx="43" cy="28" r="3.6" fill="{R}"/><circle cx="50" cy="35" r="3.6" fill="{B}"/>')
+    # профили: две карточки, у задней видны только верх и левый край, на передней фигурные скобки
+    icon("profiles", '<path class="ink" d="M11 41V15q0-4 4-4h26q4 0 4 4v4"/><rect class="ink" x="19" y="19" width="34" height="34" rx="6"/>'
+                     f'<path d="M33 27q-4 0-4 4v2q0 3-3 3 3 0 3 3v2q0 4 4 4M39 27q4 0 4 4v2q0 3 3 3-3 0-3 3v2q0 4-4 4" fill="none" stroke="{B}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>')
+    # версии: дуга против часовой стрелки со стрелкой в конце и зелёная метка в центре
+    icon("versions", f'<path class="ink" d="M14 32a18 18 0 1 0 5.3-12.7"/><path class="ink" d="M19.3 11.3v8h8"/><circle cx="32" cy="32" r="5" fill="{G}"/>')
     # приватность: щит с галочкой
     icon("privacy", f'<path class="ink" d="M32 8l20 7v15c0 13-9 22-20 26C21 52 12 43 12 30V15z"/><path d="M23 32l7 7 12-14" fill="none" stroke="{G}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>')
-    # язык и тема: круг с закрашенной половиной и искра
-    icon("theme", f'<circle class="ink" cx="32" cy="32" r="21"/><path class="fill" d="M32 11a21 21 0 0 1 0 42z"/>{star(46, 14, 7, G)}')
-    # отчёт: бумажный самолётик
-    icon("report", f'<path d="M8 30L56 10 40 54 29 38z" fill="{B}"/><path d="M29 38L56 10 26 33z" fill="#1d4ed8"/><path class="ink" d="M29 38v14l8-8" stroke="{G}"/>')
+    # язык и тема: круг с закрашенной половиной, искра вынесена за его край
+    icon("theme", f'<circle class="ink" cx="30" cy="34" r="19"/><path class="fill" d="M30 15a19 19 0 0 1 0 38z"/>{star(51, 13, 8, G)}')
+    # отчёт: бумажный самолётик из двух граней
+    icon("report", f'<path d="M56 8L8 27l18 8z" fill="{B}"/><path d="M56 8L26 35l8 19z" fill="#1d4ed8"/>')
 
 
 def banner(lang: str) -> str:

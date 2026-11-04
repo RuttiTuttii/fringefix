@@ -19,5 +19,5 @@
       .arrow { stroke: #7a88a6; }
     }
   </style>
-  <path class="ink" d="M13 51L38 26"/><path d="M38 26l5 5" stroke="#3b82f6" stroke-width="7" stroke-linecap="round"/><path d="M46 6L48.24 11.76L54 14L48.24 16.240000000000002L46 22L43.76 16.240000000000002L38 14L43.76 11.76Z" fill="#22c55e"/><path d="M54 25L55.4 28.6L59 30L55.4 31.4L54 35L52.6 31.4L49 30L52.6 28.6Z" fill="#ef4444"/><path d="M24 8L25.68 12.32L30 14L25.68 15.68L24 20L22.32 15.68L18 14L22.32 12.32Z" fill="#3b82f6"/>
+  <path class="ink" d="M11 53L33 31"/><path d="M33 31l8-8" stroke="#3b82f6" stroke-width="7" stroke-linecap="round"/><path d="M53 5L55.52 11.48L62 14L55.52 16.52L53 23L50.48 16.52L44 14L50.48 11.48Z" fill="#22c55e"/><path d="M56 31L57.68 35.32L62 37L57.68 38.68L56 43L54.32 38.68L50 37L54.32 35.32Z" fill="#ef4444"/><path d="M27 5L28.96 10.04L34 12L28.96 13.96L27 19L25.04 13.96L20 12L25.04 10.04Z" fill="#3b82f6"/>
 </svg>
