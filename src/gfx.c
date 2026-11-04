@@ -127,7 +127,7 @@ static int open_window(ff_gfx *g, const RECT *rect, char *err)
     return 0;
 }
 
-static int open_swapchain(ff_gfx *g, char *err)
+static int open_swapchain(ff_gfx *g, int gpu_priority, char *err)
 {
     HRESULT hr;
     int rc = -1;
@@ -143,6 +143,8 @@ static int open_swapchain(ff_gfx *g, char *err)
     if (SUCCEEDED(IDXGIDevice_QueryInterface(dxdev, &IID_IDXGIDevice1, (void **)&dev1))) {
         IDXGIDevice1_SetMaximumFrameLatency(dev1, 1);
     }
+    /* ниже ноля оверлей уступает видеокарту игре; сбой тут не страшен, остаётся приоритет по умолчанию */
+    IDXGIDevice_SetGPUThreadPriority(dxdev, gpu_priority);
     TRY(IDXGIDevice_GetAdapter(dxdev, &ad), "GetAdapter");
     TRY(IDXGIAdapter_GetParent(ad, &IID_IDXGIFactory2, (void **)&fac), "GetParent");
 
@@ -206,7 +208,7 @@ static int open_pipeline(ff_gfx *g, char *err)
         "CreatePixelShader");
 
     memset(&bd, 0, sizeof bd);
-    bd.ByteWidth = 32;
+    bd.ByteWidth = 48;
     bd.Usage = D3D11_USAGE_DYNAMIC;
     bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
     bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
@@ -227,14 +229,14 @@ done:
     return rc;
 }
 
-int gfx_init(ff_gfx *g, int monitor, char *err)
+int gfx_init(ff_gfx *g, const ff_config *cfg, char *err)
 {
     RECT rect;
 
     memset(g, 0, sizeof *g);
     err[0] = '\0';
-    if (open_capture(g, monitor, &rect, err) != 0 || open_window(g, &rect, err) != 0
-        || open_swapchain(g, err) != 0 || open_pipeline(g, err) != 0
+    if (open_capture(g, cfg->monitor, &rect, err) != 0 || open_window(g, &rect, err) != 0
+        || open_swapchain(g, cfg->gpu_priority, err) != 0 || open_pipeline(g, err) != 0
         || gfx_sig_open(g, err) != 0) {
         gfx_shutdown(g);
         return -1;

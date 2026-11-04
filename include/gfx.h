@@ -16,6 +16,8 @@ typedef struct {
     int hdr;
     int shown;
     int have_frame;
+    /* облегчённый режим: один сдвиг без лапласиана и резкости, чтобы шейдер почти ничего не стоил */
+    int light;
     UINT w;
     UINT h;
     DXGI_FORMAT fmt;
@@ -43,8 +45,9 @@ typedef struct {
     size_t meta_cap;
 } ff_gfx;
 
-/* поднимает всё сразу или ничего; при ошибке кладёт текст в err (GFX_ERR_LEN байт) и возвращает -1 */
-int gfx_init(ff_gfx *g, int monitor, char *err);
+/* поднимает всё сразу или ничего: монитор и приоритет GPU берутся из cfg; при ошибке кладёт текст в err
+ * (GFX_ERR_LEN байт) и возвращает -1 */
+int gfx_init(ff_gfx *g, const ff_config *cfg, char *err);
 
 /* безопасен для нулевой структуры и для повторного вызова */
 void gfx_shutdown(ff_gfx *g);

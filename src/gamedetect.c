@@ -107,25 +107,48 @@ static int is_3d_app(DWORD pid)
     return result;
 }
 
-int game_detect(int mode, const RECT *monitor)
+/* путь к exe процесса активного окна; пустой, если процесс не открылся */
+static void exe_path(DWORD pid, wchar_t path[MAX_PATH])
+{
+    DWORD len = MAX_PATH;
+    HANDLE p = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+
+    path[0] = L'\0';
+    if (p) {
+        if (!QueryFullProcessImageNameW(p, 0, path, &len)) {
+            path[0] = L'\0';
+        }
+        CloseHandle(p);
+    }
+}
+
+int game_detect(const ff_config *cfg, const RECT *monitor)
 {
     HWND fg = GetForegroundWindow();
     DWORD pid = 0;
+    wchar_t path[MAX_PATH];
     RECT wr;
     RECT overlap;
 
-    if (mode <= 0 || !fg) {
+    if (cfg->auto_pause <= 0 || !fg) {
         return GAME_NONE;
     }
     GetWindowThreadProcessId(fg, &pid);
     if (pid == GetCurrentProcessId() || is_shell_window(fg)) {
         return GAME_NONE;
     }
+    exe_path(pid, path);
+    if (path[0] && ff_app_list_has(cfg->ignore_apps, path)) {
+        return GAME_NONE;
+    }
+    if (path[0] && ff_app_list_has(cfg->pause_apps, path)) {
+        return GAME_LISTED;
+    }
     if (covers_monitor(fg, monitor)) {
         return GAME_FULLSCREEN;
     }
     /* 3D-приложение считается, только если его окно лежит на мониторе оверлея */
-    if (mode >= 2 && GetWindowRect(fg, &wr) && IntersectRect(&overlap, &wr, monitor)
+    if (cfg->auto_pause >= 2 && GetWindowRect(fg, &wr) && IntersectRect(&overlap, &wr, monitor)
         && is_3d_app(pid)) {
         return GAME_3D;
     }

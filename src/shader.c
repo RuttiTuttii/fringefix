@@ -12,6 +12,7 @@ static const char HLSL[] =
     "cbuffer cb : register(b0) {\n"
     "    float4 shiftRG;\n"   /* rx, ry, gx, gy */
     "    float4 shiftBX;\n"   /* bx, by, sharpen, hdr */
+    "    float4 mode;\n"      /* light, 0, 0, 0 */
     "};\n"
     "static float2 size;\n"
     "float ld(int2 c, int ch) {\n"
@@ -24,6 +25,9 @@ static const char HLSL[] =
     "    float2 p = pix - s;\n"
     "    float4 t = src.SampleLevel(lin, p / size, 0);\n"
     "    float v = t[ch];\n"
+    "    if (mode.x > 0.5) {\n"
+    "        return shiftBX.w > 0.5 ? v : saturate(v);\n"
+    "    }\n"
     "    int2 q = int2(floor(p));\n"
     "    float lap = ld(q + int2(-1, 0), ch) + ld(q + int2(1, 0), ch)\n"
     "              + ld(q + int2(0, -1), ch) + ld(q + int2(0, 1), ch) - 4.0 * ld(q, ch);\n"

@@ -12,7 +12,7 @@
 void gfx_upload(ff_gfx *g, const ff_config *c)
 {
     D3D11_MAPPED_SUBRESOURCE m;
-    float v[8];
+    float v[12];
 
     v[0] = c->shift[0][0];
     v[1] = c->shift[0][1];
@@ -22,6 +22,8 @@ void gfx_upload(ff_gfx *g, const ff_config *c)
     v[5] = c->shift[2][1];
     v[6] = c->sharpen;
     v[7] = g->hdr ? 1.0f : 0.0f;
+    v[8] = g->light ? 1.0f : 0.0f;
+    v[9] = v[10] = v[11] = 0.0f;
     if (SUCCEEDED(ID3D11DeviceContext_Map(g->ctx, (ID3D11Resource *)g->cb, 0,
                                           D3D11_MAP_WRITE_DISCARD, 0, &m))) {
         memcpy(m.pData, v, sizeof v);
