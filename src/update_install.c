@@ -17,6 +17,9 @@ typedef struct {
     ff_update_info info;
 } install_job;
 
+/* идёт ли установка: не больше одной за раз */
+static volatile LONG g_installing;
+
 /* первые 64 символа файла .sha256 должны быть hex; формат sha256sum "<hash>  <имя>" */
 static int expected_hash(const unsigned char *text, size_t len, char out[65])
 {
@@ -66,16 +69,21 @@ static int exe_paths(wchar_t path[MAX_PATH], wchar_t neu[MAX_PATH], wchar_t old[
     return 0;
 }
 
-/* работающий exe нельзя перезаписать, но можно переименовать: старый уходит в .old, новый встаёт на место */
-static int swap_exe(const wchar_t *path, const wchar_t *neu, const wchar_t *old)
+/* работающий exe нельзя перезаписать, но можно переименовать: старый уходит в .old, новый встаёт на место;
+ * 0 или код ошибки WinAPI */
+static DWORD swap_exe(const wchar_t *path, const wchar_t *neu, const wchar_t *old)
 {
+    DWORD err;
+
     DeleteFileW(old);
     if (!MoveFileExW(path, old, MOVEFILE_REPLACE_EXISTING)) {
-        return -1;
+        return GetLastError();
     }
     if (!MoveFileExW(neu, path, MOVEFILE_REPLACE_EXISTING)) {
+        /* код причины снимается до отката: откат сам перезапишет GetLastError */
+        err = GetLastError();
         MoveFileExW(old, path, MOVEFILE_REPLACE_EXISTING);
-        return -1;
+        return err;
     }
     return 0;
 }
@@ -91,6 +99,7 @@ static int install(const ff_update_info *info, ff_install_result *res)
     unsigned char digest[32];
     wchar_t neu[MAX_PATH];
     wchar_t old[MAX_PATH];
+    DWORD swap_err;
     int rc = -1;
 
     if (exe_paths(res->exe, neu, old) != 0) {
@@ -119,9 +128,10 @@ static int install(const ff_update_info *info, ff_install_result *res)
         snprintf(res->msg, sizeof res->msg, "cannot write %s", "fringefix.exe.new");
         goto done;
     }
-    if (swap_exe(res->exe, neu, old) != 0) {
+    swap_err = swap_exe(res->exe, neu, old);
+    if (swap_err != 0) {
         DeleteFileW(neu);
-        snprintf(res->msg, sizeof res->msg, "cannot replace fringefix.exe (%lu)", GetLastError());
+        snprintf(res->msg, sizeof res->msg, "cannot replace fringefix.exe (%lu)", (unsigned long)swap_err);
         goto done;
     }
     rc = 0;
@@ -144,15 +154,22 @@ static DWORD WINAPI install_thread(LPVOID arg)
         }
     }
     free(job);
+    InterlockedExchange(&g_installing, 0);
     return 0;
 }
 
 void update_install_async(HWND notify, const ff_update_info *info)
 {
-    install_job *job = calloc(1, sizeof *job);
+    install_job *job;
     HANDLE t;
 
+    /* вторая установка поверх идущей писала бы тот же .new: пока идёт одна, новые просьбы игнорируются */
+    if (InterlockedCompareExchange(&g_installing, 1, 0) != 0) {
+        return;
+    }
+    job = calloc(1, sizeof *job);
     if (!job) {
+        InterlockedExchange(&g_installing, 0);
         return;
     }
     job->notify = notify;
@@ -160,6 +177,7 @@ void update_install_async(HWND notify, const ff_update_info *info)
     t = CreateThread(NULL, 0, install_thread, job, 0, NULL);
     if (!t) {
         free(job);
+        InterlockedExchange(&g_installing, 0);
         return;
     }
     CloseHandle(t);
