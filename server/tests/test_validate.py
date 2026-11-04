@@ -58,6 +58,7 @@ class ValidateTest(unittest.TestCase):
             ("settings", "sharpen", 5),
             ("settings", "gpu_priority", 99),
             ("settings", "auto_pause", True),
+            ("settings", "auto_pause", 4),
             ("system", "windows_build", -1),
         ]
         for section, key, value in cases:
@@ -69,6 +70,13 @@ class ValidateTest(unittest.TestCase):
         report["settings"]["red"]["x"] = 2.5
         with self.assertRaises(ReportError):
             validate_report(report)
+
+    def test_accepts_every_auto_pause_mode(self) -> None:
+        # режимы клиента: 0 выключена, 1 полный экран, 2 полный экран и 3D, 3 только 3D
+        for mode in range(4):
+            report = load()
+            report["settings"]["auto_pause"] = mode
+            self.assertEqual(validate_report(report)["settings"]["auto_pause"], mode)
 
     def test_limits_on_lists_and_comment(self) -> None:
         report = load()

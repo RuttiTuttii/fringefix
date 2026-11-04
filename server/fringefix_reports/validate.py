@@ -104,7 +104,7 @@ def _settings(raw: dict[str, Any]) -> dict[str, Any]:
             "y": _ranged_float(xy.get("y"), f"{channel}.y", -2.0, 2.0),
         }
     out["sharpen"] = _ranged_float(settings.get("sharpen"), "settings.sharpen", -1.0, 1.0)
-    out["auto_pause"] = _ranged_int(settings.get("auto_pause"), "settings.auto_pause", 0, 2)
+    out["auto_pause"] = _ranged_int(settings.get("auto_pause"), "settings.auto_pause", 0, 3)
     out["game_action"] = _ranged_int(settings.get("game_action"), "settings.game_action", 0, 1)
     out["gpu_priority"] = _ranged_int(
         settings.get("gpu_priority"), "settings.gpu_priority", -7, 7
