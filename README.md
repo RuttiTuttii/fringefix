@@ -62,8 +62,8 @@ check the network before sending: a transfer to the wrong network cannot be reco
 - download `fringefix.exe` from the latest release and put it in any folder
 - start it, a tray icon of three balls in a triangle appears (black and white means off or paused)
 - double click opens settings, right click opens the menu with profiles
-- the "Filter" switch at the bottom left of the settings window does the same as `Ctrl+Alt+F`; with the filter off the picture is left unchanged
-- `Ctrl+Alt+F` toggles the overlay, `Ctrl+Alt+Q` quits
+- the "Filter" switch at the bottom left of the settings window does the same as `Win+Alt+F`; with the filter off the picture is left unchanged
+- `Win+Alt+F` toggles the overlay, `Win+Alt+Q` quits
 - settings live in `%APPDATA%\fringefix\fringefix.ini`, the Save button writes them
 - the "Start with Windows" checkbox in the Startup card (the "Settings" button) writes `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, no administrator rights needed. The state is read from the registry: if the exe moved to another folder the checkbox is off, turning it on again updates the path
 

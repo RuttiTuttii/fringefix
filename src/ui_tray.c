@@ -265,8 +265,9 @@ int ui_tray_create(ff_app *a)
     if (!a->hwnd) {
         return -1;
     }
-    RegisterHotKey(a->hwnd, HK_TOGGLE, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 'F');
-    RegisterHotKey(a->hwnd, HK_QUIT, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 'Q');
+    /* не Ctrl+Alt: это AltGr, и хоткей съедал бы символы вроде @ на немецкой и [ на венгерской раскладке */
+    RegisterHotKey(a->hwnd, HK_TOGGLE, MOD_WIN | MOD_ALT | MOD_NOREPEAT, 'F');
+    RegisterHotKey(a->hwnd, HK_QUIT, MOD_WIN | MOD_ALT | MOD_NOREPEAT, 'Q');
     tray_notify(a, NIM_ADD);
     return 0;
 }
