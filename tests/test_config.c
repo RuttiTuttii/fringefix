@@ -8,7 +8,7 @@ static void test_defaults(void)
     ff_config c;
     ff_config_defaults(&c);
     CHECK(c.shift[0][0] == 0.0f && c.shift[2][1] == 0.0f);
-    CHECK(c.sharpen == 0.0f && c.monitor == 0 && c.check_updates == 1);
+    CHECK(c.sharpen == 0.0f && c.monitor == 0 && c.check_updates == 1 && c.auto_pause == 1);
 }
 
 static void test_values(void)
@@ -16,12 +16,12 @@ static void test_values(void)
     ff_config c;
     ff_config_defaults(&c);
     CHECK(ff_config_parse("red_y = 0.25\ngreen_y=-0.5\nblue_x=1\nsharpen=0.3\nmonitor=1\n"
-                          "check_updates=0\n", &c) == 6);
+                          "check_updates=0\nauto_pause=2\n", &c) == 7);
     CHECK(c.shift[0][1] == 0.25f);
     CHECK(c.shift[1][1] == -0.5f);
     CHECK(c.shift[2][0] == 1.0f);
     CHECK(c.sharpen > 0.29f && c.sharpen < 0.31f);
-    CHECK(c.monitor == 1 && c.check_updates == 0);
+    CHECK(c.monitor == 1 && c.check_updates == 0 && c.auto_pause == 2);
 }
 
 static void test_clamp(void)
@@ -34,6 +34,8 @@ static void test_clamp(void)
     /* минус у резкости разрешён, плюс зажимается единицей */
     CHECK(ff_config_parse("sharpen=-0.5\n", &c) == 1 && c.sharpen == -0.5f);
     CHECK(ff_config_parse("sharpen=7\n", &c) == 1 && c.sharpen == 1.0f);
+    CHECK(ff_config_parse("auto_pause=9\n", &c) == 1 && c.auto_pause == 2);
+    CHECK(ff_config_parse("auto_pause=-1\n", &c) == 1 && c.auto_pause == 0);
     CHECK(ff_config_parse("monitor=1000\n", &c) == 1 && c.monitor == 15);
 }
 
@@ -83,11 +85,12 @@ static void test_roundtrip(void)
     a.sharpen = 0.5f;
     a.monitor = 2;
     a.check_updates = 0;
+    a.auto_pause = 2;
 
     n = ff_config_format(&a, buf, sizeof buf);
     CHECK(n > 0);
     ff_config_defaults(&b);
-    CHECK(ff_config_parse(buf, &b) == 9);
+    CHECK(ff_config_parse(buf, &b) == 10);
     CHECK(memcmp(&a, &b, sizeof a) == 0);
     /* маленький буфер не должен молча обрезать файл */
     CHECK(ff_config_format(&a, tiny, sizeof tiny) == -1);

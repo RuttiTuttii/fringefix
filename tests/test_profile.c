@@ -24,7 +24,7 @@ static void test_roundtrip(void)
     CHECK(ff_profile_parse(buf, &b) == 7);
     CHECK(memcmp(a.shift, b.shift, sizeof a.shift) == 0 && a.sharpen == b.sharpen);
     /* монитор и обновления в профиль не входят и не должны меняться */
-    CHECK(b.monitor == 0 && b.check_updates == 1);
+    CHECK(b.monitor == 0 && b.check_updates == 1 && b.auto_pause == 1);
     CHECK(ff_profile_format(&a, tiny, sizeof tiny) == -1);
 }
 

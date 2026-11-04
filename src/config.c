@@ -16,6 +16,7 @@ void ff_config_defaults(ff_config *cfg)
 {
     memset(cfg, 0, sizeof *cfg);
     cfg->check_updates = 1;
+    cfg->auto_pause = 1;
 }
 
 /* срезает пробелы с обеих сторон прямо в буфере */
@@ -87,6 +88,13 @@ static int parse_line(char *line, ff_config *cfg)
         cfg->monitor = (int)v;
         return 1;
     }
+    if (strcmp(key, "auto_pause") == 0) {
+        if (!parse_number(val, 0.0, 2.0, &v)) {
+            return 0;
+        }
+        cfg->auto_pause = (int)v;
+        return 1;
+    }
     if (strcmp(key, "check_updates") == 0) {
         if (!parse_number(val, 0.0, 1.0, &v)) {
             return 0;
@@ -132,11 +140,12 @@ int ff_config_format(const ff_config *cfg, char *buf, size_t n)
         "blue_x = %.3f\nblue_y = %.3f\n"
         "\n; резкость от -1 до 1, минус смягчает картинку\nsharpen = %.3f\n"
         "\n; номер монитора, выходы всех видеокарт считаются подряд с нуля\nmonitor = %d\n"
-        "\n; проверять обновления при запуске, 0 или 1\ncheck_updates = %d\n",
+        "\n; проверять обновления при запуске, 0 или 1\ncheck_updates = %d\n"
+        "\n; автопауза: 0 выключена, 1 в полноэкранных приложениях, 2 ещё и в 3D-приложениях\nauto_pause = %d\n",
         (double)cfg->shift[0][0], (double)cfg->shift[0][1],
         (double)cfg->shift[1][0], (double)cfg->shift[1][1],
         (double)cfg->shift[2][0], (double)cfg->shift[2][1],
-        (double)cfg->sharpen, cfg->monitor, cfg->check_updates);
+        (double)cfg->sharpen, cfg->monitor, cfg->check_updates, cfg->auto_pause);
 
     return (w < 0 || (size_t)w >= n) ? -1 : w;
 }
