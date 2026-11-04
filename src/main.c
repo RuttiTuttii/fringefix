@@ -8,6 +8,7 @@
 
 #include "app.h"
 #include "i18n.h"
+#include "stats_store.h"
 #include "theme.h"
 #include "ui.h"
 #include "update.h"
@@ -51,15 +52,24 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show)
         return 0;
     }
     update_cleanup();
-    /* язык интерфейса и тема берутся у системы */
-    ff_i18n_set(PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_RUSSIAN ? FF_LANG_RU : FF_LANG_EN);
-    theme_refresh();
+    /* до загрузки настроек язык берётся у системы, чтобы сообщение об ошибке было понятным */
+    ui_language_apply(0);
     InitCommonControlsEx(&icc);
 
     if (app_init(&app, inst) != 0 || ui_tray_create(&app) != 0 || capture_start(&app) != 0) {
         MessageBoxW(NULL, ff_tr(S_START_FAILED), L"fringefix", MB_ICONERROR);
         return 1;
     }
+    {
+        wchar_t stats_path[MAX_PATH];
+
+        app_stats_path(&app, stats_path);
+        stats_store_init(stats_path, app.cfg.stats);
+    }
+    /* язык и тема из настроек: 0 значит как в системе */
+    ui_language_apply(app.cfg.language);
+    theme_set_mode(app.cfg.theme);
+    theme_refresh();
     if (app.cfg.check_updates && FF_REPO[0]) {
         update_check_async(app.hwnd, FF_REPO, 0);
     }
@@ -71,6 +81,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show)
         }
     }
     app_shutdown(&app);
+    stats_store_save();
     ReleaseMutex(single);
     CloseHandle(single);
     return 0;

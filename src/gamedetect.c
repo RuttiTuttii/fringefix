@@ -107,6 +107,19 @@ static int is_3d_app(DWORD pid)
     return result;
 }
 
+/* имя файла из пути в UTF-8; без пути и без папок, в отчёт попадает только оно */
+static void base_name_utf8(const wchar_t *path, char out[64])
+{
+    const wchar_t *slash = wcsrchr(path, L'\\');
+    const wchar_t *name = slash ? slash + 1 : path;
+
+    out[0] = '\0';
+    if (*name) {
+        WideCharToMultiByte(CP_UTF8, 0, name, -1, out, 64, NULL, NULL);
+        out[63] = '\0';
+    }
+}
+
 /* путь к exe процесса активного окна; пустой, если процесс не открылся */
 static void exe_path(DWORD pid, wchar_t path[MAX_PATH])
 {
@@ -122,7 +135,7 @@ static void exe_path(DWORD pid, wchar_t path[MAX_PATH])
     }
 }
 
-int game_detect(const ff_config *cfg, const RECT *monitor)
+int game_detect(const ff_config *cfg, const RECT *monitor, char exe[64])
 {
     HWND fg = GetForegroundWindow();
     DWORD pid = 0;
@@ -130,6 +143,7 @@ int game_detect(const ff_config *cfg, const RECT *monitor)
     RECT wr;
     RECT overlap;
 
+    exe[0] = '\0';
     if (cfg->auto_pause <= 0 || !fg) {
         return GAME_NONE;
     }
@@ -138,6 +152,7 @@ int game_detect(const ff_config *cfg, const RECT *monitor)
         return GAME_NONE;
     }
     exe_path(pid, path);
+    base_name_utf8(path, exe);
     if (path[0] && ff_app_list_has(cfg->ignore_apps, path)) {
         return GAME_NONE;
     }

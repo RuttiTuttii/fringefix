@@ -18,6 +18,9 @@ typedef struct {
     int have_frame;
     /* облегчённый режим: один сдвиг без лапласиана и резкости, чтобы шейдер почти ничего не стоил */
     int light;
+    /* счётчики для статистики; поток захвата забирает их и обнуляет */
+    unsigned drawn;
+    unsigned echo_skipped;
     UINT w;
     UINT h;
     DXGI_FORMAT fmt;

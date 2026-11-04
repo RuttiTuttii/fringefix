@@ -52,6 +52,7 @@ static void draw(ff_gfx *g)
     ID3D11DeviceContext_PSSetConstantBuffers(g->ctx, 0, 1, &g->cb);
     ID3D11DeviceContext_Draw(g->ctx, 3, 0);
     IDXGISwapChain1_Present(g->sc, 1, 0);
+    g->drawn++;
 
     /* окно показываем только после первой готовой картинки, иначе экран на миг станет чёрным */
     if (!g->shown) {
@@ -126,6 +127,9 @@ static int frame_changed(ff_gfx *g, const DXGI_OUTDUPL_FRAME_INFO *info)
     changed = !g->sig_valid || sig != g->sig;
     g->sig = sig;
     g->sig_valid = 1;
+    if (!changed) {
+        g->echo_skipped++;
+    }
     return changed;
 }
 

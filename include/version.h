@@ -8,5 +8,9 @@
 #ifndef FF_REPO
 #define FF_REPO ""
 #endif
+/* адрес приёма отчётов; пусто значит, что отправка из этой сборки отключена */
+#ifndef FF_REPORT_URL
+#define FF_REPORT_URL ""
+#endif
 
 #endif

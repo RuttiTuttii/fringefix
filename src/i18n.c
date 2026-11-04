@@ -97,6 +97,45 @@ static const wchar_t *const RU[S_COUNT] = {
     [S_VER_CLOSE] = L"Закрыть",
     [S_VER_CONFIRM_UP] = L"Установить версию %ls? Сейчас %ls. Программа перезапустится.",
     [S_VER_CONFIRM_DOWN] = L"Откатиться на версию %ls? Сейчас %ls. Программа перезапустится.",
+    [S_BTN_PROGRAM] = L"Программа...",
+    [S_APP_TITLE] = L"fringefix: программа",
+    [S_CARD_INTERFACE] = L"Интерфейс",
+    [S_CARD_GAMES] = L"Игры",
+    [S_CARD_DATA] = L"Обновления и данные",
+    [S_LANGUAGE] = L"Язык",
+    [S_LANG_AUTO] = L"Авто (как в системе)",
+    [S_LANG_RU] = L"Русский",
+    [S_LANG_EN] = L"English",
+    [S_THEME] = L"Тема",
+    [S_THEME_AUTO] = L"Авто (как в системе)",
+    [S_THEME_LIGHT] = L"Светлая",
+    [S_THEME_DARK] = L"Тёмная",
+    [S_BTN_REPORT] = L"Отчёт и статистика...",
+    [S_REP_TITLE] = L"fringefix: отчёт и статистика",
+    [S_REP_HINT] = L"Ничего не отправляется само. Внизу показано ровно то, что уйдёт на сервер, и ты решаешь, отправлять или нет. "
+                   L"В отчёте нет имени пользователя, имени компьютера, путей, заголовков окон и постоянного идентификатора. "
+                   L"Сервер видит сетевой адрес, но не записывает его.",
+    [S_REP_COLLECT] = L"Вести статистику на этом компьютере (хранится только здесь)",
+    [S_REP_SYSTEM] = L"Система: версия Windows, видеокарта, разрешение монитора, HDR",
+    [S_REP_SETTINGS] = L"Мои настройки: сдвиги, резкость, автопауза",
+    [S_REP_STATS] = L"Статистика: счётчики, ошибки и игры (только имена exe)",
+    [S_REP_COMMENT] = L"Комментарий, по желанию",
+    [S_REP_PREVIEW] = L"Что будет отправлено (точно этот текст)",
+    [S_REP_SEND] = L"Отправить",
+    [S_REP_ISSUE] = L"Открыть issue на GitHub",
+    [S_REP_COPY] = L"Скопировать",
+    [S_REP_SAVE] = L"Сохранить в файл...",
+    [S_REP_CLEAR] = L"Очистить статистику",
+    [S_REP_SENDING] = L"Отправляю...",
+    [S_REP_SENT] = L"Отправлено, номер %ls. Спасибо",
+    [S_REP_SEND_FAILED] = L"Не отправилось: %ls",
+    [S_REP_NO_URL] = L"В этой сборке нет адреса приёма: отчёт можно скопировать, сохранить в файл или открыть issue",
+    [S_REP_COPIED] = L"Скопировано в буфер обмена",
+    [S_REP_SAVED] = L"Сохранено в файл",
+    [S_REP_CLEARED] = L"Статистика очищена",
+    [S_REP_ISSUE_BODY] = L"Вставь сюда отчёт (Ctrl+V), он уже в буфере обмена.",
+    [S_REP_CONFIRM] = L"Отправить отчёт на сервер? Уйдёт ровно тот текст, что показан в окне.",
+    [S_REP_TOO_BIG] = L"Отчёт слишком длинный, сократи комментарий",
 };
 
 static const wchar_t *const EN[S_COUNT] = {
@@ -194,6 +233,45 @@ static const wchar_t *const EN[S_COUNT] = {
     [S_VER_CLOSE] = L"Close",
     [S_VER_CONFIRM_UP] = L"Install version %ls? You have %ls. The program will restart.",
     [S_VER_CONFIRM_DOWN] = L"Roll back to version %ls? You have %ls. The program will restart.",
+    [S_BTN_PROGRAM] = L"Program...",
+    [S_APP_TITLE] = L"fringefix program settings",
+    [S_CARD_INTERFACE] = L"Interface",
+    [S_CARD_GAMES] = L"Games",
+    [S_CARD_DATA] = L"Updates and data",
+    [S_LANGUAGE] = L"Language",
+    [S_LANG_AUTO] = L"Auto (as in the system)",
+    [S_LANG_RU] = L"Русский",
+    [S_LANG_EN] = L"English",
+    [S_THEME] = L"Theme",
+    [S_THEME_AUTO] = L"Auto (as in the system)",
+    [S_THEME_LIGHT] = L"Light",
+    [S_THEME_DARK] = L"Dark",
+    [S_BTN_REPORT] = L"Report and statistics...",
+    [S_REP_TITLE] = L"fringefix: report and statistics",
+    [S_REP_HINT] = L"Nothing is sent on its own. Below is exactly what would go to the server, and you decide whether to send it. "
+                   L"The report has no user name, computer name, paths, window titles or permanent identifier. "
+                   L"The server sees the network address but does not record it.",
+    [S_REP_COLLECT] = L"Keep statistics on this computer (stored only here)",
+    [S_REP_SYSTEM] = L"System: Windows version, GPU, monitor resolution, HDR",
+    [S_REP_SETTINGS] = L"My settings: shifts, sharpness, auto-pause",
+    [S_REP_STATS] = L"Statistics: counters, errors and games (exe names only)",
+    [S_REP_COMMENT] = L"Comment, optional",
+    [S_REP_PREVIEW] = L"What will be sent (exactly this text)",
+    [S_REP_SEND] = L"Send",
+    [S_REP_ISSUE] = L"Open a GitHub issue",
+    [S_REP_COPY] = L"Copy",
+    [S_REP_SAVE] = L"Save to file...",
+    [S_REP_CLEAR] = L"Clear statistics",
+    [S_REP_SENDING] = L"Sending...",
+    [S_REP_SENT] = L"Sent, number %ls. Thank you",
+    [S_REP_SEND_FAILED] = L"Not sent: %ls",
+    [S_REP_NO_URL] = L"This build has no receiving address: the report can be copied, saved to a file or opened as an issue",
+    [S_REP_COPIED] = L"Copied to the clipboard",
+    [S_REP_SAVED] = L"Saved to a file",
+    [S_REP_CLEARED] = L"Statistics cleared",
+    [S_REP_ISSUE_BODY] = L"Paste the report here (Ctrl+V), it is already in the clipboard.",
+    [S_REP_CONFIRM] = L"Send the report to the server? Exactly the text shown in the window goes out.",
+    [S_REP_TOO_BIG] = L"The report is too long, shorten the comment",
 };
 
 void ff_i18n_set(ff_lang lang)
@@ -210,6 +288,11 @@ const wchar_t *ff_tr_lang(ff_lang lang, str_id id)
     }
     s = lang == FF_LANG_RU ? RU[id] : EN[id];
     return s ? s : L"";
+}
+
+ff_lang ff_i18n_get(void)
+{
+    return g_lang;
 }
 
 const wchar_t *ff_tr(str_id id)

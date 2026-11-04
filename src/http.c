@@ -18,8 +18,9 @@
         goto done;                                                                  \
     } while (0)
 
-int ff_http_get(const char *url, size_t max, unsigned char **out, size_t *out_len, char *err,
-                size_t err_len)
+/* общий запрос: GET без тела или POST с JSON; успехом считается любой код 2xx */
+static int request(const wchar_t *method, const char *url, const void *body, size_t body_len,
+                   size_t max, unsigned char **out, size_t *out_len, char *err, size_t err_len)
 {
     wchar_t wurl[URL_MAX];
     wchar_t wagent[64];
@@ -66,13 +67,16 @@ int ff_http_get(const char *url, size_t max, unsigned char **out, size_t *out_le
     if (!con) {
         FAIL("WinHttpConnect");
     }
-    req = WinHttpOpenRequest(con, L"GET", path, NULL, WINHTTP_NO_REFERER,
+    req = WinHttpOpenRequest(con, method, path, NULL, WINHTTP_NO_REFERER,
                              WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
     if (!req) {
         FAIL("WinHttpOpenRequest");
     }
-    if (!WinHttpSendRequest(req, L"Accept: application/vnd.github+json\r\n", (DWORD)-1L,
-                            WINHTTP_NO_REQUEST_DATA, 0, 0, 0)
+    if (!WinHttpSendRequest(req,
+                            body ? L"Content-Type: application/json\r\nAccept: application/json\r\n"
+                                 : L"Accept: application/vnd.github+json\r\n",
+                            (DWORD)-1L, body ? (LPVOID)body : WINHTTP_NO_REQUEST_DATA,
+                            (DWORD)body_len, (DWORD)body_len, 0)
         || !WinHttpReceiveResponse(req, NULL)) {
         FAIL("request");
     }
@@ -81,7 +85,7 @@ int ff_http_get(const char *url, size_t max, unsigned char **out, size_t *out_le
                              WINHTTP_NO_HEADER_INDEX)) {
         FAIL("WinHttpQueryHeaders");
     }
-    if (status != 200) {
+    if (status < 200 || status > 299) {
         snprintf(err, err_len, status == 404
                                    ? "HTTP 404, repository is private or has no releases"
                                    : "HTTP %lu", (unsigned long)status);
@@ -144,4 +148,22 @@ done:
         WinHttpCloseHandle(ses);
     }
     return rc;
+}
+
+int ff_http_get(const char *url, size_t max, unsigned char **out, size_t *out_len, char *err,
+                size_t err_len)
+{
+    return request(L"GET", url, NULL, 0, max, out, out_len, err, err_len);
+}
+
+int ff_http_post_json(const char *url, const void *body, size_t body_len, size_t max,
+                      unsigned char **out, size_t *out_len, char *err, size_t err_len)
+{
+    if (body_len == 0 || body_len > 1000000) {
+        snprintf(err, err_len, "bad body size");
+        *out = NULL;
+        *out_len = 0;
+        return -1;
+    }
+    return request(L"POST", url, body, body_len, max, out, out_len, err, err_len);
 }

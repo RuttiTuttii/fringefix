@@ -4,6 +4,7 @@
 #include <windows.h>
 
 #include "app.h"
+#include "report_send.h"
 #include "update.h"
 
 /* скрытое окно сообщений, значок в трее и глобальные хоткеи; 0 или -1 */
@@ -21,6 +22,20 @@ void ui_settings_refresh(void);
 
 /* для главного цикла: Tab и Enter в окне настроек; ненулевой ответ значит сообщение съедено */
 int ui_settings_translate(MSG *m);
+
+/* окно настроек программы: язык, тема, игры, обновления и отчёт */
+void ui_app_show(ff_app *a);
+
+/* язык интерфейса: 0 как в системе, 1 русский, 2 английский; тему применяет ui_theme_apply после theme_set_mode */
+void ui_language_apply(int mode);
+void ui_theme_apply(void);
+
+/* закрывает окно настроек: пересоздаётся на следующем показе уже с новым языком */
+void ui_settings_destroy(void);
+
+/* отчёт и локальная статистика: что именно уйдёт, комментарий и отправка */
+void ui_report_show(ff_app *a);
+void ui_report_on_result(ff_app *a, ff_report_result *res);
 
 /* выбор версии из релизов репозитория с откатом на старую */
 void ui_versions_show(ff_app *a);

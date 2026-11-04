@@ -50,10 +50,6 @@ void ctl_sync(void)
         ctl_edit_show(i);
     }
     SendMessageW(ui.monitor, CB_SETCURSEL, (WPARAM)ui.app->cfg.monitor, 0);
-    SendMessageW(ui.autopause, CB_SETCURSEL, (WPARAM)ui.app->cfg.auto_pause, 0);
-    SendMessageW(ui.gameaction, CB_SETCURSEL, (WPARAM)ui.app->cfg.game_action, 0);
-    SendMessageW(ui.check, BM_SETCHECK,
-                 ui.app->cfg.check_updates ? BST_CHECKED : BST_UNCHECKED, 0);
 }
 
 void ctl_slider_changed(int idx)
@@ -126,36 +122,19 @@ static void build_button(str_id text, int col, int y, int id)
           BTN_H, id);
 }
 
-/* выпадающий список в строке таблицы: монитор или автопауза */
-static HWND build_combo(const row_def *r, int id)
-{
-    return child(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 0,
-                 MARGIN + COL_SLIDER, row_y(r) + 2, CARD_W - COL_SLIDER - COL_LABEL, 220, id);
-}
-
-static void build_combos(void)
+/* список мониторов в строке таблицы */
+static void build_monitor(const row_def *r)
 {
     wchar_t names[MAX_OUTPUTS][OUTPUT_NAME_LEN];
     int n = ff_output_list(names, MAX_OUTPUTS);
     int i;
 
-    for (i = 0; i < NROWS; i++) {
-        if (ROWS[i].idx == IDX_MONITOR) {
-            ui.monitor = build_combo(&ROWS[i], ID_MONITOR);
-        } else if (ROWS[i].idx == IDX_AUTOPAUSE) {
-            ui.autopause = build_combo(&ROWS[i], ID_AUTOPAUSE);
-        } else if (ROWS[i].idx == IDX_GAMEACTION) {
-            ui.gameaction = build_combo(&ROWS[i], ID_GAMEACTION);
-        }
-    }
+    ui.monitor = child(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 0,
+                       MARGIN + COL_SLIDER, row_y(r) + 2, CARD_W - COL_SLIDER - COL_LABEL, 220,
+                       ID_MONITOR);
     for (i = 0; i < n; i++) {
         SendMessageW(ui.monitor, CB_ADDSTRING, 0, (LPARAM)names[i]);
     }
-    SendMessageW(ui.autopause, CB_ADDSTRING, 0, (LPARAM)ff_tr(S_AP_OFF));
-    SendMessageW(ui.autopause, CB_ADDSTRING, 0, (LPARAM)ff_tr(S_AP_FULLSCREEN));
-    SendMessageW(ui.autopause, CB_ADDSTRING, 0, (LPARAM)ff_tr(S_AP_3D));
-    SendMessageW(ui.gameaction, CB_ADDSTRING, 0, (LPARAM)ff_tr(S_GA_PAUSE));
-    SendMessageW(ui.gameaction, CB_ADDSTRING, 0, (LPARAM)ff_tr(S_GA_LIGHT));
 }
 
 void ctl_build(void)
@@ -165,19 +144,16 @@ void ctl_build(void)
     for (i = 0; i < NROWS; i++) {
         if (ROWS[i].idx <= IDX_SHARPEN) {
             build_row(i);
+        } else if (ROWS[i].idx == IDX_MONITOR) {
+            build_monitor(&ROWS[i]);
         }
     }
-    build_combos();
-    ui.check = child(L"BUTTON", ff_tr(S_CHECK_UPDATES), BS_AUTOCHECKBOX | WS_TABSTOP, 0, MARGIN,
-                     CHECK_Y, CARD_W, 22, ID_CHECK);
-
     build_button(S_BTN_WIZARD, 0, BTN1_Y, ID_WIZARD);
     build_button(S_BTN_PATTERN, 1, BTN1_Y, ID_PATTERN);
     build_button(S_BTN_RESET, 2, BTN1_Y, ID_RESET);
     build_button(S_BTN_PROFILE_LOAD, 0, BTN2_Y, ID_PROF_LOAD);
     build_button(S_BTN_PROFILE_SAVE, 1, BTN2_Y, ID_PROF_SAVE);
-    build_button(S_BTN_VERSIONS, 2, BTN2_Y, ID_VERSIONS);
-    build_button(S_BTN_UPDATES, 0, BTN3_Y, ID_UPDATE);
+    build_button(S_BTN_PROGRAM, 2, BTN2_Y, ID_PROGRAM);
     build_button(S_BTN_SAVE, 2, BTN3_Y, ID_SAVE);
 }
 

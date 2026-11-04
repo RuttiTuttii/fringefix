@@ -23,6 +23,20 @@ void app_profile_dir(const ff_app *a, wchar_t out[MAX_PATH])
     CreateDirectoryW(out, NULL);
 }
 
+void app_stats_path(const ff_app *a, wchar_t out[MAX_PATH])
+{
+    wchar_t *slash;
+
+    wcsncpy(out, a->ini, MAX_PATH - 1);
+    out[MAX_PATH - 1] = L'\0';
+    slash = wcsrchr(out, L'\\');
+    if (!slash || (size_t)(slash - out) + 11 >= MAX_PATH) {
+        wcscpy(out, L"stats.txt");
+    } else {
+        wcscpy(slash + 1, L"stats.txt");
+    }
+}
+
 void app_profile_basename(const wchar_t *path, wchar_t out[PROFILE_NAME_LEN])
 {
     const wchar_t *slash = wcsrchr(path, L'\\');

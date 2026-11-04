@@ -79,24 +79,48 @@ static void text(HDC dc, int x, int y, const wchar_t *s, COLORREF color)
     TextOutW(dc, x, y, s, (int)wcslen(s));
 }
 
-static void card(HDC dc, int c, int dpi, const ff_palette *p)
+void paint_card(HDC dc, int dpi, int x96, int y96, int w96, int h96, const wchar_t *title)
 {
+    const ff_palette *p = theme_get();
     HBRUSH fill = CreateSolidBrush(p->card);
     HPEN edge = CreatePen(PS_SOLID, 1, p->border);
     HGDIOBJ ob = SelectObject(dc, fill);
     HGDIOBJ op = SelectObject(dc, edge);
-    int x = S(MARGIN);
-    int y = S(card_y(c));
+    int x = S(x96);
+    int y = S(y96);
 
-    RoundRect(dc, x, y, x + S(CARD_W), y + S(card_h(c)), S(10), S(10));
+    RoundRect(dc, x, y, x + S(w96), y + S(h96), S(10), S(10));
     SelectObject(dc, op);
     SelectObject(dc, ob);
     DeleteObject(edge);
     DeleteObject(fill);
 
     SelectObject(dc, g_bold);
-    text(dc, x + S(COL_LABEL), y + S(7), ff_tr(CARDS[c].title), p->accent);
+    text(dc, x + S(COL_LABEL), y + S(7), title, p->accent);
     SelectObject(dc, g_font);
+}
+
+void paint_draw_item(const DRAWITEMSTRUCT *d, HICON icon, const wchar_t *label, int dpi)
+{
+    const ff_palette *p = theme_get();
+    int selected = (d->itemState & ODS_SELECTED) != 0;
+    HBRUSH bg = CreateSolidBrush(selected ? p->accent : p->field);
+    int size = S(16);
+    int mid = (d->rcItem.top + d->rcItem.bottom) / 2;
+
+    FillRect(d->hDC, &d->rcItem, bg);
+    DeleteObject(bg);
+    if (icon) {
+        DrawIconEx(d->hDC, d->rcItem.left + S(6), mid - size / 2, icon, size, size, 0, NULL,
+                   DI_NORMAL);
+    }
+    SetBkMode(d->hDC, TRANSPARENT);
+    SetTextColor(d->hDC, selected ? RGB(255, 255, 255) : p->fg);
+    SelectObject(d->hDC, g_font);
+    TextOutW(d->hDC, d->rcItem.left + S(6) + size + S(8), mid - S(8), label, (int)wcslen(label));
+    if (d->itemState & ODS_FOCUS && !(d->itemState & ODS_COMBOBOXEDIT)) {
+        DrawFocusRect(d->hDC, &d->rcItem);
+    }
 }
 
 void paint_window(HWND h, int dpi, const wchar_t *status)
@@ -114,7 +138,7 @@ void paint_window(HWND h, int dpi, const wchar_t *status)
 
     text(dc, S(MARGIN), S(10), ff_tr(S_HINT), p->muted);
     for (i = 0; i < NCARDS; i++) {
-        card(dc, i, dpi, p);
+        paint_card(dc, dpi, MARGIN, card_y(i), CARD_W, card_h(i), ff_tr(CARDS[i].title));
     }
     for (i = 0; i < NROWS; i++) {
         int x = S(MARGIN + COL_LABEL);

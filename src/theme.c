@@ -8,6 +8,7 @@
 #define DWMWA_DARK_MODE_OLD 19
 
 static ff_palette g_pal;
+static int g_mode;
 
 static int apps_use_dark(void)
 {
@@ -34,9 +35,14 @@ static COLORREF system_accent(void)
     return RGB((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF);
 }
 
+void theme_set_mode(int mode)
+{
+    g_mode = mode;
+}
+
 void theme_refresh(void)
 {
-    g_pal.dark = apps_use_dark();
+    g_pal.dark = g_mode == 0 ? apps_use_dark() : g_mode == 2;
     g_pal.accent = system_accent();
     if (g_pal.dark) {
         g_pal.bg = RGB(32, 32, 32);

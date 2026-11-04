@@ -208,6 +208,9 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
     case WM_APP_RELEASE_LIST:
         ui_versions_on_list(a, (ff_release_list *)l);
         return 0;
+    case WM_APP_REPORT_DONE:
+        ui_report_on_result(a, (ff_report_result *)l);
+        return 0;
     case WM_APP_INSTALL_DONE:
         ui_update_on_done(a, (ff_install_result *)l);
         return 0;

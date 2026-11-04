@@ -101,29 +101,16 @@ static void on_command(int id, int code)
     } else if (id == ID_MONITOR && code == CBN_SELCHANGE) {
         c->monitor = (int)SendMessageW(ui.monitor, CB_GETCURSEL, 0, 0);
         app_reinit(ui.app);
-    } else if (id == ID_AUTOPAUSE && code == CBN_SELCHANGE) {
-        c->auto_pause = (int)SendMessageW(ui.autopause, CB_GETCURSEL, 0, 0);
-        app_wake(ui.app);
-    } else if (id == ID_GAMEACTION && code == CBN_SELCHANGE) {
-        c->game_action = (int)SendMessageW(ui.gameaction, CB_GETCURSEL, 0, 0);
-        app_wake(ui.app);
-    } else if (id == ID_VERSIONS) {
-        ui_versions_show(ui.app);
     } else if (id == ID_WIZARD) {
         ui_wizard_show(ui.app);
-    } else if (id == ID_CHECK) {
-        c->check_updates = SendMessageW(ui.check, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    } else if (id == ID_PROGRAM) {
+        ui_app_show(ui.app);
     } else if (id == ID_PROF_LOAD || id == ID_PROF_SAVE) {
         on_profile(id == ID_PROF_SAVE);
     } else if (id == ID_PATTERN) {
         pattern_show(ui.app->inst, c->monitor);
     } else if (id == ID_RESET) {
         ctl_reset();
-    } else if (id == ID_UPDATE && FF_REPO[0]) {
-        set_status(ff_tr(S_CHECKING));
-        update_check_async(ui.app->hwnd, FF_REPO, 1);
-    } else if (id == ID_UPDATE) {
-        set_status(ff_tr(S_NO_REPO));
     } else if (id == ID_SAVE) {
         set_status(ff_tr(app_save(ui.app) == 0 ? S_SAVED : S_SAVE_FAILED));
     }
@@ -156,13 +143,11 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
     case WM_CTLCOLORLISTBOX:
     case WM_CTLCOLORBTN:
     case WM_CTLCOLORSTATIC:
-        return paint_ctlcolor(m, (HDC)w, (HWND)l, (HWND)l == ui.monitor || (HWND)l == ui.autopause || (HWND)l == ui.gameaction ? (HWND)l : NULL);
+        return paint_ctlcolor(m, (HDC)w, (HWND)l, (HWND)l == ui.monitor ? (HWND)l : NULL);
     case WM_SETTINGCHANGE:
         /* сменилась тема приложений Windows: перекрасить окно на лету */
         if (l && wcscmp((const wchar_t *)l, L"ImmersiveColorSet") == 0) {
-            theme_refresh();
-            paint_init(ui.dpi);
-            ctl_restyle();
+            ui_theme_apply();
         }
         return 0;
     case WM_DPICHANGED:
@@ -230,6 +215,15 @@ void ui_settings_show(ff_app *a)
     app_set_fast(a, 1);
 }
 
+void ui_settings_destroy(void)
+{
+    if (ui.win) {
+        DestroyWindow(ui.win);
+        ui.win = NULL;
+        app_set_fast(ui.app, 0);
+    }
+}
+
 void ui_settings_refresh(void)
 {
     if (ui.win) {
@@ -244,5 +238,13 @@ void ui_settings_set_status(const wchar_t *text)
 
 int ui_settings_translate(MSG *m)
 {
-    return ui.win && IsWindowVisible(ui.win) && IsDialogMessageW(ui.win, m);
+    wchar_t cls[32];
+    HWND top = m->hwnd ? GetAncestor(m->hwnd, GA_ROOT) : NULL;
+
+    /* любое окно fringefix с элементами, кроме скрытого окна трея и паттерна */
+    if (!top || GetClassNameW(top, cls, 32) == 0 || wcsncmp(cls, L"fringefix_", 10) != 0
+        || wcscmp(cls, L"fringefix_main") == 0 || wcscmp(cls, L"fringefix_pattern") == 0) {
+        return 0;
+    }
+    return IsDialogMessageW(top, m);
 }

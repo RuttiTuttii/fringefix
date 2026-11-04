@@ -1,6 +1,7 @@
 #define COBJMACROS
 #include <windows.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "com.h"
 #include "output.h"
@@ -93,6 +94,33 @@ int ff_output_list(wchar_t names[][OUTPUT_NAME_LEN], int max)
 
     each_output(list_cb, &l);
     return l.count;
+}
+
+int ff_output_info_get(int index, ff_output_info *info)
+{
+    IDXGIAdapter1 *ad = NULL;
+    IDXGIOutput6 *out = NULL;
+    DXGI_OUTPUT_DESC1 d;
+    DXGI_ADAPTER_DESC1 ad_desc;
+    int rc = -1;
+
+    memset(info, 0, sizeof *info);
+    if (ff_output_pick(index, &ad, &out) != 0) {
+        return -1;
+    }
+    if (SUCCEEDED(IDXGIOutput6_GetDesc1(out, &d))) {
+        info->width = (unsigned)(d.DesktopCoordinates.right - d.DesktopCoordinates.left);
+        info->height = (unsigned)(d.DesktopCoordinates.bottom - d.DesktopCoordinates.top);
+        info->hdr = d.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
+        rc = 0;
+    }
+    if (SUCCEEDED(IDXGIAdapter1_GetDesc1(ad, &ad_desc))) {
+        WideCharToMultiByte(CP_UTF8, 0, ad_desc.Description, -1, info->gpu, sizeof info->gpu, NULL, NULL);
+        info->gpu[sizeof info->gpu - 1] = '\0';
+    }
+    FF_REL(out);
+    FF_REL(ad);
+    return rc;
 }
 
 int ff_output_rect(int index, RECT *rect)

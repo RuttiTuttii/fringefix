@@ -12,6 +12,7 @@
 #define WM_APP_GFX_ERROR (WM_APP + 4)
 #define WM_APP_STATE (WM_APP + 5)
 #define WM_APP_RELEASE_LIST (WM_APP + 6)
+#define WM_APP_REPORT_DONE (WM_APP + 7)
 
 #define PROFILE_NAME_LEN 64
 
@@ -72,6 +73,9 @@ int app_profile_load(ff_app *a, const wchar_t *path);
 
 /* 0 или -1 */
 int app_profile_save(ff_app *a, const wchar_t *path);
+
+/* путь файла локальной статистики рядом с настройками */
+void app_stats_path(const ff_app *a, wchar_t out[MAX_PATH]);
 
 /* имя файла без папки и расширения */
 void app_profile_basename(const wchar_t *path, wchar_t out[PROFILE_NAME_LEN]);

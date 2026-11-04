@@ -15,7 +15,10 @@ typedef struct {
     COLORREF accent;
 } ff_palette;
 
-/* перечитывает тему приложений и акцентный цвет из системы */
+/* 0 как в системе, 1 светлая, 2 тёмная; действует со следующего theme_refresh */
+void theme_set_mode(int mode);
+
+/* перечитывает тему приложений и акцентный цвет из системы с учётом ручного режима */
 void theme_refresh(void);
 
 const ff_palette *theme_get(void);
