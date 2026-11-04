@@ -210,10 +210,10 @@ void ui_versions_show(ff_app *a)
                             NULL, a->inst, NULL);
     SendMessageW(g_win, WM_SETICON, ICON_BIG,
                  (LPARAM)LoadImageW(a->inst, MAKEINTRESOURCEW(IDI_APP), IMAGE_ICON,
-                                    GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), 0));
+                                    GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), LR_SHARED));
     SendMessageW(g_win, WM_SETICON, ICON_SMALL,
                  (LPARAM)LoadImageW(a->inst, MAKEINTRESOURCEW(IDI_APP), IMAGE_ICON,
-                                    GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), 0));
+                                    GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_SHARED));
     build();
     set_status(ff_tr(S_VER_LOADING));
     ShowWindow(g_win, SW_SHOW);

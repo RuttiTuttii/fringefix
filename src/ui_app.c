@@ -20,6 +20,8 @@
 #define CARD_ROW 30
 #define CARD_INNER_W 488
 #define WM_REOPEN (WM_APP + 40)
+#define TIMER_LANG 1
+#define LANG_DELAY_MS 400
 
 enum {
     ID_A_LANG = 700,
@@ -38,6 +40,9 @@ enum {
 static const wchar_t CLASS_NAME[] = L"fringefix_program";
 static HWND g_win;
 static HWND g_lang;
+/* положение окна при пересоздании после смены языка */
+static POINT g_pos;
+static int g_have_pos;
 static HWND g_action;
 static HICON g_flags[3];
 
@@ -188,15 +193,36 @@ static void paint(HWND h)
     EndPaint(h, &ps);
 }
 
-/* смена языка пересоздаёт и это окно, и окно настроек, чтобы все строки встали заново */
+/* смена языка пересоздаёт и это окно, и окно настроек, чтобы все строки встали заново;
+ * окно настроек, если оно было открыто, показывается снова на прежнем месте */
 static void change_language(int mode)
 {
+    int settings_open = ui.win && IsWindowVisible(ui.win);
+
     ui.app->cfg.language = mode;
     ui_language_apply(mode);
     app_save(ui.app);
     PostMessageW(ui.app->hwnd, WM_APP_STATE, 0, 0);
     ui_settings_destroy();
+    if (settings_open) {
+        ui_settings_show(ui.app);
+    }
     PostMessageW(g_win, WM_REOPEN, 0, 0);
+}
+
+/* выбор в списке языков применяется, когда пользователь остановился и список закрыт: стрелка или колесо
+ * над закрытым списком шлют CBN_SELCHANGE на каждый шаг, а пересоздание окон отнимает у списка фокус */
+static void apply_language_choice(void)
+{
+    int sel = (int)SendMessageW(g_lang, CB_GETCURSEL, 0, 0);
+
+    KillTimer(g_win, TIMER_LANG);
+    if (SendMessageW(g_lang, CB_GETDROPPEDSTATE, 0, 0)) {
+        return;
+    }
+    if (sel != CB_ERR && sel != ui.app->cfg.language) {
+        change_language(sel);
+    }
 }
 
 /* запись в реестр не удалась: галочка возвращается к тому, что видит Windows */
@@ -265,8 +291,10 @@ static void on_command(int id, int code)
     if (code == CBN_SELCHANGE) {
         sel = (int)SendMessageW((HWND)GetDlgItem(g_win, id), CB_GETCURSEL, 0, 0);
     }
-    if (id == ID_A_LANG && code == CBN_SELCHANGE) {
-        change_language(sel);
+    if (id == ID_A_LANG) {
+        if (code == CBN_SELCHANGE || code == CBN_CLOSEUP) {
+            SetTimer(g_win, TIMER_LANG, LANG_DELAY_MS, NULL);
+        }
     } else if (id == ID_A_THEME && code == CBN_SELCHANGE) {
         c->theme = sel;
         theme_set_mode(sel);
@@ -343,10 +371,22 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
             ui_theme_apply();
         }
         return 0;
-    case WM_REOPEN:
+    case WM_TIMER:
+        if (w == TIMER_LANG) {
+            apply_language_choice();
+        }
+        return 0;
+    case WM_REOPEN: {
+        RECT r;
+
+        GetWindowRect(h, &r);
+        g_pos.x = r.left;
+        g_pos.y = r.top;
+        g_have_pos = 1;
         DestroyWindow(h);
         ui_app_show(ui.app);
         return 0;
+    }
     case WM_CLOSE:
         DestroyWindow(h);
         return 0;
@@ -393,14 +433,16 @@ void ui_app_show(ff_app *a)
     SetRect(&r, 0, 0, S(APP_W), S(APP_H));
     AdjustWindowRect(&r, style, FALSE);
     g_win = CreateWindowExW(WS_EX_TOPMOST | WS_EX_CONTROLPARENT, CLASS_NAME, ff_tr(S_APP_TITLE),
-                            style, CW_USEDEFAULT, CW_USEDEFAULT, r.right - r.left, r.bottom - r.top,
+                            style, g_have_pos ? g_pos.x : CW_USEDEFAULT,
+                            g_have_pos ? g_pos.y : CW_USEDEFAULT, r.right - r.left, r.bottom - r.top,
                             NULL, NULL, a->inst, NULL);
+    g_have_pos = 0;
     SendMessageW(g_win, WM_SETICON, ICON_BIG,
                  (LPARAM)LoadImageW(a->inst, MAKEINTRESOURCEW(IDI_APP), IMAGE_ICON,
-                                    GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), 0));
+                                    GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), LR_SHARED));
     SendMessageW(g_win, WM_SETICON, ICON_SMALL,
                  (LPARAM)LoadImageW(a->inst, MAKEINTRESOURCEW(IDI_APP), IMAGE_ICON,
-                                    GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), 0));
+                                    GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_SHARED));
     build();
     ShowWindow(g_win, SW_SHOW);
     SetForegroundWindow(g_win);

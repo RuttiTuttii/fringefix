@@ -73,6 +73,7 @@ static int checked(int id)
 /* пересобирает отчёт из окна и показывает его же в предпросмотре; кнопки отправки зависят от сборки */
 static void refresh(void)
 {
+    static int too_big;
     char comment[FF_COMMENT_MAX + 1];
 
     report_read_comment(g_comment, COMMENT_CHARS, comment);
@@ -82,6 +83,10 @@ static void refresh(void)
         g_len = 0;
         g_payload[0] = '\0';
         set_status(ff_tr(S_REP_TOO_BIG));
+        too_big = 1;
+    } else if (too_big) {
+        set_status(L"");
+        too_big = 0;
     }
     report_preview_text(g_payload, g_len, g_preview_text, FF_REPORT_MAX * 2);
     SetWindowTextW(g_preview, g_preview_text);
@@ -282,10 +287,10 @@ void ui_report_show(ff_app *a)
                             NULL, NULL, a->inst, NULL);
     SendMessageW(g_win, WM_SETICON, ICON_BIG,
                  (LPARAM)LoadImageW(a->inst, MAKEINTRESOURCEW(IDI_APP), IMAGE_ICON,
-                                    GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), 0));
+                                    GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), LR_SHARED));
     SendMessageW(g_win, WM_SETICON, ICON_SMALL,
                  (LPARAM)LoadImageW(a->inst, MAKEINTRESOURCEW(IDI_APP), IMAGE_ICON,
-                                    GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), 0));
+                                    GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_SHARED));
     g_status[0] = L'\0';
     build();
     refresh();

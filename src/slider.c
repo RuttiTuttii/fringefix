@@ -106,6 +106,7 @@ static void paint(HWND h, const slider_t *s)
     HBRUSH tb;
     HPEN ring;
     COLORREF thumb_color;
+    COLORREF back;
     HGDIOBJ obr;
     HGDIOBJ open;
 
@@ -118,7 +119,9 @@ static void paint(HWND h, const slider_t *s)
     bmp = CreateCompatibleBitmap(dc, r.right, r.bottom);
     old = SelectObject(mem, bmp);
 
-    bg = CreateSolidBrush(p->card);
+    /* выключатель стоит на фоне окна, а не на карточке */
+    back = is_switch(s) ? p->bg : p->card;
+    bg = CreateSolidBrush(back);
     FillRect(mem, &r, bg);
     DeleteObject(bg);
 
@@ -141,7 +144,7 @@ static void paint(HWND h, const slider_t *s)
     /* выключенный выключатель серый, чтобы положение читалось и без заливки дорожки */
     thumb_color = is_switch(s) && s->pos == s->lo ? p->muted : p->accent;
     tb = CreateSolidBrush(thumb_color);
-    ring = CreatePen(PS_SOLID, 2, p->card);
+    ring = CreatePen(PS_SOLID, 2, back);
     obr = SelectObject(mem, tb);
     open = SelectObject(mem, ring);
     Ellipse(mem, x - thumb, cy - thumb, x + thumb + 1, cy + thumb + 1);
@@ -251,6 +254,10 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
     case WM_LBUTTONUP:
         s->drag = 0;
         ReleaseCapture();
+        return 0;
+    case WM_CAPTURECHANGED:
+        /* захват отняли (Alt+Tab, всплывшее окно): без этого наведение без кнопки продолжало бы двигать значение */
+        s->drag = 0;
         return 0;
     case WM_MOUSEWHEEL:
         set_pos(h, s, s->pos + GET_WHEEL_DELTA_WPARAM(w) / WHEEL_DELTA * (GET_KEYSTATE_WPARAM(w) & MK_SHIFT ? BIG_STEP : 1), 1);

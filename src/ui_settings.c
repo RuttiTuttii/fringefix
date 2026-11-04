@@ -24,6 +24,10 @@ static wchar_t g_status[STATUS_CHARS];
 
 ui_state ui = { .dpi = 96 };
 
+/* место окна, из которого его пересоздали (смена языка): новое встаёт туда же */
+static POINT g_saved;
+static int g_have_saved;
+
 static void set_status(const wchar_t *text)
 {
     RECT r;
@@ -128,7 +132,8 @@ static LRESULT on_dpi_changed(HWND h, WPARAM w, LPARAM l)
     const RECT *r = (const RECT *)l;
 
     ui.dpi = HIWORD(w);
-    paint_init(ui.dpi);
+    /* шрифты общие для всех окон: пересоздание без перестилизации оставило бы в них удалённые HFONT */
+    ui_theme_apply();
     ctl_rebuild();
     SetWindowPos(h, NULL, r->left, r->top, r->right - r->left, r->bottom - r->top,
                  SWP_NOZORDER | SWP_NOACTIVATE);
@@ -184,10 +189,10 @@ static void set_icons(void)
 {
     SendMessageW(ui.win, WM_SETICON, ICON_BIG,
                  (LPARAM)LoadImageW(ui.app->inst, MAKEINTRESOURCEW(IDI_APP), IMAGE_ICON,
-                                    GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), 0));
+                                    GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), LR_SHARED));
     SendMessageW(ui.win, WM_SETICON, ICON_SMALL,
                  (LPARAM)LoadImageW(ui.app->inst, MAKEINTRESOURCEW(IDI_APP), IMAGE_ICON,
-                                    GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), 0));
+                                    GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_SHARED));
 }
 
 static void create_window(void)
@@ -211,10 +216,12 @@ static void create_window(void)
 
     SetRect(&r, 0, 0, S(CLIENT_W), S(CLIENT_H));
     AdjustWindowRect(&r, style, FALSE);
-    /* поверх паттерна, который тоже занимает весь монитор */
+    /* поверх оверлея, как и окно паттерна рядом */
     ui.win = CreateWindowExW(WS_EX_TOPMOST | WS_EX_CONTROLPARENT, CLASS_NAME,
-                             ff_tr(S_WINDOW_TITLE), style, CW_USEDEFAULT, CW_USEDEFAULT,
-                             r.right - r.left, r.bottom - r.top, NULL, NULL, ui.app->inst, NULL);
+                             ff_tr(S_WINDOW_TITLE), style, g_have_saved ? g_saved.x : CW_USEDEFAULT,
+                             g_have_saved ? g_saved.y : CW_USEDEFAULT, r.right - r.left,
+                             r.bottom - r.top, NULL, NULL, ui.app->inst, NULL);
+    g_have_saved = 0;
     paint_init(ui.dpi);
     set_icons();
     ctl_build();
@@ -238,6 +245,12 @@ void ui_settings_destroy(void)
 {
     pattern_close();
     if (ui.win) {
+        RECT r;
+
+        GetWindowRect(ui.win, &r);
+        g_saved.x = r.left;
+        g_saved.y = r.top;
+        g_have_saved = 1;
         DestroyWindow(ui.win);
         ui.win = NULL;
         app_set_fast(ui.app, 0);
