@@ -4,34 +4,67 @@
 
 A Windows overlay that shifts the colour channels of the finished frame by fractions of a pixel to cancel colour fringing on QD-OLED panels with the triangular subpixel layout (4th generation and earlier). Lives in the tray, tuned with sliders, updates from GitHub Releases.
 
-> limitations: the project builds with mingw-w64 without warnings and the portable-module tests pass (`make test`), but it has never been run on Windows. The tray, settings window, HDR path and updater follow the documentation and are unverified. Requires Windows 10 2004 or newer. Updates work only with a public repository: for a private one the GitHub API answers 404 without a token.
+> limitations: the project builds with mingw-w64 without warnings and the portable-module tests pass (`make test`). Version 0.1.0 ran on one machine with a 4K QD-OLED in SDR: the tray, settings window and overlay worked. The HDR path, updater, dark theme, typed values and profiles are unverified. Requires Windows 10 2004 or newer. Updates work only with a public repository: for a private one the GitHub API answers 404 without a token.
 
 ## running
 
 - download `fringefix.exe` from the latest release and put it in any folder
 - start it, a tray icon of three coloured bars appears (grey means off)
-- double click opens settings, right click opens the menu
+- double click opens settings, right click opens the menu with profiles
 - `Ctrl+Alt+F` toggles the overlay, `Ctrl+Alt+Q` quits
 - settings live in `%APPDATA%\fringefix\fringefix.ini`, the Save button writes them
 
 ## tuning
 
-1. press the pattern button: lines on the left and text in the middle open on the chosen monitor
+1. press the test pattern button: lines on the left and text in the middle open on the chosen monitor
 2. move the vertical green slider until horizontal edges turn grey
 3. move the horizontal red and blue sliders in opposite directions until vertical edges turn grey
-4. the additional sliders are usually unneeded on this panel: red and blue subpixels sit at the same height and green sits midway between them horizontally
+4. the other shifts are usually unneeded on this panel: red and blue subpixels sit at the same height and green sits midway between them horizontally
 5. press save
 
-A positive value moves the channel content right and down, slider step is 0.01 pixel, range is -2 to 2.
+The window is split into cards by colour: red, green and blue each have a horizontal and a vertical shift, the Image card holds sharpness and the monitor choice. Everything is at zero until you change it.
+
+- a positive value moves the channel content right and down, range is -2 to 2 pixels, step 0.01
+- a value can be typed into the field right of the slider, dot and comma both work, the change applies at once
+- a double click on a slider resets it to zero, the mouse wheel moves it by 0.01 (0.1 with Shift), arrows by 0.01, PageUp and PageDown by 0.1, Home and End to the ends
+- sharpness is from -1 to 1: plus strengthens contours, minus softens them
+
+A sub-pixel shift goes through bilinear interpolation, which blurs. The shader restores sharpness up front with a laplacian of strength `min(1.72 * f^2, 0.35)`, where `f` is the fractional part of the shift. So with non-zero shifts a small contour boost exists even at sharpness 0, and with zero shifts there is none. Sharpness -1 cancels the maximum of that boost completely.
+
+## profiles
+
+- "Save profile..." and "Load profile..." work with JSON files, the default folder is `%APPDATA%\fringefix\profiles`
+- the tray menu item "Profiles" lists the files from that folder, picking one applies it at once
+- a profile holds only the look of the picture: the three channel shifts and sharpness, the monitor and the update check stay as they were
+
+```json
+{
+  "format": "fringefix-profile",
+  "version": 1,
+  "red": { "x": 0.000, "y": 0.000 },
+  "green": { "x": 0.000, "y": 0.250 },
+  "blue": { "x": -0.150, "y": 0.000 },
+  "sharpen": 0.000
+}
+```
+
+Out-of-range values are clamped, broken ones are skipped, a file without the `format` field is rejected whole.
+
+## language and theme
+
+- the interface is Russian if Windows display language is Russian, English otherwise
+- the theme is light or dark by the Windows "app mode" setting, a change applies to an open window without restart
+- the slider accent colour comes from the system one
 
 ## how it works
 
 ```
-main.c ─ ui_tray.c ─ ui_settings.c ─ pattern.c
+main.c ─ ui_tray.c ─ ui_settings.c ─ ui_controls.c, ui_paint.c, slider.c, theme.c
+  │         │            └─ ui_profile.c, pattern.c
   │         └─ ui_update.c ─ update.c ─ http.c, sha256.c, release.c
-  └─ app.c ─ config.c
+  └─ app.c ─ config.c, profile.c, profile_io.c, i18n.c
        └─ capture.c (own thread)
-            └─ gfx.c, gfx_frame.c ─ shader.c, output.c
+            └─ gfx.c, gfx_frame.c, gfx_sig.c ─ shader.c, output.c
 ```
 
 - the frame comes from `IDXGIOutput6::DuplicateOutput1`, format follows the desktop mode: 8-bit in SDR, FP16 scRGB in HDR
@@ -82,5 +115,5 @@ git tag v0.1.0 && git push origin v0.1.0
 - rotated monitors
 - start with Windows
 - code signing and release signing
-- the interface is Russian only
+- manual choice of language and theme: they come from the system only
 - the overlay adds one frame of latency over the desktop
