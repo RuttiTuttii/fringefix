@@ -7,4 +7,7 @@
  * по центру текст; закрывается по Esc или клику. повторный вызов выводит окно вперёд */
 void pattern_show(HINSTANCE inst, int monitor);
 
+/* закрывает окно паттерна, если оно открыто */
+void pattern_close(void);
+
 #endif

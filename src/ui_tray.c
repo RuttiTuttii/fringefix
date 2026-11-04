@@ -48,9 +48,9 @@ static void tray_notify(ff_app *a, DWORD msg)
     nid.uID = 1;
     nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     nid.uCallbackMessage = WM_APP_TRAY;
-    nid.hIcon = a->enabled ? g_icon_on : g_icon_off;
+    nid.hIcon = a->enabled && !a->suspended ? g_icon_on : g_icon_off;
     _snwprintf(nid.szTip, 128, L"fringefix %ls: %ls", L"" FF_VERSION,
-               ff_tr(a->enabled ? S_TIP_ON : S_TIP_OFF));
+               ff_tr(!a->enabled ? S_TIP_OFF : (a->suspended ? S_TIP_PAUSED : S_TIP_ON)));
     nid.szTip[127] = L'\0';
     Shell_NotifyIconW(msg, &nid);
 }
@@ -210,6 +210,9 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
         return 0;
     case WM_APP_GFX_ERROR:
         on_gfx_error(a, (char *)l);
+        return 0;
+    case WM_APP_STATE:
+        tray_notify(a, NIM_MODIFY);
         return 0;
     case WM_DESTROY: {
         NOTIFYICONDATAW nid;

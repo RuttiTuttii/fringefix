@@ -73,6 +73,13 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
     return DefWindowProcW(h, m, w, l);
 }
 
+void pattern_close(void)
+{
+    if (g_win) {
+        DestroyWindow(g_win);
+    }
+}
+
 void pattern_show(HINSTANCE inst, int monitor)
 {
     static int registered;

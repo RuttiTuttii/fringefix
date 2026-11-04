@@ -48,6 +48,21 @@ HFONT paint_font(void)
     return g_font;
 }
 
+HFONT paint_bold(void)
+{
+    return g_bold;
+}
+
+LRESULT paint_ctlcolor(UINT msg, HDC dc, HWND ctl, HWND field_ctl)
+{
+    const ff_palette *p = theme_get();
+    int field = msg == WM_CTLCOLOREDIT || msg == WM_CTLCOLORLISTBOX || (ctl && ctl == field_ctl);
+
+    SetTextColor(dc, p->fg);
+    SetBkColor(dc, field ? p->field : p->bg);
+    return (LRESULT)(field ? g_field : g_bg);
+}
+
 HBRUSH paint_bg(void)
 {
     return g_bg;

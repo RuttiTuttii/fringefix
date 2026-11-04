@@ -22,7 +22,7 @@
 static const wchar_t CLASS_NAME[] = L"fringefix_settings";
 static wchar_t g_status[STATUS_CHARS];
 
-ui_state ui = { NULL, NULL, { NULL }, { NULL }, NULL, NULL, 96, 0 };
+ui_state ui = { .dpi = 96 };
 
 static void set_status(const wchar_t *text)
 {
@@ -101,6 +101,11 @@ static void on_command(int id, int code)
     } else if (id == ID_MONITOR && code == CBN_SELCHANGE) {
         c->monitor = (int)SendMessageW(ui.monitor, CB_GETCURSEL, 0, 0);
         app_reinit(ui.app);
+    } else if (id == ID_AUTOPAUSE && code == CBN_SELCHANGE) {
+        c->auto_pause = (int)SendMessageW(ui.autopause, CB_GETCURSEL, 0, 0);
+        app_wake(ui.app);
+    } else if (id == ID_WIZARD) {
+        ui_wizard_show(ui.app);
     } else if (id == ID_CHECK) {
         c->check_updates = SendMessageW(ui.check, BM_GETCHECK, 0, 0) == BST_CHECKED;
     } else if (id == ID_PROF_LOAD || id == ID_PROF_SAVE) {
@@ -117,16 +122,6 @@ static void on_command(int id, int code)
     } else if (id == ID_SAVE) {
         set_status(ff_tr(app_save(ui.app) == 0 ? S_SAVED : S_SAVE_FAILED));
     }
-}
-
-static LRESULT on_ctlcolor(UINT m, HDC dc, HWND ctl)
-{
-    const ff_palette *p = theme_get();
-    int field = m == WM_CTLCOLOREDIT || m == WM_CTLCOLORLISTBOX || ctl == ui.monitor;
-
-    SetTextColor(dc, p->fg);
-    SetBkColor(dc, field ? p->field : p->bg);
-    return (LRESULT)(field ? paint_field() : paint_bg());
 }
 
 static LRESULT on_dpi_changed(HWND h, WPARAM w, LPARAM l)
@@ -156,7 +151,7 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
     case WM_CTLCOLORLISTBOX:
     case WM_CTLCOLORBTN:
     case WM_CTLCOLORSTATIC:
-        return on_ctlcolor(m, (HDC)w, (HWND)l);
+        return paint_ctlcolor(m, (HDC)w, (HWND)l, (HWND)l == ui.monitor || (HWND)l == ui.autopause ? (HWND)l : NULL);
     case WM_SETTINGCHANGE:
         /* сменилась тема приложений Windows: перекрасить окно на лету */
         if (l && wcscmp((const wchar_t *)l, L"ImmersiveColorSet") == 0) {

@@ -22,6 +22,9 @@ void ui_settings_refresh(void);
 /* для главного цикла: Tab и Enter в окне настроек; ненулевой ответ значит сообщение съедено */
 int ui_settings_translate(MSG *m);
 
+/* мастер настройки по типу матрицы: шаги с тестовым паттерном */
+void ui_wizard_show(ff_app *a);
+
 /* диалоги выбора файла профиля. 0 готово, 1 пользователь отказался,
  * -1 файл не открылся или не записался, -2 это не профиль fringefix; name получает имя без папки и .json */
 int ui_profile_load_dialog(HWND owner, ff_app *a, wchar_t name[PROFILE_NAME_LEN]);

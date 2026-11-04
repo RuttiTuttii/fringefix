@@ -50,6 +50,7 @@ void ctl_sync(void)
         ctl_edit_show(i);
     }
     SendMessageW(ui.monitor, CB_SETCURSEL, (WPARAM)ui.app->cfg.monitor, 0);
+    SendMessageW(ui.autopause, CB_SETCURSEL, (WPARAM)ui.app->cfg.auto_pause, 0);
     SendMessageW(ui.check, BM_SETCHECK,
                  ui.app->cfg.check_updates ? BST_CHECKED : BST_UNCHECKED, 0);
 }
@@ -124,10 +125,36 @@ static void build_button(str_id text, int col, int y, int id)
           BTN_H, id);
 }
 
-void ctl_build(void)
+/* выпадающий список в строке таблицы: монитор или автопауза */
+static HWND build_combo(const row_def *r, int id)
+{
+    return child(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 0,
+                 MARGIN + COL_SLIDER, row_y(r) + 3, CARD_W - COL_SLIDER - COL_LABEL, 220, id);
+}
+
+static void build_combos(void)
 {
     wchar_t names[MAX_OUTPUTS][OUTPUT_NAME_LEN];
     int n = ff_output_list(names, MAX_OUTPUTS);
+    int i;
+
+    for (i = 0; i < NROWS; i++) {
+        if (ROWS[i].idx == IDX_MONITOR) {
+            ui.monitor = build_combo(&ROWS[i], ID_MONITOR);
+        } else if (ROWS[i].idx == IDX_AUTOPAUSE) {
+            ui.autopause = build_combo(&ROWS[i], ID_AUTOPAUSE);
+        }
+    }
+    for (i = 0; i < n; i++) {
+        SendMessageW(ui.monitor, CB_ADDSTRING, 0, (LPARAM)names[i]);
+    }
+    SendMessageW(ui.autopause, CB_ADDSTRING, 0, (LPARAM)ff_tr(S_AP_OFF));
+    SendMessageW(ui.autopause, CB_ADDSTRING, 0, (LPARAM)ff_tr(S_AP_FULLSCREEN));
+    SendMessageW(ui.autopause, CB_ADDSTRING, 0, (LPARAM)ff_tr(S_AP_3D));
+}
+
+void ctl_build(void)
+{
     int i;
 
     for (i = 0; i < NROWS; i++) {
@@ -135,21 +162,17 @@ void ctl_build(void)
             build_row(i);
         }
     }
-    ui.monitor = child(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 0,
-                       MARGIN + COL_SLIDER, row_y(&ROWS[NROWS - 1]) + 3,
-                       CARD_W - COL_SLIDER - COL_LABEL, 220, ID_MONITOR);
-    for (i = 0; i < n; i++) {
-        SendMessageW(ui.monitor, CB_ADDSTRING, 0, (LPARAM)names[i]);
-    }
+    build_combos();
     ui.check = child(L"BUTTON", ff_tr(S_CHECK_UPDATES), BS_AUTOCHECKBOX | WS_TABSTOP, 0, MARGIN,
                      CHECK_Y, CARD_W, 22, ID_CHECK);
 
-    build_button(S_BTN_PROFILE_LOAD, 0, BTN1_Y, ID_PROF_LOAD);
-    build_button(S_BTN_PROFILE_SAVE, 1, BTN1_Y, ID_PROF_SAVE);
-    build_button(S_BTN_PATTERN, 2, BTN1_Y, ID_PATTERN);
-    build_button(S_BTN_RESET, 0, BTN2_Y, ID_RESET);
-    build_button(S_BTN_UPDATES, 1, BTN2_Y, ID_UPDATE);
-    build_button(S_BTN_SAVE, 2, BTN2_Y, ID_SAVE);
+    build_button(S_BTN_WIZARD, 0, BTN1_Y, ID_WIZARD);
+    build_button(S_BTN_PATTERN, 1, BTN1_Y, ID_PATTERN);
+    build_button(S_BTN_RESET, 2, BTN1_Y, ID_RESET);
+    build_button(S_BTN_PROFILE_LOAD, 0, BTN2_Y, ID_PROF_LOAD);
+    build_button(S_BTN_PROFILE_SAVE, 1, BTN2_Y, ID_PROF_SAVE);
+    build_button(S_BTN_UPDATES, 2, BTN2_Y, ID_UPDATE);
+    build_button(S_BTN_SAVE, 2, BTN3_Y, ID_SAVE);
 }
 
 static BOOL CALLBACK restyle_one(HWND c, LPARAM unused)
@@ -167,11 +190,16 @@ static BOOL CALLBACK restyle_one(HWND c, LPARAM unused)
     return TRUE;
 }
 
+void ctl_restyle_window(HWND w)
+{
+    theme_apply_window(w);
+    EnumChildWindows(w, restyle_one, 0);
+    RedrawWindow(w, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+}
+
 void ctl_restyle(void)
 {
-    theme_apply_window(ui.win);
-    EnumChildWindows(ui.win, restyle_one, 0);
-    RedrawWindow(ui.win, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
+    ctl_restyle_window(ui.win);
 }
 
 void ctl_rebuild(void)

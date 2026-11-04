@@ -13,6 +13,7 @@ typedef struct {
     HWND slider[IDX_SHARPEN + 1];
     HWND edit[IDX_SHARPEN + 1];
     HWND monitor;
+    HWND autopause;
     HWND check;
     int dpi;
     /* больше нуля, пока поля правятся из кода: EN_CHANGE тогда не считается вводом пользователя */
@@ -27,6 +28,8 @@ enum {
     ID_SLIDER = 100,
     ID_EDIT = 120,
     ID_MONITOR = 140,
+    ID_AUTOPAUSE,
+    ID_WIZARD,
     ID_CHECK,
     ID_PROF_LOAD,
     ID_PROF_SAVE,
@@ -47,6 +50,9 @@ void ctl_sync(void);
 
 /* шрифт и системная тема элементам, перерисовка окна */
 void ctl_restyle(void);
+
+/* то же для любого окна приложения с элементами, например для мастера */
+void ctl_restyle_window(HWND w);
 
 /* пользователь двинул ползунок или правит поле idx */
 void ctl_slider_changed(int idx);

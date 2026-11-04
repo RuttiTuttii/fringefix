@@ -52,6 +52,35 @@ static const wchar_t *const RU[S_COUNT] = {
         L"Плоские верх и низ (e f z s t) показывают вертикальную каёмку,\n"
         L"прямые стойки (l i k d) показывают горизонтальную.\n\n"
         L"Esc или клик закрывают окно",
+    [S_AUTOPAUSE] = L"Автопауза",
+    [S_AP_OFF] = L"Выключена",
+    [S_AP_FULLSCREEN] = L"В полноэкранных приложениях",
+    [S_AP_3D] = L"В полноэкранных и 3D-приложениях",
+    [S_TIP_PAUSED] = L"пауза, идёт игра или полный экран",
+    [S_BTN_WIZARD] = L"Мастер настройки...",
+    [S_WIZ_TITLE] = L"fringefix: мастер настройки",
+    [S_WIZ_STEP] = L"Шаг %d из 3",
+    [S_WIZ_T0] = L"Тип матрицы",
+    [S_WIZ_T1] = L"Вертикальная каёмка",
+    [S_WIZ_T2] = L"Горизонтальная каёмка",
+    [S_WIZ_B0] = L"Выбери тип матрицы монитора. Для QD-OLED с треугольными субпикселями мастер сам "
+                 L"посчитает сдвиги по геометрии: красный и синий стоят рядом снизу, зелёный над ними. "
+                 L"Дальше останется подогнать две силы, по вертикали и по горизонтали. "
+                 L"Для обычных RGB-полосок коррекция не нужна.",
+    [S_WIZ_B1] = L"Нажми «Тестовый паттерн» и смотри на горизонтальные линии в правой половине. "
+                 L"Двигай силу по вертикали, пока верхний и нижний края линий не станут серыми. "
+                 L"Если каёмка стала сильнее, двигай в другую сторону: минус зеркалит раскладку.",
+    [S_WIZ_B2] = L"Теперь смотри на вертикальные линии в левой половине и двигай силу по горизонтали, "
+                 L"пока их края не станут серыми. Потом нажми «Готово»: значения попадут в окно настроек, "
+                 L"там их можно уточнить вручную.",
+    [S_WIZ_TYPE_QD] = L"QD-OLED, треугольные субпиксели (поколения 1-4)",
+    [S_WIZ_TYPE_NONE] = L"RGB-полоски (LCD, QD-OLED 5 поколения): коррекция не нужна",
+    [S_WIZ_STRENGTH_V] = L"Сила по вертикали",
+    [S_WIZ_STRENGTH_H] = L"Сила по горизонтали",
+    [S_WIZ_BACK] = L"Назад",
+    [S_WIZ_NEXT] = L"Далее",
+    [S_WIZ_FINISH] = L"Готово",
+    [S_WIZ_CANCEL] = L"Отмена",
 };
 
 static const wchar_t *const EN[S_COUNT] = {
@@ -104,6 +133,35 @@ static const wchar_t *const EN[S_COUNT] = {
         L"Flat tops and bottoms (e f z s t) show vertical fringing,\n"
         L"upright stems (l i k d) show horizontal fringing.\n\n"
         L"Esc or a click closes the window",
+    [S_AUTOPAUSE] = L"Auto-pause",
+    [S_AP_OFF] = L"Off",
+    [S_AP_FULLSCREEN] = L"In fullscreen apps",
+    [S_AP_3D] = L"In fullscreen and 3D apps",
+    [S_TIP_PAUSED] = L"paused, a game or fullscreen app is running",
+    [S_BTN_WIZARD] = L"Setup wizard...",
+    [S_WIZ_TITLE] = L"fringefix setup wizard",
+    [S_WIZ_STEP] = L"Step %d of 3",
+    [S_WIZ_T0] = L"Panel type",
+    [S_WIZ_T1] = L"Vertical fringing",
+    [S_WIZ_T2] = L"Horizontal fringing",
+    [S_WIZ_B0] = L"Choose the panel type. For QD-OLED with triangular subpixels the wizard computes the "
+                 L"shifts from the geometry: red and blue sit side by side at the bottom, green above them. "
+                 L"What is left is to fit two strengths, vertical and horizontal. "
+                 L"Plain RGB stripes need no correction.",
+    [S_WIZ_B1] = L"Press the test pattern button and look at the horizontal lines in the right half. "
+                 L"Move the vertical strength until the top and bottom edges of the lines turn grey. "
+                 L"If the fringing got stronger, move the other way: a minus mirrors the layout.",
+    [S_WIZ_B2] = L"Now look at the vertical lines in the left half and move the horizontal strength "
+                 L"until their edges turn grey. Then press Finish: the values land in the settings "
+                 L"window where they can be refined by hand.",
+    [S_WIZ_TYPE_QD] = L"QD-OLED, triangular subpixels (gen 1-4)",
+    [S_WIZ_TYPE_NONE] = L"RGB stripes (LCD, 5th-gen QD-OLED): no correction needed",
+    [S_WIZ_STRENGTH_V] = L"Vertical strength",
+    [S_WIZ_STRENGTH_H] = L"Horizontal strength",
+    [S_WIZ_BACK] = L"Back",
+    [S_WIZ_NEXT] = L"Next",
+    [S_WIZ_FINISH] = L"Finish",
+    [S_WIZ_CANCEL] = L"Cancel",
 };
 
 void ff_i18n_set(ff_lang lang)

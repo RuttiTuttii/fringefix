@@ -8,8 +8,8 @@
 enum {
     MARGIN = 16,
     CARD_W = 488,
-    CARD_HEAD = 30,
-    ROW_H = 34,
+    CARD_HEAD = 28,
+    ROW_H = 32,
     CARD_PAD = 10,
     CARD_GAP = 8,
     TOP = 34,
@@ -31,6 +31,7 @@ typedef struct {
 /* idx 0..5 это shift[idx / 2][idx % 2], дальше резкость и монитор */
 #define IDX_SHARPEN 6
 #define IDX_MONITOR 7
+#define IDX_AUTOPAUSE 8
 
 typedef struct {
     str_id label;
@@ -40,7 +41,7 @@ typedef struct {
 } row_def;
 
 static const card_def CARDS[] = {
-    { S_RED, 2 }, { S_GREEN, 2 }, { S_BLUE, 2 }, { S_IMAGE, 2 },
+    { S_RED, 2 }, { S_GREEN, 2 }, { S_BLUE, 2 }, { S_IMAGE, 3 },
 };
 #define NCARDS ((int)(sizeof CARDS / sizeof CARDS[0]))
 
@@ -49,6 +50,7 @@ static const row_def ROWS[] = {
     { S_HORIZONTAL, 2, 1, 0 }, { S_VERTICAL, 3, 1, 1 },
     { S_HORIZONTAL, 4, 2, 0 }, { S_VERTICAL, 5, 2, 1 },
     { S_SHARPEN, IDX_SHARPEN, 3, 0 }, { S_MONITOR, IDX_MONITOR, 3, 1 },
+    { S_AUTOPAUSE, IDX_AUTOPAUSE, 3, 2 },
 };
 #define NROWS ((int)(sizeof ROWS / sizeof ROWS[0]))
 
@@ -73,14 +75,15 @@ static inline int row_y(const row_def *r)
     return card_y(r->card) + CARD_HEAD + r->row * ROW_H;
 }
 
-/* всё, что ниже карточек: флажок, строка состояния, две строки кнопок */
+/* всё, что ниже карточек: флажок, строка состояния, три строки кнопок */
 #define CARDS_BOTTOM (card_y(NCARDS - 1) + card_h(NCARDS - 1))
 #define CHECK_Y (CARDS_BOTTOM + 12)
-#define STATUS_Y (CARDS_BOTTOM + 42)
-#define BTN1_Y (CARDS_BOTTOM + 70)
-#define BTN2_Y (BTN1_Y + 38)
+#define STATUS_Y (CARDS_BOTTOM + 40)
+#define BTN1_Y (CARDS_BOTTOM + 66)
+#define BTN2_Y (BTN1_Y + 36)
+#define BTN3_Y (BTN2_Y + 36)
 #define BTN_H 30
 #define CLIENT_W (MARGIN * 2 + CARD_W)
-#define CLIENT_H (BTN2_Y + BTN_H + MARGIN)
+#define CLIENT_H (BTN3_Y + BTN_H + MARGIN)
 
 #endif
