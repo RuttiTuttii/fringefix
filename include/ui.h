@@ -22,6 +22,10 @@ void ui_settings_refresh(void);
 /* для главного цикла: Tab и Enter в окне настроек; ненулевой ответ значит сообщение съедено */
 int ui_settings_translate(MSG *m);
 
+/* выбор версии из релизов репозитория с откатом на старую */
+void ui_versions_show(ff_app *a);
+void ui_versions_on_list(ff_app *a, ff_release_list *list);
+
 /* мастер настройки по типу матрицы: шаги с тестовым паттерном */
 void ui_wizard_show(ff_app *a);
 

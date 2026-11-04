@@ -11,6 +11,7 @@
 #define WM_APP_INSTALL_DONE (WM_APP + 3)
 #define WM_APP_GFX_ERROR (WM_APP + 4)
 #define WM_APP_STATE (WM_APP + 5)
+#define WM_APP_RELEASE_LIST (WM_APP + 6)
 
 #define PROFILE_NAME_LEN 64
 

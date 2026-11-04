@@ -118,7 +118,7 @@ void paint_window(HWND h, int dpi, const wchar_t *status)
     }
     for (i = 0; i < NROWS; i++) {
         int x = S(MARGIN + COL_LABEL);
-        int y = S(row_y(&ROWS[i])) + S(5);
+        int y = S(row_y(&ROWS[i])) + S(4);
 
         text(dc, x, y, ff_tr(ROWS[i].label), p->fg);
         /* единица измерения только у сдвигов, у резкости её нет */

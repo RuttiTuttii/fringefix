@@ -104,6 +104,11 @@ static void on_command(int id, int code)
     } else if (id == ID_AUTOPAUSE && code == CBN_SELCHANGE) {
         c->auto_pause = (int)SendMessageW(ui.autopause, CB_GETCURSEL, 0, 0);
         app_wake(ui.app);
+    } else if (id == ID_GAMEACTION && code == CBN_SELCHANGE) {
+        c->game_action = (int)SendMessageW(ui.gameaction, CB_GETCURSEL, 0, 0);
+        app_wake(ui.app);
+    } else if (id == ID_VERSIONS) {
+        ui_versions_show(ui.app);
     } else if (id == ID_WIZARD) {
         ui_wizard_show(ui.app);
     } else if (id == ID_CHECK) {
@@ -151,7 +156,7 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
     case WM_CTLCOLORLISTBOX:
     case WM_CTLCOLORBTN:
     case WM_CTLCOLORSTATIC:
-        return paint_ctlcolor(m, (HDC)w, (HWND)l, (HWND)l == ui.monitor || (HWND)l == ui.autopause ? (HWND)l : NULL);
+        return paint_ctlcolor(m, (HDC)w, (HWND)l, (HWND)l == ui.monitor || (HWND)l == ui.autopause || (HWND)l == ui.gameaction ? (HWND)l : NULL);
     case WM_SETTINGCHANGE:
         /* сменилась тема приложений Windows: перекрасить окно на лету */
         if (l && wcscmp((const wchar_t *)l, L"ImmersiveColorSet") == 0) {

@@ -6,13 +6,15 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 # owner/name репозитория, откуда качаются релизы; пусто значит обновления отключены
 REPO ?=
 
-WARN = -Wall -Wextra -Wpedantic
+# WERROR=1 делает предупреждения ошибками, SAN=1 собирает тесты под ASan и UBSan
+SAN_ON := -fsanitize=address,undefined -fno-omit-frame-pointer -g
+WARN = -Wall -Wextra -Wpedantic $(if $(WERROR),-Werror)
 INC = -Iinclude
 
 PORTABLE = src/config.c src/release.c src/sha256.c src/profile.c src/i18n.c src/layout.c src/applist.c
 WIN_SRC = src/main.c src/app.c src/capture.c src/gfx.c src/gfx_frame.c src/gfx_sig.c src/shader.c \
 	src/output.c src/pattern.c src/ui_tray.c src/ui_settings.c src/ui_controls.c src/ui_paint.c src/ui_profile.c \
-	src/ui_update.c src/ui_wizard.c src/gamedetect.c src/slider.c src/theme.c src/profile_io.c src/update.c src/http.c $(PORTABLE)
+	src/ui_update.c src/ui_wizard.c src/ui_versions.c src/gamedetect.c src/slider.c src/theme.c src/profile_io.c src/update.c src/update_install.c src/http.c $(PORTABLE)
 WIN_LIBS = -ld3d11 -ldxgi -ld3dcompiler -ldxguid -luuid -luser32 -lgdi32 -lcomctl32 \
 	-lshell32 -lwinhttp -lcomdlg32 -ldwmapi -luxtheme -ladvapi32 -lpsapi
 WIN_FLAGS = -std=gnu99 -O2 $(WARN) -fvisibility=hidden $(INC) -D_WIN32_WINNT=0x0A00 \
@@ -34,7 +36,7 @@ test: $(TESTS:%=build/test_%)
 
 build/test_%: tests/test_%.c src/%.c include/%.h tests/test.h
 	mkdir -p build
-	$(CC) -std=c99 -O2 $(WARN) -fvisibility=hidden $(INC) -o $@ $(filter %.c,$^) -lm
+	$(CC) -std=c99 -O2 $(WARN) $(if $(SAN),$(SAN_ON)) -fvisibility=hidden $(INC) -o $@ $(filter %.c,$^) -lm
 
 # профиль собирается вместе с конфигом: оба нужны для проверки круга запись-чтение
 build/test_profile: src/config.c

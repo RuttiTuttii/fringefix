@@ -51,6 +51,7 @@ void ctl_sync(void)
     }
     SendMessageW(ui.monitor, CB_SETCURSEL, (WPARAM)ui.app->cfg.monitor, 0);
     SendMessageW(ui.autopause, CB_SETCURSEL, (WPARAM)ui.app->cfg.auto_pause, 0);
+    SendMessageW(ui.gameaction, CB_SETCURSEL, (WPARAM)ui.app->cfg.game_action, 0);
     SendMessageW(ui.check, BM_SETCHECK,
                  ui.app->cfg.check_updates ? BST_CHECKED : BST_UNCHECKED, 0);
 }
@@ -110,11 +111,11 @@ static void build_row(int i)
     int y = row_y(&ROWS[i]);
     int hi = idx == IDX_SHARPEN ? 100 : 200;
 
-    ui.slider[idx] = child(FF_SLIDER_CLASS, L"", WS_TABSTOP, 0, MARGIN + COL_SLIDER, y + 3,
+    ui.slider[idx] = child(FF_SLIDER_CLASS, L"", WS_TABSTOP, 0, MARGIN + COL_SLIDER, y + 1,
                            SLIDER_W, CTRL_H, ID_SLIDER + idx);
     SendMessageW(ui.slider[idx], FFS_SETRANGE, (WPARAM)-hi, hi);
     ui.edit[idx] = child(L"EDIT", L"", ES_RIGHT | ES_AUTOHSCROLL | WS_TABSTOP, WS_EX_CLIENTEDGE,
-                         MARGIN + COL_EDIT, y + 5, EDIT_W, 24, ID_EDIT + idx);
+                         MARGIN + COL_EDIT, y + 3, EDIT_W, 24, ID_EDIT + idx);
 }
 
 static void build_button(str_id text, int col, int y, int id)
@@ -129,7 +130,7 @@ static void build_button(str_id text, int col, int y, int id)
 static HWND build_combo(const row_def *r, int id)
 {
     return child(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 0,
-                 MARGIN + COL_SLIDER, row_y(r) + 3, CARD_W - COL_SLIDER - COL_LABEL, 220, id);
+                 MARGIN + COL_SLIDER, row_y(r) + 2, CARD_W - COL_SLIDER - COL_LABEL, 220, id);
 }
 
 static void build_combos(void)
@@ -143,6 +144,8 @@ static void build_combos(void)
             ui.monitor = build_combo(&ROWS[i], ID_MONITOR);
         } else if (ROWS[i].idx == IDX_AUTOPAUSE) {
             ui.autopause = build_combo(&ROWS[i], ID_AUTOPAUSE);
+        } else if (ROWS[i].idx == IDX_GAMEACTION) {
+            ui.gameaction = build_combo(&ROWS[i], ID_GAMEACTION);
         }
     }
     for (i = 0; i < n; i++) {
@@ -151,6 +154,8 @@ static void build_combos(void)
     SendMessageW(ui.autopause, CB_ADDSTRING, 0, (LPARAM)ff_tr(S_AP_OFF));
     SendMessageW(ui.autopause, CB_ADDSTRING, 0, (LPARAM)ff_tr(S_AP_FULLSCREEN));
     SendMessageW(ui.autopause, CB_ADDSTRING, 0, (LPARAM)ff_tr(S_AP_3D));
+    SendMessageW(ui.gameaction, CB_ADDSTRING, 0, (LPARAM)ff_tr(S_GA_PAUSE));
+    SendMessageW(ui.gameaction, CB_ADDSTRING, 0, (LPARAM)ff_tr(S_GA_LIGHT));
 }
 
 void ctl_build(void)
@@ -171,7 +176,8 @@ void ctl_build(void)
     build_button(S_BTN_RESET, 2, BTN1_Y, ID_RESET);
     build_button(S_BTN_PROFILE_LOAD, 0, BTN2_Y, ID_PROF_LOAD);
     build_button(S_BTN_PROFILE_SAVE, 1, BTN2_Y, ID_PROF_SAVE);
-    build_button(S_BTN_UPDATES, 2, BTN2_Y, ID_UPDATE);
+    build_button(S_BTN_VERSIONS, 2, BTN2_Y, ID_VERSIONS);
+    build_button(S_BTN_UPDATES, 0, BTN3_Y, ID_UPDATE);
     build_button(S_BTN_SAVE, 2, BTN3_Y, ID_SAVE);
 }
 

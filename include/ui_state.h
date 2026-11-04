@@ -14,6 +14,7 @@ typedef struct {
     HWND edit[IDX_SHARPEN + 1];
     HWND monitor;
     HWND autopause;
+    HWND gameaction;
     HWND check;
     int dpi;
     /* больше нуля, пока поля правятся из кода: EN_CHANGE тогда не считается вводом пользователя */
@@ -29,7 +30,9 @@ enum {
     ID_EDIT = 120,
     ID_MONITOR = 140,
     ID_AUTOPAUSE,
+    ID_GAMEACTION,
     ID_WIZARD,
+    ID_VERSIONS,
     ID_CHECK,
     ID_PROF_LOAD,
     ID_PROF_SAVE,
