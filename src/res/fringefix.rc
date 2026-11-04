@@ -1,3 +1,6 @@
 1 24 "src/res/fringefix.manifest"
 1 ICON "src/res/fringefix.ico"
 2 ICON "src/res/fringefix_off.ico"
+10 ICON "src/res/flag_auto.ico"
+11 ICON "src/res/flag_ru.ico"
+12 ICON "src/res/flag_en.ico"

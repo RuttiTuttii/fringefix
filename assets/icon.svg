@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="t">
+  <title id="t">fringefix</title>
+  <style>
+    /* плоский рисунок без градиентов и свечения; светлая тема меняет только плитку */
+    .tile { fill: #1b2030; }
+    @media (prefers-color-scheme: light) {
+      .tile { fill: #eef1f8; }
+    }
+  </style>
+  <rect class="tile" width="256" height="256" rx="58"/>
+  <!-- пучок из трёх сабпикселей треугольником: зелёный сверху, красный и синий снизу -->
+  <circle cx="82" cy="168" r="50" fill="#ef4444"/>
+  <circle cx="174" cy="168" r="50" fill="#3b82f6"/>
+  <circle cx="128" cy="88" r="50" fill="#22c55e"/>
+</svg>

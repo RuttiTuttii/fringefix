@@ -1,87 +1,93 @@
-"""Генерирует src/res/fringefix.ico и fringefix_off.ico: три полосы R, G, B, зелёная выше.
+"""Собирает ICO для ресурсов exe из SVG в assets/: значок приложения и флаги языков.
 
-Только стандартная библиотека. Запуск из корня репозитория: python3 tools/make_icons.py
+Значок выключенного оверлея не рисуется отдельно: это те же SVG под монохромным фильтром.
+
+Нужен rsvg-convert (librsvg). Запуск из корня репозитория: python3 tools/make_icons.py
+Результат лежит в репозитории готовым, пересобирать нужно только при правке SVG.
 """
 from __future__ import annotations
 
+import shutil
 import struct
-import zlib
+import subprocess
+import sys
 from pathlib import Path
 
-SIZES = (16, 24, 32, 48, 64, 128, 256)
-SUPER = 4
-COLORS = {
-    "on": ((224, 72, 72), (72, 208, 104), (72, 128, 240)),
-    "off": ((128, 128, 128),) * 3,
-}
+ROOT = Path(__file__).resolve().parent.parent
+ASSETS = ROOT / "assets"
+OUT = ROOT / "src" / "res"
+APP_SIZES = (16, 20, 24, 32, 40, 48, 64, 128, 256)
+FLAG_SIZES = (16, 20, 24, 32)
+# до этого размера берётся знак без плитки: на мелких размерах плитка съедает форму
+MARK_MAX = 32
 
 
-def in_bar(x: float, y: float, x0: float, y0: float, w: float, h: float, r: float) -> bool:
-    """Точка внутри прямоугольника со скруглёнными углами."""
-    if not (x0 <= x <= x0 + w and y0 <= y <= y0 + h):
-        return False
-    cx = min(max(x, x0 + r), x0 + w - r)
-    cy = min(max(y, y0 + r), y0 + h - r)
-    return (x - cx) ** 2 + (y - cy) ** 2 <= r * r
+# выключенный оверлей: тот же рисунок под монохромным фильтром, цвета уходят, яркость шариков остаётся
+OFF_FILTER = (
+    '<defs><filter id="ff-off" color-interpolation-filters="sRGB">'
+    '<feColorMatrix type="saturate" values="0"/></filter></defs>'
+    '<g filter="url(#ff-off)">'
+)
 
 
-def render(size: int, colors: tuple[tuple[int, int, int], ...]) -> bytes:
-    """RGBA-картинка с усреднением по SUPER x SUPER подточкам."""
-    bar_w, bar_h, gap = size * 0.22, size * 0.58, size * 0.06
-    left = (size - (3 * bar_w + 2 * gap)) / 2
-    rows = []
-    for py in range(size):
-        row = bytearray([0])
-        for px in range(size):
-            acc = [0, 0, 0, 0]
-            for sy in range(SUPER):
-                for sx in range(SUPER):
-                    x = px + (sx + 0.5) / SUPER
-                    y = py + (sy + 0.5) / SUPER
-                    for i, color in enumerate(colors):
-                        top = size * (0.12 if i == 1 else 0.30)
-                        if in_bar(x, y, left + i * (bar_w + gap), top, bar_w, bar_h, bar_w * 0.3):
-                            acc[0] += color[0]
-                            acc[1] += color[1]
-                            acc[2] += color[2]
-                            acc[3] += 255
-                            break
-            n = SUPER * SUPER
-            alpha = acc[3] // n
-            # цвет считаем по покрытым подточкам, чтобы край не темнел от прозрачного чёрного
-            covered = max(acc[3] // 255, 1)
-            row += bytes([acc[0] // covered, acc[1] // covered, acc[2] // covered, alpha])
-        rows.append(bytes(row))
-    return b"".join(rows)
+def with_off_filter(svg_text: str) -> str:
+    """Оборачивает содержимое SVG в группу с фильтром выключенного состояния."""
+    start = svg_text.index(">", svg_text.index("<svg")) + 1
+    end = svg_text.rindex("</svg>")
+    return svg_text[:start] + OFF_FILTER + svg_text[start:end] + "</g>" + svg_text[end:]
 
 
-def png(size: int, raw: bytes) -> bytes:
-    def chunk(tag: bytes, data: bytes) -> bytes:
-        body = tag + data
-        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body))
+def render(svg: Path, size: int, off: bool = False) -> bytes:
+    """PNG нужного размера из SVG через rsvg-convert; off накладывает монохромный фильтр выключенного состояния."""
+    text = svg.read_text(encoding="utf-8")
+    if off:
+        text = with_off_filter(text)
+    result = subprocess.run(
+        ["rsvg-convert", "-w", str(size), "-h", str(size), "--keep-aspect-ratio"],
+        input=text.encode("utf-8"),
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"rsvg-convert не смог собрать {svg.name}: {result.stderr.decode()}")
+    return result.stdout
 
-    ihdr = struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0)
-    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b"")
 
-
-def ico(colors: tuple[tuple[int, int, int], ...]) -> bytes:
-    images = [png(s, render(s, colors)) for s in SIZES]
+def pack_ico(images: list[tuple[int, bytes]]) -> bytes:
+    """ICO из PNG-картинок: заголовок, каталог и сами PNG."""
     head = struct.pack("<HHH", 0, 1, len(images))
     offset = 6 + 16 * len(images)
     entries = b""
-    for size, data in zip(SIZES, images):
+    for size, data in images:
         dim = 0 if size >= 256 else size
         entries += struct.pack("<BBBBHHII", dim, dim, 0, 0, 1, 32, len(data), offset)
         offset += len(data)
-    return head + entries + b"".join(images)
+    return head + entries + b"".join(data for _, data in images)
 
 
-def main() -> None:
-    out = Path(__file__).resolve().parent.parent / "src" / "res"
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "fringefix.ico").write_bytes(ico(COLORS["on"]))
-    (out / "fringefix_off.ico").write_bytes(ico(COLORS["off"]))
+def app_icon(off: bool) -> bytes:
+    images = [
+        (s, render(ASSETS / ("mark.svg" if s <= MARK_MAX else "icon.svg"), s, off))
+        for s in APP_SIZES
+    ]
+    return pack_ico(images)
+
+
+def flag_icon(name: str) -> bytes:
+    return pack_ico([(s, render(ASSETS / "flags" / f"{name}.svg", s)) for s in FLAG_SIZES])
+
+
+def main() -> int:
+    if shutil.which("rsvg-convert") is None:
+        print("нужен rsvg-convert: pacman -S librsvg или apt install librsvg2-bin", file=sys.stderr)
+        return 1
+    OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / "fringefix.ico").write_bytes(app_icon(off=False))
+    (OUT / "fringefix_off.ico").write_bytes(app_icon(off=True))
+    for name in ("ru", "en", "auto"):
+        (OUT / f"flag_{name}.ico").write_bytes(flag_icon(name))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-labelledby="t">
+  <title id="t">Русский</title>
+  <defs>
+    <clipPath id="c"><rect x="2" y="6" width="60" height="36" rx="6"/></clipPath>
+  </defs>
+  <g transform="translate(0 8)">
+  <g clip-path="url(#c)">
+    <rect x="2" y="6" width="60" height="12" fill="#ffffff"/>
+    <rect x="2" y="18" width="60" height="12" fill="#1c57a5"/>
+    <rect x="2" y="30" width="60" height="12" fill="#d52b1e"/>
+  </g>
+  <rect x="2.5" y="6.5" width="59" height="35" rx="5.5" fill="none" stroke="#000" stroke-opacity=".35"/>
+  </g>
+</svg>

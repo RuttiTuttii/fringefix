@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-labelledby="t">
+  <title id="t">English</title>
+  <defs>
+    <clipPath id="c"><rect x="2" y="6" width="60" height="36" rx="6"/></clipPath>
+    <clipPath id="cross"><path d="M32,24 h30 v18 z v18 h-30 z h-30 v-18 z v-18 h30 z" transform="translate(0,0)"/></clipPath>
+  </defs>
+  <g transform="translate(0 8)">
+  <g clip-path="url(#c)">
+    <!-- флаг Великобритании в окне 60x36: синий фон, диагонали, прямой крест -->
+    <rect x="2" y="6" width="60" height="36" fill="#012169"/>
+    <path d="M2,6 L62,42 M62,6 L2,42" stroke="#ffffff" stroke-width="7.2"/>
+    <path d="M2,6 L62,42 M62,6 L2,42" stroke="#c8102e" stroke-width="2.6" clip-path="url(#cross)"/>
+    <path d="M32,6 V42 M2,24 H62" stroke="#ffffff" stroke-width="12"/>
+    <path d="M32,6 V42 M2,24 H62" stroke="#c8102e" stroke-width="7.2"/>
+  </g>
+  <rect x="2.5" y="6.5" width="59" height="35" rx="5.5" fill="none" stroke="#000" stroke-opacity=".35"/>
+  </g>
+</svg>
