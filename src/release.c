@@ -77,9 +77,10 @@ static int ends_with(const char *s, const char *suffix)
     return a >= b && strcmp(s + a - b, suffix) == 0;
 }
 
-/* значение строкового поля key, поиск с позиции from; экранирование не поддерживается, такие строки отбрасываются.
+/* значение строкового поля key в [from, end); экранирование не поддерживается, такие строки отбрасываются.
  * возвращает указатель за закрывающей кавычкой или NULL */
-static const char *json_string(const char *from, const char *key, char *out, size_t n)
+static const char *json_string(const char *from, const char *end, const char *key, char *out,
+                               size_t n)
 {
     char pat[48];
     const char *p;
@@ -89,7 +90,7 @@ static const char *json_string(const char *from, const char *key, char *out, siz
         return NULL;
     }
     p = strstr(from, pat);
-    if (!p) {
+    if (!p || p + strlen(pat) >= end) {
         return NULL;
     }
     p += strlen(pat);
@@ -107,13 +108,13 @@ static const char *json_string(const char *from, const char *key, char *out, siz
         return NULL;
     }
     p++;
-    while (*p && *p != '"') {
+    while (p < end && *p && *p != '"') {
         if (*p == '\\' || i + 1 >= n) {
             return NULL;
         }
         out[i++] = *p++;
     }
-    if (*p != '"') {
+    if (p >= end || *p != '"') {
         return NULL;
     }
     out[i] = '\0';
@@ -148,23 +149,24 @@ static int tag_ok(const char *tag)
     return p != tag;
 }
 
-int ff_release_parse(const char *json, const char *repo, ff_release *out)
+/* префикс, с которого обязана начинаться каждая принятая ссылка на файл релиза */
+static int make_prefix(const char *repo, char *prefix, size_t n)
 {
-    char prefix[160];
+    return repo_ok(repo)
+           && snprintf(prefix, n, "https://github.com/%s/releases/download/", repo) < (int)n;
+}
+
+/* один релиз: тег и файлы в [from, end) */
+static int parse_segment(const char *from, const char *end, const char *prefix, ff_release *out)
+{
     char url[FF_URL_MAX];
     const char *p;
 
     memset(out, 0, sizeof *out);
-    if (!repo_ok(repo)
-        || snprintf(prefix, sizeof prefix, "https://github.com/%s/releases/download/", repo)
-               >= (int)sizeof prefix) {
+    if (!json_string(from, end, "tag_name", out->tag, sizeof out->tag) || !tag_ok(out->tag)) {
         return -1;
     }
-    if (!json_string(json, "tag_name", out->tag, sizeof out->tag) || !tag_ok(out->tag)) {
-        return -1;
-    }
-
-    for (p = json; (p = json_string(p, "browser_download_url", url, sizeof url)) != NULL;) {
+    for (p = from; (p = json_string(p, end, "browser_download_url", url, sizeof url)) != NULL;) {
         if (!starts_with_ci(url, prefix)) {
             continue;
         }
@@ -175,4 +177,37 @@ int ff_release_parse(const char *json, const char *repo, ff_release *out)
         }
     }
     return (out->exe_url[0] && out->sha_url[0]) ? 0 : -2;
+}
+
+int ff_release_parse(const char *json, const char *repo, ff_release *out)
+{
+    char prefix[160];
+
+    memset(out, 0, sizeof *out);
+    if (!make_prefix(repo, prefix, sizeof prefix)) {
+        return -1;
+    }
+    return parse_segment(json, json + strlen(json), prefix, out);
+}
+
+int ff_release_list_parse(const char *json, const char *repo, ff_release out[], int max)
+{
+    char prefix[160];
+    const char *p = json;
+    int n = 0;
+
+    if (!make_prefix(repo, prefix, sizeof prefix)) {
+        return -1;
+    }
+    /* у каждого релиза tag_name идёт раньше его файлов, поэтому границей служит следующий tag_name */
+    while (n < max && (p = strstr(p, "\"tag_name\"")) != NULL) {
+        const char *next = strstr(p + 1, "\"tag_name\"");
+        const char *end = next ? next : json + strlen(json);
+
+        if (parse_segment(p, end, prefix, &out[n]) == 0) {
+            n++;
+        }
+        p = end;
+    }
+    return n;
 }

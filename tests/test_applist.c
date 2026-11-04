@@ -21,5 +21,16 @@ int main(void)
     CHECK(!ff_app_is_known_nongame(L"C:\\dir\\"));
     CHECK(!ff_app_is_known_nongame(
         L"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.exe"));
+    /* список имён: регистр, пробелы, пути, имя без .exe */
+    CHECK(ff_app_list_has("Game.exe; other ;x.exe", L"C:\\Games\\game.exe"));
+    CHECK(ff_app_list_has("Game.exe; other ;x.exe", L"OTHER.EXE"));
+    CHECK(ff_app_list_has("Game.exe; other ;x.exe", L"x.exe"));
+    CHECK(!ff_app_list_has("Game.exe; other ;x.exe", L"gam.exe"));
+    CHECK(!ff_app_list_has("Game.exe;;", L"other.exe"));
+    CHECK(!ff_app_list_has("", L"game.exe"));
+    CHECK(!ff_app_list_has(NULL, L"game.exe"));
+    CHECK(!ff_app_list_has("game.exe", NULL));
+    /* точка у элемента значит имя целиком: "game.exe" не совпадает с "game" */
+    CHECK(!ff_app_list_has("game.exe", L"game"));
     TEST_DONE("applist");
 }

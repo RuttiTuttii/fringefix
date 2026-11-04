@@ -21,4 +21,10 @@ int ff_version_cmp(const int a[3], const int b[3]);
  * 0 при успехе, -1 нет тега или плохой repo, -2 нет exe или sha256 среди файлов релиза */
 int ff_release_parse(const char *json, const char *repo, ff_release *out);
 
+#define FF_RELEASES_MAX 30
+
+/* разбирает JSON-массив из releases (новые первыми): сохраняет релизы, у которых есть оба файла, до max штук.
+ * порядок как в ответе; число сохранённых или -1 при плохом repo */
+int ff_release_list_parse(const char *json, const char *repo, ff_release out[], int max);
+
 #endif

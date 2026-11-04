@@ -1,5 +1,7 @@
 #include "applist.h"
 
+#include <ctype.h>
+#include <string.h>
 #include <wctype.h>
 
 #define NAME_MAX_W 64
@@ -58,6 +60,65 @@ int ff_app_is_known_nongame(const wchar_t *exe)
         if (same(name, NONGAME[i])) {
             return 1;
         }
+    }
+    return 0;
+}
+
+/* имя в ASCII нижнего регистра; символы вне ASCII заменяются знаком вопроса и в списке не совпадут */
+static void narrow(const wchar_t *w, char *out, size_t n)
+{
+    size_t i = 0;
+
+    for (; *w && i + 1 < n; w++) {
+        out[i++] = *w < 128 ? (char)*w : '?';
+    }
+    out[i] = '\0';
+}
+
+static int item_matches(const char *item, size_t len, const char *name)
+{
+    char buf[NAME_MAX_W];
+    size_t i;
+
+    if (len == 0 || len + 5 >= sizeof buf) {
+        return 0;
+    }
+    for (i = 0; i < len; i++) {
+        buf[i] = (char)tolower((unsigned char)item[i]);
+    }
+    buf[len] = '\0';
+    if (strcmp(buf, name) == 0) {
+        return 1;
+    }
+    /* элемент без точки считается именем без .exe */
+    return strchr(buf, '.') == NULL && (strcat(buf, ".exe"), strcmp(buf, name) == 0);
+}
+
+int ff_app_list_has(const char *list, const wchar_t *exe)
+{
+    wchar_t base[NAME_MAX_W];
+    char name[NAME_MAX_W];
+    const char *p = list;
+
+    if (!list || !exe || !base_lower(exe, base)) {
+        return 0;
+    }
+    narrow(base, name, sizeof name);
+    while (*p) {
+        const char *end = strchr(p, ';');
+        const char *a = p;
+        const char *b = end ? end : p + strlen(p);
+
+        while (a < b && (*a == ' ' || *a == '\t')) {
+            a++;
+        }
+        while (b > a && (b[-1] == ' ' || b[-1] == '\t')) {
+            b--;
+        }
+        if (item_matches(a, (size_t)(b - a), name)) {
+            return 1;
+        }
+        p = end ? end + 1 : p + strlen(p);
     }
     return 0;
 }

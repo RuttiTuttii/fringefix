@@ -96,6 +96,38 @@ static void test_parse_long_url(void)
     CHECK(ff_release_parse(json, "own/repo", &r) == -2);
 }
 
+#define B2 "https://github.com/Own/Repo/releases/download/v1.1.0/"
+#define B3 "https://github.com/Own/Repo/releases/download/v1.0.0/"
+
+static const char LIST[] =
+    "[{\"tag_name\":\"v1.2.3\",\"assets\":["
+    "{\"browser_download_url\":\"" BASE "fringefix.exe\"},"
+    "{\"browser_download_url\":\"" BASE "fringefix.exe.sha256\"}],\"body\":\"notes\"},"
+    /* у этого релиза нет файла хеша, в список он не попадёт */
+    "{\"tag_name\":\"v1.1.0\",\"assets\":["
+    "{\"browser_download_url\":\"" B2 "fringefix.exe\"}]},"
+    "{\"tag_name\":\"v1.0.0\",\"assets\":["
+    "{\"browser_download_url\":\"" B3 "fringefix.exe\"},"
+    "{\"browser_download_url\":\"" B3 "fringefix.exe.sha256\"}]}]";
+
+static void test_list(void)
+{
+    ff_release r[FF_RELEASES_MAX];
+
+    CHECK(ff_release_list_parse(LIST, "own/repo", r, FF_RELEASES_MAX) == 2);
+    CHECK(strcmp(r[0].tag, "v1.2.3") == 0 && strcmp(r[0].exe_url, BASE "fringefix.exe") == 0);
+    /* файлы привязаны к своему релизу, а не к соседнему */
+    CHECK(strcmp(r[1].tag, "v1.0.0") == 0 && strcmp(r[1].sha_url, B3 "fringefix.exe.sha256") == 0);
+
+    /* потолок по числу, пустой ответ, плохой repo */
+    CHECK(ff_release_list_parse(LIST, "own/repo", r, 1) == 1 && strcmp(r[0].tag, "v1.2.3") == 0);
+    CHECK(ff_release_list_parse("[]", "own/repo", r, FF_RELEASES_MAX) == 0);
+    CHECK(ff_release_list_parse("", "own/repo", r, FF_RELEASES_MAX) == 0);
+    CHECK(ff_release_list_parse(LIST, "own", r, FF_RELEASES_MAX) == -1);
+    /* чужой репозиторий не даёт ни одной записи */
+    CHECK(ff_release_list_parse(LIST, "other/repo", r, FF_RELEASES_MAX) == 0);
+}
+
 int main(void)
 {
     test_version();
@@ -103,5 +135,6 @@ int main(void)
     test_parse_rejects();
     test_parse_repo_validation();
     test_parse_long_url();
+    test_list();
     TEST_DONE("release");
 }

@@ -6,7 +6,7 @@
 #include <string.h>
 
 #define MONITOR_MAX 15
-#define LINE_MAX_LEN 128
+#define LINE_MAX_LEN 320
 
 static const char *const SHIFT_KEYS[6] = {
     "red_x", "red_y", "green_x", "green_y", "blue_x", "blue_y",
@@ -44,6 +44,16 @@ static int parse_number(const char *s, double lo, double hi, double *out)
         return 0;
     }
     *out = v < lo ? lo : (v > hi ? hi : v);
+    return 1;
+}
+
+/* строка целиком до конца значения; не помещается в буфер значит ключ отброшен, а не обрезан */
+static int copy_string(const char *val, char *dst, size_t n)
+{
+    if (strlen(val) >= n) {
+        return 0;
+    }
+    strcpy(dst, val);
     return 1;
 }
 
@@ -95,6 +105,26 @@ static int parse_line(char *line, ff_config *cfg)
         cfg->auto_pause = (int)v;
         return 1;
     }
+    if (strcmp(key, "game_action") == 0) {
+        if (!parse_number(val, 0.0, 1.0, &v)) {
+            return 0;
+        }
+        cfg->game_action = (int)v;
+        return 1;
+    }
+    if (strcmp(key, "gpu_priority") == 0) {
+        if (!parse_number(val, -7.0, 7.0, &v)) {
+            return 0;
+        }
+        cfg->gpu_priority = (int)v;
+        return 1;
+    }
+    if (strcmp(key, "pause_apps") == 0) {
+        return copy_string(val, cfg->pause_apps, sizeof cfg->pause_apps);
+    }
+    if (strcmp(key, "ignore_apps") == 0) {
+        return copy_string(val, cfg->ignore_apps, sizeof cfg->ignore_apps);
+    }
     if (strcmp(key, "check_updates") == 0) {
         if (!parse_number(val, 0.0, 1.0, &v)) {
             return 0;
@@ -141,11 +171,15 @@ int ff_config_format(const ff_config *cfg, char *buf, size_t n)
         "\n; резкость от -1 до 1, минус смягчает картинку\nsharpen = %.3f\n"
         "\n; номер монитора, выходы всех видеокарт считаются подряд с нуля\nmonitor = %d\n"
         "\n; проверять обновления при запуске, 0 или 1\ncheck_updates = %d\n"
-        "\n; автопауза: 0 выключена, 1 в полноэкранных приложениях, 2 ещё и в 3D-приложениях\nauto_pause = %d\n",
+        "\n; автопауза: 0 выключена, 1 в полноэкранных приложениях, 2 ещё и в 3D-приложениях\nauto_pause = %d\n"
+        "\n; что делать в игре: 0 пауза, 1 облегчённый режим без резкости и лапласиана\ngame_action = %d\n"
+        "\n; приоритет GPU оверлея от -7 до 7, ниже ноля уступает видеокарту игре\ngpu_priority = %d\n"
+        "\n; имена exe через точку с запятой: всегда на паузу и никогда не на паузу\npause_apps = %s\nignore_apps = %s\n",
         (double)cfg->shift[0][0], (double)cfg->shift[0][1],
         (double)cfg->shift[1][0], (double)cfg->shift[1][1],
         (double)cfg->shift[2][0], (double)cfg->shift[2][1],
-        (double)cfg->sharpen, cfg->monitor, cfg->check_updates, cfg->auto_pause);
+        (double)cfg->sharpen, cfg->monitor, cfg->check_updates, cfg->auto_pause, cfg->game_action, cfg->gpu_priority,
+        cfg->pause_apps, cfg->ignore_apps);
 
     return (w < 0 || (size_t)w >= n) ? -1 : w;
 }
