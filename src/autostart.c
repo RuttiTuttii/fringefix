@@ -5,6 +5,8 @@
 
 #define RUN_KEY L"Software\\Microsoft\\Windows\\CurrentVersion\\Run"
 #define RUN_VALUE L"fringefix"
+/* диспетчер задач хранит включено или выключено отдельно, не трогая запись в Run */
+#define APPROVED_KEY L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run"
 
 /* путь к этому exe в кавычках: так Windows разбирает пробелы в пути */
 static int quoted_exe(wchar_t out[MAX_PATH + 2])
@@ -20,6 +22,20 @@ static int quoted_exe(wchar_t out[MAX_PATH + 2])
     return 0;
 }
 
+/* нет записи или первый байт чётный: включено; нечётный (0x03) значит отключено в диспетчере задач */
+static int approved(void)
+{
+    BYTE v[12];
+    DWORD size = sizeof v;
+    DWORD type = 0;
+
+    if (RegGetValueW(HKEY_CURRENT_USER, APPROVED_KEY, RUN_VALUE, RRF_RT_REG_BINARY, &type, v, &size)
+        != ERROR_SUCCESS || size == 0) {
+        return 1;
+    }
+    return (v[0] & 1) == 0;
+}
+
 int autostart_get(void)
 {
     wchar_t want[MAX_PATH + 2];
@@ -33,7 +49,7 @@ int autostart_get(void)
     }
     rc = RegGetValueW(HKEY_CURRENT_USER, RUN_KEY, RUN_VALUE, RRF_RT_REG_SZ, &type, have, &size);
     /* exe переехал в другую папку: запись устарела, галочка снята, повторное включение её обновит */
-    return rc == ERROR_SUCCESS && _wcsicmp(have, want) == 0;
+    return rc == ERROR_SUCCESS && _wcsicmp(have, want) == 0 && approved();
 }
 
 int autostart_set(int on)
@@ -54,6 +70,8 @@ int autostart_set(int on)
         }
         rc = RegSetValueExW(key, RUN_VALUE, 0, REG_SZ, (const BYTE *)want,
                             (DWORD)((wcslen(want) + 1) * sizeof(wchar_t)));
+        /* включение снимает и запрет диспетчера задач, иначе галочка стояла бы, а программа не стартовала */
+        RegDeleteKeyValueW(HKEY_CURRENT_USER, APPROVED_KEY, RUN_VALUE);
     } else {
         rc = RegDeleteValueW(key, RUN_VALUE);
         /* записи и не было: выключено, как и просили */

@@ -56,20 +56,25 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show)
     ui_language_apply(0);
     InitCommonControlsEx(&icc);
 
-    if (app_init(&app, inst) != 0 || ui_tray_create(&app) != 0 || capture_start(&app) != 0) {
+    if (app_init(&app, inst) != 0) {
         MessageBoxW(NULL, ff_tr(S_START_FAILED), L"fringefix", MB_ICONERROR);
         return 1;
     }
+    /* статистика, язык и тема готовы до трея и потока захвата: первая ошибка захвата попадёт в статистику,
+     * а подсказка трея сразу будет на языке из настроек; 0 значит как в системе */
     {
         wchar_t stats_path[MAX_PATH];
 
         app_stats_path(&app, stats_path);
         stats_store_init(stats_path, app.cfg.stats);
     }
-    /* язык и тема из настроек: 0 значит как в системе */
     ui_language_apply(app.cfg.language);
     theme_set_mode(app.cfg.theme);
     theme_refresh();
+    if (ui_tray_create(&app) != 0 || capture_start(&app) != 0) {
+        MessageBoxW(NULL, ff_tr(S_START_FAILED), L"fringefix", MB_ICONERROR);
+        return 1;
+    }
     if (app.cfg.check_updates && FF_REPO[0]) {
         update_check_async(app.hwnd, FF_REPO, 0);
     }
