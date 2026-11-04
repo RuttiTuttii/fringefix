@@ -7,6 +7,8 @@
 #include <string.h>
 
 #include "app.h"
+#include "i18n.h"
+#include "theme.h"
 #include "ui.h"
 #include "update.h"
 #include "version.h"
@@ -49,10 +51,13 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show)
         return 0;
     }
     update_cleanup();
+    /* язык интерфейса и тема берутся у системы */
+    ff_i18n_set(PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_RUSSIAN ? FF_LANG_RU : FF_LANG_EN);
+    theme_refresh();
     InitCommonControlsEx(&icc);
 
     if (app_init(&app, inst) != 0 || ui_tray_create(&app) != 0 || capture_start(&app) != 0) {
-        MessageBoxW(NULL, L"Не удалось запустить fringefix.", L"fringefix", MB_ICONERROR);
+        MessageBoxW(NULL, ff_tr(S_START_FAILED), L"fringefix", MB_ICONERROR);
         return 1;
     }
     if (app.cfg.check_updates && FF_REPO[0]) {

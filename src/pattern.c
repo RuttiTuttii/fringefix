@@ -1,5 +1,6 @@
 #include <windows.h>
 
+#include "i18n.h"
 #include "output.h"
 #include "pattern.h"
 
@@ -29,11 +30,6 @@ static void draw_lines(HDC dc, const RECT *r)
 /* текст на чёрной плашке, чтобы линии его не портили */
 static void draw_text(HDC dc, const RECT *r)
 {
-    static const wchar_t TEXT[] =
-        L"fringefix: тестовый паттерн\n\n"
-        L"Плоские верх и низ (e f z s t) показывают вертикальную каёмку,\n"
-        L"прямые стойки (l i k d) показывают горизонтальную.\n\n"
-        L"Esc или клик закрывают окно";
     HFONT font = CreateFontW(-MulDiv(14, GetDeviceCaps(dc, LOGPIXELSX), 72), 0, 0, 0, FW_NORMAL,
                              0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
     HGDIOBJ old = SelectObject(dc, font);
@@ -42,7 +38,7 @@ static void draw_text(HDC dc, const RECT *r)
     FillRect(dc, &box, (HBRUSH)GetStockObject(BLACK_BRUSH));
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, RGB(255, 255, 255));
-    DrawTextW(dc, TEXT, -1, &box, DT_CENTER | DT_VCENTER | DT_WORDBREAK);
+    DrawTextW(dc, ff_tr(S_PATTERN_TEXT), -1, &box, DT_CENTER | DT_VCENTER | DT_WORDBREAK);
     SelectObject(dc, old);
     DeleteObject(font);
 }

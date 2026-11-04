@@ -1,279 +1,248 @@
 #include <windows.h>
-#include <commctrl.h>
-#include <math.h>
 #include <stdio.h>
+#include <string.h>
+#include <wchar.h>
 
-#include "output.h"
+#include "i18n.h"
 #include "pattern.h"
+#include "resource.h"
+#include "slider.h"
+#include "theme.h"
 #include "ui.h"
+#include "ui_paint.h"
+#include "ui_state.h"
 #include "version.h"
 
-#define MAX_OUTPUTS 8
-#define SHARPEN_IDX 6
-#define CLIENT_W 476
-#define CLIENT_H 470
+#ifndef WM_DPICHANGED
+#define WM_DPICHANGED 0x02E0
+#endif
 
-enum {
-    ID_SLIDER = 100,
-    ID_VALUE = 200,
-    ID_MONITOR = 300,
-    ID_CHECK,
-    ID_PATTERN,
-    ID_RESET,
-    ID_UPDATE,
-    ID_SAVE,
-    ID_STATUS,
-};
-
-/* idx 0..5 это shift[idx / 2][idx % 2], 6 это резкость; y в пикселях при 96 dpi */
-typedef struct {
-    const wchar_t *label;
-    int idx;
-    int y;
-} row_t;
-
-static const row_t ROWS[] = {
-    { L"Зелёный, по вертикали", 3, 36 },
-    { L"Красный, по горизонтали", 0, 68 },
-    { L"Синий, по горизонтали", 4, 100 },
-    { L"Зелёный, по горизонтали", 2, 164 },
-    { L"Красный, по вертикали", 1, 196 },
-    { L"Синий, по вертикали", 5, 228 },
-    { L"Резкость", SHARPEN_IDX, 292 },
-};
-#define NROWS ((int)(sizeof ROWS / sizeof ROWS[0]))
+#define STATUS_CHARS 256
 
 static const wchar_t CLASS_NAME[] = L"fringefix_settings";
-static ff_app *g_app;
-static HWND g_win;
-static HWND g_slider[NROWS];
-static HWND g_value[NROWS];
-static HWND g_monitor;
-static HWND g_check;
-static HWND g_status;
-static HFONT g_font;
-static HFONT g_bold;
-static int g_dpi = 96;
+static wchar_t g_status[STATUS_CHARS];
 
-#define S(v) MulDiv((v), g_dpi, 96)
+ui_state ui = { NULL, NULL, { NULL }, { NULL }, NULL, NULL, 96, 0 };
 
-static float *row_value(ff_config *c, int idx)
+static void set_status(const wchar_t *text)
 {
-    return idx == SHARPEN_IDX ? &c->sharpen : &c->shift[idx / 2][idx % 2];
+    RECT r;
+
+    wcsncpy(g_status, text, STATUS_CHARS - 1);
+    g_status[STATUS_CHARS - 1] = L'\0';
+    if (ui.win) {
+        SetRect(&r, 0, S(STATUS_Y) - 2, S(CLIENT_W), S(STATUS_Y) + S(22));
+        InvalidateRect(ui.win, &r, FALSE);
+    }
 }
 
-static void show_value(int i)
+static void set_status_fmt(str_id id, const wchar_t *arg)
 {
-    wchar_t t[32];
-    float v = *row_value(&g_app->cfg, ROWS[i].idx);
+    wchar_t t[STATUS_CHARS];
 
-    if (ROWS[i].idx == SHARPEN_IDX) {
-        _snwprintf(t, 32, L"%.2f", (double)v);
+    _snwprintf(t, STATUS_CHARS, ff_tr(id), arg);
+    t[STATUS_CHARS - 1] = L'\0';
+    set_status(t);
+}
+
+static void on_profile(int save)
+{
+    wchar_t name[PROFILE_NAME_LEN];
+    int rc = save ? ui_profile_save_dialog(ui.win, ui.app, name)
+                  : ui_profile_load_dialog(ui.win, ui.app, name);
+
+    if (rc == 1) {
+        return;
+    }
+    if (save && rc == 0) {
+        set_status_fmt(S_PROFILE_SAVED, name);
+    } else if (save) {
+        set_status(ff_tr(S_PROFILE_SAVE_FAILED));
+    } else if (rc == 0) {
+        ctl_sync();
+        set_status_fmt(S_PROFILE_LOADED, name);
     } else {
-        _snwprintf(t, 32, L"%+.2f px", (double)v);
+        set_status(ff_tr(S_PROFILE_BAD));
     }
-    t[31] = L'\0';
-    SetWindowTextW(g_value[i], t);
 }
 
-/* значения конфига в элементы окна */
-static void sync_controls(void)
+static void on_edit(int id, int code)
+{
+    if (code == EN_CHANGE && !ui.sync) {
+        ctl_edit_changed(id - ID_EDIT);
+    } else if (code == EN_KILLFOCUS) {
+        ctl_edit_show(id - ID_EDIT);
+    }
+}
+
+/* Enter в поле: привести текст к виду значения и выделить его для следующего ввода */
+static void on_enter(void)
 {
     int i;
 
-    for (i = 0; i < NROWS; i++) {
-        float v = *row_value(&g_app->cfg, ROWS[i].idx);
-
-        SendMessageW(g_slider[i], TBM_SETPOS, TRUE, lroundf(v * 100.0f));
-        show_value(i);
+    for (i = 0; i <= IDX_SHARPEN; i++) {
+        if (GetFocus() == ui.edit[i]) {
+            ctl_edit_show(i);
+            SendMessageW(ui.edit[i], EM_SETSEL, 0, -1);
+        }
     }
-    SendMessageW(g_monitor, CB_SETCURSEL, (WPARAM)g_app->cfg.monitor, 0);
-    SendMessageW(g_check, BM_SETCHECK, g_app->cfg.check_updates ? BST_CHECKED : BST_UNCHECKED, 0);
-}
-
-static HWND add(const wchar_t *cls, const wchar_t *text, DWORD style, int x, int y, int w, int h,
-                int id, HFONT font)
-{
-    HWND c = CreateWindowExW(0, cls, text, WS_CHILD | WS_VISIBLE | style, S(x), S(y), S(w), S(h),
-                             g_win, (HMENU)(INT_PTR)id, g_app->inst, NULL);
-
-    SendMessageW(c, WM_SETFONT, (WPARAM)font, TRUE);
-    return c;
-}
-
-static void add_section(const wchar_t *title, int y)
-{
-    add(L"STATIC", title, SS_LEFT, 16, y, 440, 20, -1, g_bold);
-}
-
-static void add_row(int i)
-{
-    int lo = ROWS[i].idx == SHARPEN_IDX ? 0 : -200;
-    int y = ROWS[i].y;
-
-    add(L"STATIC", ROWS[i].label, SS_LEFT, 16, y + 4, 166, 20, -1, g_font);
-    g_slider[i] = add(TRACKBAR_CLASSW, L"", TBS_HORZ | TBS_NOTICKS | WS_TABSTOP, 186, y, 210, 28,
-                      ID_SLIDER + i, g_font);
-    SendMessageW(g_slider[i], TBM_SETRANGE, TRUE, MAKELONG(lo, ROWS[i].idx == SHARPEN_IDX ? 100 : 200));
-    SendMessageW(g_slider[i], TBM_SETPAGESIZE, 0, 10);
-    g_value[i] = add(L"STATIC", L"", SS_RIGHT, 402, y + 4, 64, 20, ID_VALUE + i, g_font);
-}
-
-static void create_controls(void)
-{
-    wchar_t names[MAX_OUTPUTS][OUTPUT_NAME_LEN];
-    int n = ff_output_list(names, MAX_OUTPUTS);
-    int i;
-
-    add_section(L"Основные", 12);
-    add_section(L"Дополнительные", 140);
-    add_section(L"Прочее", 268);
-    for (i = 0; i < NROWS; i++) {
-        add_row(i);
-    }
-
-    add(L"STATIC", L"Монитор", SS_LEFT, 16, 334, 166, 20, -1, g_font);
-    g_monitor = add(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 186, 330, 280, 200,
-                    ID_MONITOR, g_font);
-    for (i = 0; i < n; i++) {
-        SendMessageW(g_monitor, CB_ADDSTRING, 0, (LPARAM)names[i]);
-    }
-    g_check = add(L"BUTTON", L"Проверять обновления при запуске", BS_AUTOCHECKBOX | WS_TABSTOP, 16,
-                  366, 440, 22, ID_CHECK, g_font);
-    g_status = add(L"STATIC", L"", SS_LEFTNOWORDWRAP, 16, 396, 444, 22, ID_STATUS, g_font);
-
-    add(L"BUTTON", L"Паттерн", BS_PUSHBUTTON | WS_TABSTOP, 16, 428, 108, 30, ID_PATTERN, g_font);
-    add(L"BUTTON", L"Сбросить", BS_PUSHBUTTON | WS_TABSTOP, 132, 428, 108, 30, ID_RESET, g_font);
-    add(L"BUTTON", L"Обновления", BS_PUSHBUTTON | WS_TABSTOP, 248, 428, 108, 30, ID_UPDATE, g_font);
-    add(L"BUTTON", L"Сохранить", BS_DEFPUSHBUTTON | WS_TABSTOP, 364, 428, 96, 30, ID_SAVE, g_font);
 }
 
 static void on_command(int id, int code)
 {
-    ff_config *c = &g_app->cfg;
+    ff_config *c = &ui.app->cfg;
 
-    switch (id) {
-    case ID_MONITOR:
-        if (code == CBN_SELCHANGE) {
-            c->monitor = (int)SendMessageW(g_monitor, CB_GETCURSEL, 0, 0);
-            app_reinit(g_app);
-        }
-        break;
-    case ID_CHECK:
-        c->check_updates = SendMessageW(g_check, BM_GETCHECK, 0, 0) == BST_CHECKED;
-        break;
-    case ID_PATTERN:
-        pattern_show(g_app->inst, c->monitor);
-        break;
-    case ID_RESET:
-        memset(c->shift, 0, sizeof c->shift);
-        c->sharpen = 0.0f;
-        sync_controls();
-        app_apply(g_app);
-        break;
-    case ID_UPDATE:
-        if (FF_REPO[0]) {
-            ui_settings_set_status(L"Проверяю обновления...");
-            update_check_async(g_app->hwnd, FF_REPO, 1);
-        } else {
-            ui_settings_set_status(L"В этой сборке не указан репозиторий для обновлений");
-        }
-        break;
-    case ID_SAVE:
-        ui_settings_set_status(app_save(g_app) == 0 ? L"Сохранено" : L"Не удалось сохранить файл настроек");
-        break;
+    if (id >= ID_SLIDER && id <= ID_SLIDER + IDX_SHARPEN && code == FFN_CHANGED) {
+        ctl_slider_changed(id - ID_SLIDER);
+    } else if (id >= ID_EDIT && id <= ID_EDIT + IDX_SHARPEN) {
+        on_edit(id, code);
+    } else if (id == IDOK) {
+        on_enter();
+    } else if (id == ID_MONITOR && code == CBN_SELCHANGE) {
+        c->monitor = (int)SendMessageW(ui.monitor, CB_GETCURSEL, 0, 0);
+        app_reinit(ui.app);
+    } else if (id == ID_CHECK) {
+        c->check_updates = SendMessageW(ui.check, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    } else if (id == ID_PROF_LOAD || id == ID_PROF_SAVE) {
+        on_profile(id == ID_PROF_SAVE);
+    } else if (id == ID_PATTERN) {
+        pattern_show(ui.app->inst, c->monitor);
+    } else if (id == ID_RESET) {
+        ctl_reset();
+    } else if (id == ID_UPDATE && FF_REPO[0]) {
+        set_status(ff_tr(S_CHECKING));
+        update_check_async(ui.app->hwnd, FF_REPO, 1);
+    } else if (id == ID_UPDATE) {
+        set_status(ff_tr(S_NO_REPO));
+    } else if (id == ID_SAVE) {
+        set_status(ff_tr(app_save(ui.app) == 0 ? S_SAVED : S_SAVE_FAILED));
     }
 }
 
-static void on_scroll(HWND src)
+static LRESULT on_ctlcolor(UINT m, HDC dc, HWND ctl)
 {
-    int i;
+    const ff_palette *p = theme_get();
+    int field = m == WM_CTLCOLOREDIT || m == WM_CTLCOLORLISTBOX || ctl == ui.monitor;
 
-    for (i = 0; i < NROWS; i++) {
-        if (src == g_slider[i]) {
-            int pos = (int)SendMessageW(src, TBM_GETPOS, 0, 0);
+    SetTextColor(dc, p->fg);
+    SetBkColor(dc, field ? p->field : p->bg);
+    return (LRESULT)(field ? paint_field() : paint_bg());
+}
 
-            *row_value(&g_app->cfg, ROWS[i].idx) = (float)pos / 100.0f;
-            show_value(i);
-            app_apply(g_app);
-        }
-    }
+static LRESULT on_dpi_changed(HWND h, WPARAM w, LPARAM l)
+{
+    const RECT *r = (const RECT *)l;
+
+    ui.dpi = HIWORD(w);
+    paint_init(ui.dpi);
+    ctl_rebuild();
+    SetWindowPos(h, NULL, r->left, r->top, r->right - r->left, r->bottom - r->top,
+                 SWP_NOZORDER | SWP_NOACTIVATE);
+    return 0;
 }
 
 static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
 {
     switch (m) {
-    case WM_HSCROLL:
-        on_scroll((HWND)l);
+    case WM_PAINT:
+        paint_window(h, ui.dpi, g_status);
         return 0;
+    case WM_ERASEBKGND:
+        return 1;
     case WM_COMMAND:
         on_command(LOWORD(w), HIWORD(w));
         return 0;
+    case WM_CTLCOLOREDIT:
+    case WM_CTLCOLORLISTBOX:
+    case WM_CTLCOLORBTN:
+    case WM_CTLCOLORSTATIC:
+        return on_ctlcolor(m, (HDC)w, (HWND)l);
+    case WM_SETTINGCHANGE:
+        /* сменилась тема приложений Windows: перекрасить окно на лету */
+        if (l && wcscmp((const wchar_t *)l, L"ImmersiveColorSet") == 0) {
+            theme_refresh();
+            paint_init(ui.dpi);
+            ctl_restyle();
+        }
+        return 0;
+    case WM_DPICHANGED:
+        return on_dpi_changed(h, w, l);
     case WM_CLOSE:
         /* окно только прячется, чтобы не пересоздавать элементы */
         ShowWindow(h, SW_HIDE);
-        app_set_fast(g_app, 0);
+        app_set_fast(ui.app, 0);
         return 0;
     }
     return DefWindowProcW(h, m, w, l);
 }
 
-static HFONT make_font(int weight)
+static void set_icons(void)
 {
-    return CreateFontW(-MulDiv(9, g_dpi, 72), 0, 0, 0, weight, 0, 0, 0, DEFAULT_CHARSET, 0, 0,
-                       CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    SendMessageW(ui.win, WM_SETICON, ICON_BIG,
+                 (LPARAM)LoadImageW(ui.app->inst, MAKEINTRESOURCEW(IDI_APP), IMAGE_ICON,
+                                    GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), 0));
+    SendMessageW(ui.win, WM_SETICON, ICON_SMALL,
+                 (LPARAM)LoadImageW(ui.app->inst, MAKEINTRESOURCEW(IDI_APP), IMAGE_ICON,
+                                    GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), 0));
 }
 
 static void create_window(void)
 {
     WNDCLASSW wc;
     HDC dc = GetDC(NULL);
-    DWORD style = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+    DWORD style = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN;
     RECT r;
 
-    g_dpi = GetDeviceCaps(dc, LOGPIXELSX);
+    ui.dpi = GetDeviceCaps(dc, LOGPIXELSX);
     ReleaseDC(NULL, dc);
+    theme_refresh();
+    slider_register(ui.app->inst);
 
     memset(&wc, 0, sizeof wc);
     wc.lpfnWndProc = proc;
-    wc.hInstance = g_app->inst;
+    wc.hInstance = ui.app->inst;
     wc.lpszClassName = CLASS_NAME;
-    wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
     wc.hCursor = LoadCursorW(NULL, (LPCWSTR)IDC_ARROW);
     RegisterClassW(&wc);
 
     SetRect(&r, 0, 0, S(CLIENT_W), S(CLIENT_H));
     AdjustWindowRect(&r, style, FALSE);
     /* поверх паттерна, который тоже занимает весь монитор */
-    g_win = CreateWindowExW(WS_EX_TOPMOST | WS_EX_CONTROLPARENT, CLASS_NAME,
-                            L"fringefix: настройки", style, CW_USEDEFAULT, CW_USEDEFAULT,
-                            r.right - r.left, r.bottom - r.top, NULL, NULL, g_app->inst, NULL);
-    g_font = make_font(FW_NORMAL);
-    g_bold = make_font(FW_SEMIBOLD);
-    create_controls();
-    ui_settings_set_status(L"Версия " FF_VERSION);
+    ui.win = CreateWindowExW(WS_EX_TOPMOST | WS_EX_CONTROLPARENT, CLASS_NAME,
+                             ff_tr(S_WINDOW_TITLE), style, CW_USEDEFAULT, CW_USEDEFAULT,
+                             r.right - r.left, r.bottom - r.top, NULL, NULL, ui.app->inst, NULL);
+    paint_init(ui.dpi);
+    set_icons();
+    ctl_build();
+    ctl_restyle();
+    set_status_fmt(S_VERSION, L"" FF_VERSION);
 }
 
 void ui_settings_show(ff_app *a)
 {
-    g_app = a;
-    if (!g_win) {
+    ui.app = a;
+    if (!ui.win) {
         create_window();
     }
-    sync_controls();
-    ShowWindow(g_win, SW_SHOW);
-    SetForegroundWindow(g_win);
+    ctl_sync();
+    ShowWindow(ui.win, SW_SHOW);
+    SetForegroundWindow(ui.win);
     app_set_fast(a, 1);
+}
+
+void ui_settings_refresh(void)
+{
+    if (ui.win) {
+        ctl_sync();
+    }
 }
 
 void ui_settings_set_status(const wchar_t *text)
 {
-    if (g_status) {
-        SetWindowTextW(g_status, text);
-    }
+    set_status(text);
 }
 
 int ui_settings_translate(MSG *m)
 {
-    return g_win && IsWindowVisible(g_win) && IsDialogMessageW(g_win, m);
+    return ui.win && IsWindowVisible(ui.win) && IsDialogMessageW(ui.win, m);
 }

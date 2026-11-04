@@ -9,21 +9,21 @@ REPO ?=
 WARN = -Wall -Wextra -Wpedantic
 INC = -Iinclude
 
-PORTABLE = src/config.c src/release.c src/sha256.c
+PORTABLE = src/config.c src/release.c src/sha256.c src/profile.c src/i18n.c
 WIN_SRC = src/main.c src/app.c src/capture.c src/gfx.c src/gfx_frame.c src/gfx_sig.c src/shader.c \
-	src/output.c src/pattern.c src/ui_tray.c src/ui_settings.c src/ui_update.c \
-	src/update.c src/http.c $(PORTABLE)
+	src/output.c src/pattern.c src/ui_tray.c src/ui_settings.c src/ui_controls.c src/ui_paint.c src/ui_profile.c \
+	src/ui_update.c src/slider.c src/theme.c src/profile_io.c src/update.c src/http.c $(PORTABLE)
 WIN_LIBS = -ld3d11 -ldxgi -ld3dcompiler -ldxguid -luuid -luser32 -lgdi32 -lcomctl32 \
-	-lshell32 -lwinhttp
+	-lshell32 -lwinhttp -lcomdlg32 -ldwmapi -luxtheme -ladvapi32
 WIN_FLAGS = -std=gnu99 -O2 $(WARN) -fvisibility=hidden $(INC) -D_WIN32_WINNT=0x0A00 \
 	-DFF_VERSION='"$(VERSION)"' -DFF_REPO='"$(REPO)"'
 
-TESTS = config release sha256
+TESTS = config release sha256 profile i18n
 
 # собирается под Windows кросс-компилятором mingw-w64 или нативно в msys2 (CC_WIN=gcc WINDRES=windres)
 win: build/fringefix.exe
 
-build/fringefix.exe: $(WIN_SRC) $(wildcard include/*.h) src/res/fringefix.rc src/res/fringefix.manifest
+build/fringefix.exe: $(WIN_SRC) $(wildcard include/*.h) $(wildcard src/res/*)
 	mkdir -p build
 	$(WINDRES) -O coff -i src/res/fringefix.rc -o build/fringefix_rc.o
 	$(CC_WIN) $(WIN_FLAGS) -mwindows -o $@ $(WIN_SRC) build/fringefix_rc.o $(WIN_LIBS) -static
@@ -34,9 +34,16 @@ test: $(TESTS:%=build/test_%)
 
 build/test_%: tests/test_%.c src/%.c include/%.h tests/test.h
 	mkdir -p build
-	$(CC) -std=c99 -O2 $(WARN) -fvisibility=hidden $(INC) -o $@ tests/test_$*.c src/$*.c -lm
+	$(CC) -std=c99 -O2 $(WARN) -fvisibility=hidden $(INC) -o $@ $(filter %.c,$^) -lm
+
+# профиль собирается вместе с конфигом: оба нужны для проверки круга запись-чтение
+build/test_profile: src/config.c
+
+# значки генерируются скриптом и лежат в репозитории готовыми
+icons:
+	python3 -I tools/make_icons.py
 
 clean:
 	rm -rf build
 
-.PHONY: win test clean
+.PHONY: win test icons clean

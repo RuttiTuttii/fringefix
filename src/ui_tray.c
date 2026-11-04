@@ -1,25 +1,28 @@
 #include <windows.h>
 #include <shellapi.h>
-#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
 
 #include "gfx.h"
+#include "i18n.h"
 #include "pattern.h"
+#include "resource.h"
 #include "ui.h"
 #include "version.h"
 
 #define HK_TOGGLE 1
 #define HK_QUIT 2
-#define ICON_SIZE 32
+#define MAX_PROFILES 24
 
-enum { IDM_SETTINGS = 1, IDM_TOGGLE, IDM_PATTERN, IDM_UPDATE, IDM_QUIT };
+enum { IDM_SETTINGS = 1, IDM_TOGGLE, IDM_PATTERN, IDM_UPDATE, IDM_QUIT, IDM_PROFILE = 100 };
 
 static const wchar_t CLASS_NAME[] = L"fringefix_main";
 static UINT g_taskbar_created;
 static HICON g_icon_on;
 static HICON g_icon_off;
+/* имена профилей на момент показа меню: по номеру пункта находим файл */
+static wchar_t g_profiles[MAX_PROFILES][PROFILE_NAME_LEN];
 
 void ui_utf8(const char *s, wchar_t *out, int n)
 {
@@ -29,54 +32,10 @@ void ui_utf8(const char *s, wchar_t *out, int n)
     out[n - 1] = L'\0';
 }
 
-/* значок рисуется в памяти: три полосы R, G, B, зелёная выше, как в треугольной раскладке;
- * выключенный оверлей серый */
-static HICON make_icon(int on)
+static HICON load_icon(HINSTANCE inst, int id)
 {
-    static const uint32_t COLORS[3] = { 0xFFE04848, 0xFF48D068, 0xFF4880F0 };
-    BITMAPINFO bi;
-    ICONINFO ii;
-    HDC dc = GetDC(NULL);
-    void *bits = NULL;
-    HBITMAP color;
-    HICON icon = NULL;
-    int c;
-    int x;
-    int y;
-
-    memset(&bi, 0, sizeof bi);
-    bi.bmiHeader.biSize = sizeof bi.bmiHeader;
-    bi.bmiHeader.biWidth = ICON_SIZE;
-    bi.bmiHeader.biHeight = -ICON_SIZE;
-    bi.bmiHeader.biPlanes = 1;
-    bi.bmiHeader.biBitCount = 32;
-    bi.bmiHeader.biCompression = BI_RGB;
-    color = CreateDIBSection(dc, &bi, DIB_RGB_COLORS, &bits, NULL, 0);
-    ReleaseDC(NULL, dc);
-    if (!color) {
-        return NULL;
-    }
-    memset(bits, 0, (size_t)ICON_SIZE * ICON_SIZE * 4);
-    for (c = 0; c < 3; c++) {
-        int x0 = 3 + c * 9;
-        int y0 = c == 1 ? 4 : 9;
-
-        for (y = y0; y < y0 + 19; y++) {
-            for (x = x0; x < x0 + 8; x++) {
-                ((uint32_t *)bits)[y * ICON_SIZE + x] = on ? COLORS[c] : 0xFF808080;
-            }
-        }
-    }
-    memset(&ii, 0, sizeof ii);
-    ii.fIcon = TRUE;
-    ii.hbmColor = color;
-    ii.hbmMask = CreateBitmap(ICON_SIZE, ICON_SIZE, 1, 1, NULL);
-    if (ii.hbmMask) {
-        icon = CreateIconIndirect(&ii);
-        DeleteObject(ii.hbmMask);
-    }
-    DeleteObject(color);
-    return icon;
+    return (HICON)LoadImageW(inst, MAKEINTRESOURCEW(id), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON),
+                             GetSystemMetrics(SM_CYSMICON), 0);
 }
 
 static void tray_notify(ff_app *a, DWORD msg)
@@ -91,7 +50,7 @@ static void tray_notify(ff_app *a, DWORD msg)
     nid.uCallbackMessage = WM_APP_TRAY;
     nid.hIcon = a->enabled ? g_icon_on : g_icon_off;
     _snwprintf(nid.szTip, 128, L"fringefix %ls: %ls", L"" FF_VERSION,
-               a->enabled ? L"включён" : L"выключен");
+               ff_tr(a->enabled ? S_TIP_ON : S_TIP_OFF));
     nid.szTip[127] = L'\0';
     Shell_NotifyIconW(msg, &nid);
 }
@@ -111,23 +70,40 @@ static void balloon(ff_app *a, const wchar_t *title, const wchar_t *text)
     Shell_NotifyIconW(NIM_MODIFY, &nid);
 }
 
+/* подменю профилей: по одному пункту на файл из папки профилей */
+static HMENU profiles_menu(ff_app *a)
+{
+    HMENU sub = CreatePopupMenu();
+    int n = app_profile_list(a, g_profiles, MAX_PROFILES);
+    int i;
+
+    for (i = 0; i < n; i++) {
+        AppendMenuW(sub, MF_STRING, IDM_PROFILE + i, g_profiles[i]);
+    }
+    if (n == 0) {
+        AppendMenuW(sub, MF_STRING | MF_GRAYED, 0, ff_tr(S_MENU_NO_PROFILES));
+    }
+    return sub;
+}
+
 static void show_menu(ff_app *a)
 {
     HMENU m = CreatePopupMenu();
     POINT pt;
 
-    AppendMenuW(m, MF_STRING, IDM_SETTINGS, L"Настройки");
-    AppendMenuW(m, MF_STRING, IDM_TOGGLE,
-                a->enabled ? L"Выключить\tCtrl+Alt+F" : L"Включить\tCtrl+Alt+F");
-    AppendMenuW(m, MF_STRING, IDM_PATTERN, L"Тестовый паттерн");
-    AppendMenuW(m, MF_STRING, IDM_UPDATE, L"Проверить обновления");
+    AppendMenuW(m, MF_STRING, IDM_SETTINGS, ff_tr(S_MENU_SETTINGS));
+    AppendMenuW(m, MF_STRING, IDM_TOGGLE, ff_tr(a->enabled ? S_MENU_DISABLE : S_MENU_ENABLE));
+    AppendMenuW(m, MF_POPUP, (UINT_PTR)profiles_menu(a), ff_tr(S_MENU_PROFILES));
+    AppendMenuW(m, MF_STRING, IDM_PATTERN, ff_tr(S_MENU_PATTERN));
+    AppendMenuW(m, MF_STRING, IDM_UPDATE, ff_tr(S_MENU_UPDATES));
     AppendMenuW(m, MF_SEPARATOR, 0, NULL);
-    AppendMenuW(m, MF_STRING, IDM_QUIT, L"Выход\tCtrl+Alt+Q");
+    AppendMenuW(m, MF_STRING, IDM_QUIT, ff_tr(S_MENU_QUIT));
     GetCursorPos(&pt);
     /* без SetForegroundWindow меню не закрывается по клику мимо */
     SetForegroundWindow(a->hwnd);
     TrackPopupMenu(m, TPM_RIGHTBUTTON, pt.x, pt.y, 0, a->hwnd, NULL);
     PostMessageW(a->hwnd, WM_NULL, 0, 0);
+    /* уничтожение главного меню уничтожает и подменю */
     DestroyMenu(m);
 }
 
@@ -140,16 +116,37 @@ static void toggle(ff_app *a)
 static void check_updates(ff_app *a)
 {
     if (!FF_REPO[0]) {
-        MessageBoxW(NULL, L"В этой сборке не указан репозиторий для обновлений.", L"fringefix",
-                    MB_ICONINFORMATION | MB_TOPMOST);
+        MessageBoxW(NULL, ff_tr(S_NO_REPO), L"fringefix", MB_ICONINFORMATION | MB_TOPMOST);
         return;
     }
-    ui_settings_set_status(L"Проверяю обновления...");
+    ui_settings_set_status(ff_tr(S_CHECKING));
     update_check_async(a->hwnd, FF_REPO, 1);
+}
+
+static void load_profile(ff_app *a, int n)
+{
+    wchar_t path[MAX_PATH];
+
+    app_profile_dir(a, path);
+    if (wcslen(path) + wcslen(g_profiles[n]) + 7 >= MAX_PATH) {
+        return;
+    }
+    wcscat(path, L"\\");
+    wcscat(path, g_profiles[n]);
+    wcscat(path, L".json");
+    if (app_profile_load(a, path) == 0) {
+        ui_settings_refresh();
+    } else {
+        balloon(a, L"fringefix", ff_tr(S_PROFILE_BAD));
+    }
 }
 
 static void on_command(ff_app *a, int id)
 {
+    if (id >= IDM_PROFILE && id < IDM_PROFILE + MAX_PROFILES) {
+        load_profile(a, id - IDM_PROFILE);
+        return;
+    }
     switch (id) {
     case IDM_SETTINGS:
         ui_settings_show(a);
@@ -177,7 +174,7 @@ static void on_gfx_error(ff_app *a, char *msg)
     ui_utf8(msg, text, GFX_ERR_LEN);
     free(msg);
     tray_notify(a, NIM_MODIFY);
-    balloon(a, L"fringefix не включился", text);
+    balloon(a, ff_tr(S_START_FAILED_TITLE), text);
 }
 
 static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
@@ -248,8 +245,8 @@ int ui_tray_create(ff_app *a)
         return -1;
     }
     g_taskbar_created = RegisterWindowMessageW(L"TaskbarCreated");
-    g_icon_on = make_icon(1);
-    g_icon_off = make_icon(0);
+    g_icon_on = load_icon(a->inst, IDI_APP);
+    g_icon_off = load_icon(a->inst, IDI_OFF);
 
     /* не message-only окно: такое не получает TaskbarCreated */
     a->hwnd = CreateWindowExW(WS_EX_TOOLWINDOW, CLASS_NAME, L"fringefix", WS_POPUP, 0, 0, 0, 0,

@@ -16,8 +16,16 @@ void ui_utf8(const char *s, wchar_t *out, int n);
 void ui_settings_show(ff_app *a);
 void ui_settings_set_status(const wchar_t *text);
 
+/* значения конфига в элементы, если окно уже создано; нужно после загрузки профиля из меню трея */
+void ui_settings_refresh(void);
+
 /* для главного цикла: Tab и Enter в окне настроек; ненулевой ответ значит сообщение съедено */
 int ui_settings_translate(MSG *m);
+
+/* диалоги выбора файла профиля. 0 готово, 1 пользователь отказался,
+ * -1 файл не открылся или не записался, -2 это не профиль fringefix; name получает имя без папки и .json */
+int ui_profile_load_dialog(HWND owner, ff_app *a, wchar_t name[PROFILE_NAME_LEN]);
+int ui_profile_save_dialog(HWND owner, ff_app *a, wchar_t name[PROFILE_NAME_LEN]);
 
 /* ответы фоновых потоков обновления */
 void ui_update_on_info(ff_app *a, ff_update_info *info);

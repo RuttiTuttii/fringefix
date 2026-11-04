@@ -11,6 +11,8 @@
 #define WM_APP_INSTALL_DONE (WM_APP + 3)
 #define WM_APP_GFX_ERROR (WM_APP + 4)
 
+#define PROFILE_NAME_LEN 64
+
 /* общее состояние. интерфейс живёт в главном потоке, захват и оверлей в своём,
  * чтобы меню и диалоги не замораживали картинку. флаги с Interlocked, cfg пишется по одному float:
  * запись выровнена и атомарна, а рваный набор значений на один кадр не виден */
@@ -51,5 +53,20 @@ void app_set_fast(ff_app *a, int on);
 /* поток захвата и оверлея, живёт до capture_stop */
 int capture_start(ff_app *a);
 void capture_stop(ff_app *a);
+
+/* профили: JSON-файлы с видом картинки в %APPDATA%\fringefix\profiles */
+void app_profile_dir(const ff_app *a, wchar_t out[MAX_PATH]);
+
+/* имена файлов без .json по алфавиту; возвращает их число */
+int app_profile_list(const ff_app *a, wchar_t names[][PROFILE_NAME_LEN], int max);
+
+/* 0, -1 файл не открылся, -2 это не профиль fringefix; при успехе сразу применяется */
+int app_profile_load(ff_app *a, const wchar_t *path);
+
+/* 0 или -1 */
+int app_profile_save(ff_app *a, const wchar_t *path);
+
+/* имя файла без папки и расширения */
+void app_profile_basename(const wchar_t *path, wchar_t out[PROFILE_NAME_LEN]);
 
 #endif
