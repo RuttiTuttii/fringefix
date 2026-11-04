@@ -97,6 +97,16 @@ static void test_junk(void)
     CHECK(c.shift[0][0] == 0.0f);
 }
 
+static void test_bom(void)
+{
+    ff_config c;
+    ff_config_defaults(&c);
+    /* метка UTF-8 перед первым ключом не должна его съедать */
+    CHECK(ff_config_parse("\xEF\xBB\xBF" "red_x=1\ngreen_x=0.5\n", &c) == 2);
+    CHECK(c.shift[0][0] == 1.0f && c.shift[1][0] == 0.5f);
+    CHECK(ff_config_parse("\xEF\xBB", &c) == 0);
+}
+
 static void test_line_endings(void)
 {
     ff_config c;
@@ -159,6 +169,7 @@ int main(void)
     test_game_keys();
     test_resolve_game();
     test_junk();
+    test_bom();
     test_line_endings();
     test_long_line();
     test_roundtrip();

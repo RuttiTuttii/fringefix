@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "app.h"
+#include "fileio.h"
 
 #define INI_MAX 4096
 
@@ -69,23 +70,9 @@ void app_shutdown(ff_app *a)
 int app_save(ff_app *a)
 {
     char buf[INI_MAX];
-    DWORD wrote = 0;
-    HANDLE f;
     int n = ff_config_format(&a->cfg, buf, sizeof buf);
 
-    if (n < 0) {
-        return -1;
-    }
-    f = CreateFileW(a->ini, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (f == INVALID_HANDLE_VALUE) {
-        return -1;
-    }
-    if (!WriteFile(f, buf, (DWORD)n, &wrote, NULL) || wrote != (DWORD)n) {
-        CloseHandle(f);
-        return -1;
-    }
-    CloseHandle(f);
-    return 0;
+    return n < 0 ? -1 : ff_write_file(a->ini, buf, (size_t)n);
 }
 
 void app_apply(ff_app *a)

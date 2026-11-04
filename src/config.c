@@ -163,6 +163,11 @@ int ff_config_parse(const char *text, ff_config *cfg)
     int accepted = 0;
     const char *p = text;
 
+    /* блокнот Windows сохраняет UTF-8 с меткой BOM: без пропуска первый ключ файла терялся бы */
+    if ((unsigned char)p[0] == 0xEF && (unsigned char)p[1] == 0xBB && (unsigned char)p[2] == 0xBF) {
+        p += 3;
+    }
+
     while (*p) {
         const char *eol = p;
         size_t len;

@@ -1,9 +1,11 @@
 #include <windows.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
 
 #include "app.h"
+#include "fileio.h"
 #include "profile.h"
 #include "resource.h"
 
@@ -57,7 +59,12 @@ void app_profile_install_bundled(const ff_app *a)
         if (f == INVALID_HANDLE_VALUE) {
             continue;
         }
-        WriteFile(f, data, size, &wrote, NULL);
+        /* обрезанный файл CREATE_NEW потом уже не перезапишет, поэтому неполную запись убираем */
+        if (!WriteFile(f, data, size, &wrote, NULL) || wrote != size) {
+            CloseHandle(f);
+            DeleteFileW(path);
+            continue;
+        }
         CloseHandle(f);
     }
 }
@@ -90,6 +97,11 @@ void app_profile_basename(const wchar_t *path, wchar_t out[PROFILE_NAME_LEN])
     }
 }
 
+static int by_name(const void *a, const void *b)
+{
+    return _wcsicmp((const wchar_t *)a, (const wchar_t *)b);
+}
+
 int app_profile_list(const ff_app *a, wchar_t names[][PROFILE_NAME_LEN], int max)
 {
     wchar_t pattern[MAX_PATH];
@@ -107,11 +119,16 @@ int app_profile_list(const ff_app *a, wchar_t names[][PROFILE_NAME_LEN], int max
         return 0;
     }
     do {
-        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && n < max) {
+        const wchar_t *dot = wcsrchr(fd.cFileName, L'.');
+        size_t len = dot ? (size_t)(dot - fd.cFileName) : wcslen(fd.cFileName);
+
+        /* имя длиннее подписи обрезалось бы, и по обрезанному файл уже не найти */
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && len < PROFILE_NAME_LEN && n < max) {
             app_profile_basename(fd.cFileName, names[n++]);
         }
     } while (n < max && FindNextFileW(h, &fd));
     FindClose(h);
+    qsort(names, (size_t)n, sizeof names[0], by_name);
     return n;
 }
 
@@ -144,21 +161,7 @@ int app_profile_load(ff_app *a, const wchar_t *path)
 int app_profile_save(ff_app *a, const wchar_t *path)
 {
     char buf[PROFILE_MAX];
-    DWORD wrote = 0;
-    HANDLE f;
     int n = ff_profile_format(&a->cfg, buf, sizeof buf);
 
-    if (n < 0) {
-        return -1;
-    }
-    f = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (f == INVALID_HANDLE_VALUE) {
-        return -1;
-    }
-    if (!WriteFile(f, buf, (DWORD)n, &wrote, NULL) || wrote != (DWORD)n) {
-        CloseHandle(f);
-        return -1;
-    }
-    CloseHandle(f);
-    return 0;
+    return n < 0 ? -1 : ff_write_file(path, buf, (size_t)n);
 }

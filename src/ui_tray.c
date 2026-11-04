@@ -8,6 +8,7 @@
 #include "i18n.h"
 #include "pattern.h"
 #include "resource.h"
+#include "stats_store.h"
 #include "ui.h"
 #include "version.h"
 
@@ -78,7 +79,19 @@ static HMENU profiles_menu(ff_app *a)
     int i;
 
     for (i = 0; i < n; i++) {
-        AppendMenuW(sub, MF_STRING, IDM_PROFILE + i, g_profiles[i]);
+        wchar_t label[2 * PROFILE_NAME_LEN];
+        size_t k = 0;
+        const wchar_t *p;
+
+        /* & в меню делает следующую букву быстрой клавишей, а в имени файла он обычный символ */
+        for (p = g_profiles[i]; *p && k + 2 < sizeof label / sizeof label[0]; p++) {
+            label[k++] = *p;
+            if (*p == L'&') {
+                label[k++] = L'&';
+            }
+        }
+        label[k] = L'\0';
+        AppendMenuW(sub, MF_STRING, IDM_PROFILE + i, label);
     }
     if (n == 0) {
         AppendMenuW(sub, MF_STRING | MF_GRAYED, 0, ff_tr(S_MENU_NO_PROFILES));
@@ -221,6 +234,12 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
         return 0;
     case WM_APP_STATE:
         tray_notify(a, NIM_MODIFY);
+        return 0;
+    case WM_ENDSESSION:
+        /* выключение или выход из сеанса убивает процесс без WM_DESTROY: статистика уходит в файл сейчас */
+        if (w) {
+            stats_store_save();
+        }
         return 0;
     case WM_DESTROY: {
         NOTIFYICONDATAW nid;

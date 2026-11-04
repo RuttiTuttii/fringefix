@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "fileio.h"
 #include "stats_store.h"
 
 #define FILE_MAX 16384
@@ -159,22 +160,17 @@ void stats_store_save(void)
 {
     char buf[FILE_MAX];
     ff_stats snap;
-    DWORD wrote = 0;
-    HANDLE f;
     int n;
 
     if (!g_ready || !g_enabled) {
         return;
     }
+    /* замок держится до конца записи: очистка статистики между снимком и записью иначе вернула бы старые данные */
+    EnterCriticalSection(&g_lock);
     stats_store_snapshot(&snap);
     n = ff_stats_format(&snap, buf, sizeof buf);
-    if (n < 0) {
-        return;
+    if (n >= 0) {
+        ff_write_file(g_path, buf, (size_t)n);
     }
-    f = CreateFileW(g_path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (f == INVALID_HANDLE_VALUE) {
-        return;
-    }
-    WriteFile(f, buf, (DWORD)n, &wrote, NULL);
-    CloseHandle(f);
+    LeaveCriticalSection(&g_lock);
 }
