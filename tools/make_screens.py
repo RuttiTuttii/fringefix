@@ -114,14 +114,23 @@ class Canvas:
         self.add(f'<rect x="{x + .5}" y="{y + .5}" width="{w - 1}" height="{h - 1}" rx="3" fill="{self.p.field}" stroke="{self.p.border}"/>')
         self.text(x + w - 7, y + h / 2 + 4, s, anchor="end")
 
-    def combo(self, x: float, y: float, w: float, s: str, flag: str | None = None) -> None:
+    def combo(self, x: float, y: float, w: float, s: str, flag: str | None = None, locked: bool = False) -> None:
         self.add(f'<rect x="{x + .5}" y="{y + .5}" width="{w - 1}" height="23" rx="3" fill="{self.p.field}" stroke="{self.p.border}"/>')
         tx = x + 8
         if flag:
             self.add(flag_svg(flag, x + 8, y + 4))
             tx = x + 32
-        self.text(tx, y + 16, s)
+        self.text(tx, y + 16, s, self.p.muted if locked else None)
         self.add(f'<path d="M{x + w - 18} {y + 9}l4 4 4-4" fill="none" stroke="{self.p.muted}" stroke-width="1.5"/>')
+
+    def switch(self, x: float, y: float, on: bool) -> None:
+        """Выключатель как в slider.c с диапазоном из двух положений: заливка и круг у правого края, когда включён."""
+        pad, cy, w = 11, y + 14, 60
+        self.add(f'<rect x="{x + pad}" y="{cy - 2.5}" width="{w - 2 * pad}" height="5" rx="2.5" fill="{self.p.border}"/>')
+        px = x + w - pad if on else x + pad
+        if on:
+            self.add(f'<rect x="{x + pad}" y="{cy - 2.5}" width="{w - 2 * pad}" height="5" rx="2.5" fill="{ACCENT}"/>')
+        self.add(f'<circle cx="{px}" cy="{cy}" r="8" fill="{ACCENT if on else self.p.muted}" stroke="{self.p.card}" stroke-width="2"/>')
 
     def button(self, x: float, y: float, w: float, s: str) -> None:
         self.add(f'<rect x="{x + .5}" y="{y + .5}" width="{w - 1}" height="{BTN_H - 1}" rx="4" fill="{self.p.field}" stroke="{self.p.border}"/>')
@@ -196,38 +205,45 @@ def settings(pal: Palette, t: dict[str, str]) -> str:
     bottom = y + h
     c.text(MARGIN, bottom + 24, t["VERSION"].replace("%ls", "v0.3.1"), pal.muted)
     bw = (CARD_W - 32) // 3
-    rows = [("BTN_WIZARD", "BTN_PATTERN", "BTN_RESET"), ("BTN_PROFILE_LOAD", "BTN_PROFILE_SAVE", "BTN_PROGRAM"), (None, None, "BTN_SAVE")]
+    rows = [("BTN_PATTERN", "BTN_RESET", "BTN_PROGRAM"), ("BTN_PROFILE_LOAD", "BTN_PROFILE_SAVE", "BTN_SAVE")]
     for r, names in enumerate(rows):
         for col, key in enumerate(names):
-            if key:
-                c.button(MARGIN + col * (bw + 16), bottom + 40 + r * 34, bw, t[key])
+            c.button(MARGIN + col * (bw + 16), bottom + 40 + r * 34, bw, t[key])
+    # выключатель фильтра в левом нижнем углу, третья строка кнопок
+    c.switch(MARGIN, bottom + 40 + 2 * 34, True)
+    c.text(MARGIN + 70, bottom + 40 + 2 * 34 + 19, t["FILTER_ON"])
     return svg(window(c, t["WINDOW_TITLE"], 520, 592), 520, 592, t["WINDOW_TITLE"])
 
 
 def program(pal: Palette, t: dict[str, str]) -> str:
     c = Canvas(pal)
-    c.add(f'<rect width="520" height="392" fill="{pal.bg}"/>')
-    lang = {"ru": ("Русский", "ru"), "en": ("English", "en")}
+    height = 496
+    c.add(f'<rect width="520" height="{height}" fill="{pal.bg}"/>')
     langname = t["LANG_RU"] if t["LANGUAGE"] == "Язык" else t["LANG_EN"]
     flag = "ru" if t["LANGUAGE"] == "Язык" else "en"
+    combo_w = CARD_W - COL_SLIDER - COL_LABEL
+    # карточки как в ui_app.c: верхний край и число строк
     c.card(MARGIN, 16, CARD_W, 96, t["CARD_INTERFACE"])
     c.text(MARGIN + COL_LABEL, 16 + 26 + 19, t["LANGUAGE"])
-    c.combo(MARGIN + COL_SLIDER, 16 + 26 + 1, CARD_W - COL_SLIDER - COL_LABEL, langname, flag)
+    c.combo(MARGIN + COL_SLIDER, 16 + 26 + 1, combo_w, langname, flag)
     c.text(MARGIN + COL_LABEL, 16 + 56 + 19, t["THEME"])
-    c.combo(MARGIN + COL_SLIDER, 16 + 56 + 1, CARD_W - COL_SLIDER - COL_LABEL, t["THEME_AUTO"])
-    c.card(MARGIN, 120, CARD_W, 96, t["CARD_GAMES"])
+    c.combo(MARGIN + COL_SLIDER, 16 + 56 + 1, combo_w, t["THEME_AUTO"])
+    c.card(MARGIN, 120, CARD_W, 126, t["CARD_AUTOPAUSE"])
     c.text(MARGIN + COL_LABEL, 120 + 26 + 19, t["AUTOPAUSE"])
-    c.combo(MARGIN + COL_SLIDER, 120 + 26 + 1, CARD_W - COL_SLIDER - COL_LABEL, t["AP_FULLSCREEN"])
+    c.combo(MARGIN + COL_SLIDER, 120 + 26 + 1, combo_w, t["AP_FULLSCREEN"])
     c.text(MARGIN + COL_LABEL, 120 + 56 + 19, t["GAMEACTION"])
-    c.combo(MARGIN + COL_SLIDER, 120 + 56 + 1, CARD_W - COL_SLIDER - COL_LABEL, t["GA_PAUSE"])
-    c.card(MARGIN, 224, CARD_W, 96, t["CARD_DATA"])
-    c.checkbox(MARGIN + COL_LABEL, 224 + 26 + 4, t["CHECK_UPDATES"])
+    # при включённой автопаузе действие заблокировано на «Пауза»
+    c.combo(MARGIN + COL_SLIDER, 120 + 56 + 1, combo_w, t["GA_PAUSE"], locked=True)
+    c.button(MARGIN + 16, 120 + 86 + 1, CARD_W - 32, t["BTN_ADD_APP"])
+    c.card(MARGIN, 254, CARD_W, 96, t["CARD_DATA"])
+    c.checkbox(MARGIN + COL_LABEL, 254 + 26 + 4, t["CHECK_UPDATES"])
     bw = (CARD_W - 32 - 16) // 3
     for i, key in enumerate(("MENU_UPDATES", "BTN_VERSIONS", "BTN_REPORT")):
-        c.button(MARGIN + 16 + i * (bw + 8), 224 + 56 + 1, bw, t[key].replace("...", "…") if i else t[key])
-    c.button(MARGIN + CARD_W - 120, 336, 120, t["VER_CLOSE"])
-    del lang
-    return svg(window(c, t["APP_TITLE"], 520, 392), 520, 392, t["APP_TITLE"])
+        c.button(MARGIN + 16 + i * (bw + 8), 254 + 56 + 1, bw, t[key].replace("...", "…") if i else t[key])
+    c.card(MARGIN, 358, CARD_W, 66, t["CARD_AUTOSTART"])
+    c.checkbox(MARGIN + COL_LABEL, 358 + 26 + 4, t["AUTOSTART_CHECK"], on=False)
+    c.button(MARGIN + CARD_W - 120, 440, 120, t["VER_CLOSE"])
+    return svg(window(c, t["APP_TITLE"], 520, height), 520, height, t["APP_TITLE"])
 
 
 def wizard(pal: Palette, t: dict[str, str]) -> str:
