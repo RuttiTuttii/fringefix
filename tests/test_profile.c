@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <string.h>
 
 #include "profile.h"
@@ -70,11 +71,36 @@ static void test_layout_variants(void)
     CHECK(ff_profile_parse("{\"format\":\"fringefix-profile\",\"green\":{\"x\":1", &c) == 0);
 }
 
+/* комплектные профили из profiles/ вшиваются в exe, поэтому каждый должен читаться полностью */
+static void test_bundled(void)
+{
+    static const char *const FILES[] = { "profiles/qd-oled-gen-3-4.json" };
+    size_t i;
+
+    for (i = 0; i < sizeof FILES / sizeof FILES[0]; i++) {
+        ff_config c;
+        char buf[4096];
+        size_t n;
+        FILE *f = fopen(FILES[i], "rb");
+
+        CHECK(f != NULL);
+        if (!f) {
+            continue;
+        }
+        n = fread(buf, 1, sizeof buf - 1, f);
+        fclose(f);
+        buf[n] = '\0';
+        ff_config_defaults(&c);
+        CHECK(ff_profile_parse(buf, &c) == 7);
+    }
+}
+
 int main(void)
 {
     test_roundtrip();
     test_clamp_and_junk();
     test_foreign_files();
     test_layout_variants();
+    test_bundled();
     TEST_DONE("profile");
 }

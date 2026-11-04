@@ -13,6 +13,7 @@
 
 #define MAX_OUTPUTS 8
 #define EDIT_CHARS 24
+#define POWER_W 60
 
 static float *row_value(ff_config *c, int idx)
 {
@@ -50,6 +51,15 @@ void ctl_sync(void)
         ctl_edit_show(i);
     }
     SendMessageW(ui.monitor, CB_SETCURSEL, (WPARAM)ui.app->cfg.monitor, 0);
+    ctl_sync_power();
+}
+
+void ctl_sync_power(void)
+{
+    int on = ui.app->enabled != 0;
+
+    SendMessageW(ui.power, FFS_SETPOS, (WPARAM)on, 0);
+    SetWindowTextW(ui.power_label, ff_tr(on ? S_FILTER_ON : S_FILTER_OFF));
 }
 
 void ctl_slider_changed(int idx)
@@ -122,6 +132,15 @@ static void build_button(str_id text, int col, int y, int id)
           BTN_H, id);
 }
 
+/* выключатель в левом нижнем углу: ползунок из двух положений, справа подпись с состоянием */
+static void build_power(void)
+{
+    ui.power = child(FF_SLIDER_CLASS, L"", WS_TABSTOP, 0, MARGIN, BTN3_Y, POWER_W, BTN_H, ID_POWER);
+    SendMessageW(ui.power, FFS_SETRANGE, 0, 1);
+    ui.power_label = child(L"STATIC", L"", SS_LEFT | SS_CENTERIMAGE, 0, MARGIN + POWER_W + 10,
+                           BTN3_Y, 200, BTN_H, ID_POWER_LABEL);
+}
+
 /* список мониторов в строке таблицы */
 static void build_monitor(const row_def *r)
 {
@@ -148,13 +167,13 @@ void ctl_build(void)
             build_monitor(&ROWS[i]);
         }
     }
-    build_button(S_BTN_WIZARD, 0, BTN1_Y, ID_WIZARD);
-    build_button(S_BTN_PATTERN, 1, BTN1_Y, ID_PATTERN);
-    build_button(S_BTN_RESET, 2, BTN1_Y, ID_RESET);
+    build_button(S_BTN_PATTERN, 0, BTN1_Y, ID_PATTERN);
+    build_button(S_BTN_RESET, 1, BTN1_Y, ID_RESET);
+    build_button(S_BTN_PROGRAM, 2, BTN1_Y, ID_PROGRAM);
     build_button(S_BTN_PROFILE_LOAD, 0, BTN2_Y, ID_PROF_LOAD);
     build_button(S_BTN_PROFILE_SAVE, 1, BTN2_Y, ID_PROF_SAVE);
-    build_button(S_BTN_PROGRAM, 2, BTN2_Y, ID_PROGRAM);
-    build_button(S_BTN_SAVE, 2, BTN3_Y, ID_SAVE);
+    build_button(S_BTN_SAVE, 2, BTN2_Y, ID_SAVE);
+    build_power();
 }
 
 static BOOL CALLBACK restyle_one(HWND c, LPARAM unused)

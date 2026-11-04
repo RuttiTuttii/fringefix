@@ -176,7 +176,7 @@ static void go(int page)
     build_page();
     /* на шагах подгонки паттерн нужен сразу, он ляжет под окном мастера */
     if (page > 0) {
-        pattern_show(ui.app->inst, ui.app->cfg.monitor);
+        pattern_show(ui.app->inst, ui.win);
     }
     InvalidateRect(g_win, NULL, TRUE);
 }
@@ -206,7 +206,7 @@ static void on_command(int id, int code)
         }
         break;
     case ID_W_PATTERN:
-        pattern_show(ui.app->inst, ui.app->cfg.monitor);
+        pattern_show(ui.app->inst, ui.win);
         break;
     case ID_W_BACK:
         go(g_page - 1);

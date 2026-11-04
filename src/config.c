@@ -19,6 +19,15 @@ void ff_config_defaults(ff_config *cfg)
     cfg->auto_pause = 1;
 }
 
+void ff_config_resolve_game(ff_config *cfg)
+{
+    if (cfg->auto_pause != 0) {
+        cfg->game_action = 0;
+    } else if (cfg->game_action == 1) {
+        cfg->auto_pause = 2;
+    }
+}
+
 /* срезает пробелы с обеих сторон прямо в буфере */
 static char *trim(char *s)
 {
@@ -99,7 +108,7 @@ static int parse_line(char *line, ff_config *cfg)
         return 1;
     }
     if (strcmp(key, "auto_pause") == 0) {
-        if (!parse_number(val, 0.0, 2.0, &v)) {
+        if (!parse_number(val, 0.0, 3.0, &v)) {
             return 0;
         }
         cfg->auto_pause = (int)v;
@@ -185,10 +194,10 @@ int ff_config_format(const ff_config *cfg, char *buf, size_t n)
         "\n; резкость от -1 до 1, минус смягчает картинку\nsharpen = %.3f\n"
         "\n; номер монитора, выходы всех видеокарт считаются подряд с нуля\nmonitor = %d\n"
         "\n; проверять обновления при запуске, 0 или 1\ncheck_updates = %d\n"
-        "\n; автопауза: 0 выключена, 1 в полноэкранных приложениях, 2 ещё и в 3D-приложениях\nauto_pause = %d\n"
-        "\n; что делать в игре: 0 пауза, 1 облегчённый режим без резкости и лапласиана\ngame_action = %d\n"
+        "\n; автопауза: 0 выключена, 1 в полноэкранных приложениях, 2 в полноэкранных и 3D-приложениях, 3 только в 3D-приложениях\nauto_pause = %d\n"
+        "\n; что делать в игре, выбирается при auto_pause = 0: 0 пауза, 1 облегчённый режим без резкости и лапласиана\ngame_action = %d\n"
         "\n; приоритет GPU оверлея от -7 до 7, ниже ноля уступает видеокарту игре\ngpu_priority = %d\n"
-        "\n; имена exe через точку с запятой: всегда на паузу и никогда не на паузу\npause_apps = %s\nignore_apps = %s\n"
+        "\n; имена exe через точку с запятой: всегда на паузу (pause_apps) и никогда не на паузу, то есть фильтр применяется всегда (ignore_apps)\npause_apps = %s\nignore_apps = %s\n"
         "\n; язык интерфейса: 0 как в системе, 1 русский, 2 английский\nlanguage = %d\n"
         "\n; тема окон: 0 как в системе, 1 светлая, 2 тёмная\ntheme = %d\n"
         "\n; локальная статистика для отчёта, сама ничего не отправляет: 0 или 1\nstats = %d\n",

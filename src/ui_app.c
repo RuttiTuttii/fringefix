@@ -1,8 +1,11 @@
 #include <windows.h>
+#include <commdlg.h>
 #include <stdio.h>
 #include <string.h>
 #include <wchar.h>
 
+#include "applist.h"
+#include "autostart.h"
 #include "i18n.h"
 #include "resource.h"
 #include "theme.h"
@@ -13,7 +16,7 @@
 #include "version.h"
 
 #define APP_W 520
-#define APP_H 392
+#define APP_H 496
 #define CARD_ROW 30
 #define CARD_INNER_W 488
 #define WM_REOPEN (WM_APP + 40)
@@ -23,7 +26,9 @@ enum {
     ID_A_THEME,
     ID_A_PAUSE,
     ID_A_ACTION,
+    ID_A_ADDAPP,
     ID_A_CHECK,
+    ID_A_AUTOSTART,
     ID_A_UPDATE,
     ID_A_VERSIONS,
     ID_A_REPORT,
@@ -33,6 +38,7 @@ enum {
 static const wchar_t CLASS_NAME[] = L"fringefix_program";
 static HWND g_win;
 static HWND g_lang;
+static HWND g_action;
 static HICON g_flags[3];
 
 /* карточки окна: заголовок, верхний край и число строк при 96 dpi */
@@ -42,11 +48,18 @@ typedef struct {
     int h;
 } card_t;
 
+/* карточки идут сверху вниз с зазором CARD_GAP; автопауза занимает три строки, автозапуск одну */
 static const card_t CARDS_A[] = {
     { S_CARD_INTERFACE, 16, CARD_HEAD + 2 * CARD_ROW + CARD_PAD },
-    { S_CARD_GAMES, 120, CARD_HEAD + 2 * CARD_ROW + CARD_PAD },
-    { S_CARD_DATA, 224, CARD_HEAD + 2 * CARD_ROW + CARD_PAD },
+    { S_CARD_AUTOPAUSE, 120, CARD_HEAD + 3 * CARD_ROW + CARD_PAD },
+    { S_CARD_DATA, 254, CARD_HEAD + 2 * CARD_ROW + CARD_PAD },
+    { S_CARD_AUTOSTART, 358, CARD_HEAD + 1 * CARD_ROW + CARD_PAD },
 };
+#define NCARDS_A ((int)(sizeof CARDS_A / sizeof CARDS_A[0]))
+
+/* режим автопаузы по порядку в списке: значение auto_pause из config.h для каждой строки */
+static const int PAUSE_VALUE[] = { 1, 3, 2, 0 };
+#define NPAUSE ((int)(sizeof PAUSE_VALUE / sizeof PAUSE_VALUE[0]))
 
 typedef struct {
     str_id label;
@@ -78,6 +91,28 @@ static HWND combo(int card, int row, int id, int owner_draw)
                  200, id);
 }
 
+static int pause_index(int value)
+{
+    int i;
+
+    for (i = 0; i < NPAUSE; i++) {
+        if (PAUSE_VALUE[i] == value) {
+            return i;
+        }
+    }
+    return 0;
+}
+
+/* действие в играх выбирается только при выключенной автопаузе, при включённой стоит заблокированная пауза */
+static void sync_action(void)
+{
+    const ff_config *c = &ui.app->cfg;
+    int free_choice = c->auto_pause == 0;
+
+    SendMessageW(g_action, CB_SETCURSEL, (WPARAM)(free_choice ? c->game_action : 0), 0);
+    EnableWindow(g_action, free_choice);
+}
+
 static void add_items(HWND c, const str_id *ids, int n, int selected)
 {
     int i;
@@ -92,18 +127,23 @@ static void build(void)
 {
     static const str_id LANGS[] = { S_LANG_AUTO, S_LANG_RU, S_LANG_EN };
     static const str_id THEMES[] = { S_THEME_AUTO, S_THEME_LIGHT, S_THEME_DARK };
-    static const str_id PAUSES[] = { S_AP_OFF, S_AP_FULLSCREEN, S_AP_3D };
+    static const str_id PAUSES[] = { S_AP_FULLSCREEN, S_AP_3D_ONLY, S_AP_3D, S_AP_OFF };
     static const str_id ACTIONS[] = { S_GA_PAUSE, S_GA_LIGHT };
     const ff_config *c = &ui.app->cfg;
     int bw = (CARD_INNER_W - 2 * 16 - 2 * 8) / 3;
     int by = row_top(2, 1) + 1;
     HWND check;
+    HWND autostart;
 
     g_lang = combo(0, 0, ID_A_LANG, 1);
     add_items(g_lang, LANGS, 3, c->language);
     add_items(combo(0, 1, ID_A_THEME, 0), THEMES, 3, c->theme);
-    add_items(combo(1, 0, ID_A_PAUSE, 0), PAUSES, 3, c->auto_pause);
-    add_items(combo(1, 1, ID_A_ACTION, 0), ACTIONS, 2, c->game_action);
+    add_items(combo(1, 0, ID_A_PAUSE, 0), PAUSES, NPAUSE, pause_index(c->auto_pause));
+    g_action = combo(1, 1, ID_A_ACTION, 0);
+    add_items(g_action, ACTIONS, 2, 0);
+    sync_action();
+    child(L"BUTTON", ff_tr(S_BTN_ADD_APP), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + 16,
+          row_top(1, 2) + 1, CARD_INNER_W - 32, BTN_H, ID_A_ADDAPP);
     check = child(L"BUTTON", ff_tr(S_CHECK_UPDATES), BS_AUTOCHECKBOX | WS_TABSTOP,
                   MARGIN + COL_LABEL, row_top(2, 0), CARD_INNER_W - 2 * COL_LABEL, 24, ID_A_CHECK);
     SendMessageW(check, BM_SETCHECK, c->check_updates ? BST_CHECKED : BST_UNCHECKED, 0);
@@ -113,8 +153,12 @@ static void build(void)
           BTN_H, ID_A_VERSIONS);
     child(L"BUTTON", ff_tr(S_BTN_REPORT), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + 16 + 2 * (bw + 8), by,
           bw, BTN_H, ID_A_REPORT);
+    autostart = child(L"BUTTON", ff_tr(S_AUTOSTART_CHECK), BS_AUTOCHECKBOX | WS_TABSTOP,
+                      MARGIN + COL_LABEL, row_top(3, 0), CARD_INNER_W - 2 * COL_LABEL, 24,
+                      ID_A_AUTOSTART);
+    SendMessageW(autostart, BM_SETCHECK, autostart_get() ? BST_CHECKED : BST_UNCHECKED, 0);
     child(L"BUTTON", ff_tr(S_VER_CLOSE), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + CARD_INNER_W - 120,
-          CARDS_A[2].y + CARDS_A[2].h + 16, 120, BTN_H, ID_A_CLOSE);
+          CARDS_A[NCARDS_A - 1].y + CARDS_A[NCARDS_A - 1].h + 16, 120, BTN_H, ID_A_CLOSE);
     ctl_restyle_window(g_win);
 }
 
@@ -129,7 +173,7 @@ static void paint(HWND h)
     GetClientRect(h, &r);
     FillRect(dc, &r, paint_bg());
     SetBkMode(dc, TRANSPARENT);
-    for (i = 0; i < 3; i++) {
+    for (i = 0; i < NCARDS_A; i++) {
         paint_card(dc, ui.dpi, MARGIN, CARDS_A[i].y, CARD_INNER_W, CARDS_A[i].h,
                    ff_tr(CARDS_A[i].title));
     }
@@ -155,6 +199,64 @@ static void change_language(int mode)
     PostMessageW(g_win, WM_REOPEN, 0, 0);
 }
 
+/* запись в реестр не удалась: галочка возвращается к тому, что видит Windows */
+static void set_autostart(int on)
+{
+    if (autostart_set(on) != 0) {
+        MessageBoxW(g_win, ff_tr(S_AUTOSTART_FAILED), L"fringefix", MB_ICONERROR | MB_TOPMOST);
+        SendMessageW(GetDlgItem(g_win, ID_A_AUTOSTART), BM_SETCHECK,
+                     autostart_get() ? BST_CHECKED : BST_UNCHECKED, 0);
+    }
+}
+
+/* окно с текстом, в который подставлено имя файла */
+static int say(const str_id fmt, const wchar_t *name, UINT flags)
+{
+    wchar_t text[MAX_PATH + 128];
+
+    _snwprintf(text, sizeof text / sizeof text[0], ff_tr(fmt), name);
+    text[sizeof text / sizeof text[0] - 1] = L'\0';
+    return MessageBoxW(g_win, text, L"fringefix", flags | MB_TOPMOST);
+}
+
+/* выбор exe в список обязательного применения (ignore_apps: на паузу никогда, что бы ни стояло в автопаузе);
+ * уже стоящее в списке предлагается убрать, так список правится одной кнопкой.
+ * shortcut: строка списка правится на месте, а поток захвата копирует настройки целиком, поэтому
+ * в худшем случае одна проверка за полсекунды увидит список наполовину записанным */
+static void edit_force_list(void)
+{
+    OPENFILENAMEW o;
+    wchar_t path[MAX_PATH] = L"";
+    const wchar_t *name;
+    ff_config *c = &ui.app->cfg;
+
+    memset(&o, 0, sizeof o);
+    o.lStructSize = sizeof o;
+    o.hwndOwner = g_win;
+    o.lpstrFilter = L"EXE (*.exe)\0*.exe\0";
+    o.lpstrFile = path;
+    o.nMaxFile = MAX_PATH;
+    o.Flags = OFN_EXPLORER | OFN_NOCHANGEDIR | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
+    if (!GetOpenFileNameW(&o)) {
+        return;
+    }
+    /* имя без папки для сообщений; в список и поиск уходит как есть, они сами берут имя из пути */
+    name = wcsrchr(path, L'\\') ? wcsrchr(path, L'\\') + 1 : path;
+    if (ff_app_list_has(c->ignore_apps, path)) {
+        if (say(S_FORCE_ASK_REMOVE, name, MB_YESNO | MB_ICONQUESTION) == IDYES) {
+            ff_app_list_remove(c->ignore_apps, sizeof c->ignore_apps, path);
+            say(S_FORCE_REMOVED, name, MB_ICONINFORMATION);
+        }
+    } else if (ff_app_list_add(c->ignore_apps, sizeof c->ignore_apps, path) < 0) {
+        say(S_FORCE_FAILED, name, MB_ICONWARNING);
+        return;
+    } else {
+        say(S_FORCE_ADDED, name, MB_ICONINFORMATION);
+    }
+    app_wake(ui.app);
+    app_save(ui.app);
+}
+
 static void on_command(int id, int code)
 {
     ff_config *c = &ui.app->cfg;
@@ -171,7 +273,8 @@ static void on_command(int id, int code)
         ui_theme_apply();
         app_save(ui.app);
     } else if (id == ID_A_PAUSE && code == CBN_SELCHANGE) {
-        c->auto_pause = sel;
+        c->auto_pause = PAUSE_VALUE[sel];
+        sync_action();
         app_wake(ui.app);
         app_save(ui.app);
     } else if (id == ID_A_ACTION && code == CBN_SELCHANGE) {
@@ -181,6 +284,10 @@ static void on_command(int id, int code)
     } else if (id == ID_A_CHECK) {
         c->check_updates = SendMessageW(GetDlgItem(g_win, ID_A_CHECK), BM_GETCHECK, 0, 0) == BST_CHECKED;
         app_save(ui.app);
+    } else if (id == ID_A_ADDAPP) {
+        edit_force_list();
+    } else if (id == ID_A_AUTOSTART) {
+        set_autostart(SendMessageW(GetDlgItem(g_win, ID_A_AUTOSTART), BM_GETCHECK, 0, 0) == BST_CHECKED);
     } else if (id == ID_A_UPDATE && FF_REPO[0]) {
         ui_settings_set_status(ff_tr(S_CHECKING));
         update_check_async(ui.app->hwnd, FF_REPO, 1);
@@ -229,7 +336,8 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
     case WM_CTLCOLORSTATIC:
         /* списки окна красятся как поля, флажок и кнопки как фон */
         return paint_ctlcolor(m, (HDC)w, (HWND)l,
-                              (HWND)l != GetDlgItem(h, ID_A_CHECK) ? (HWND)l : NULL);
+                              (HWND)l != GetDlgItem(h, ID_A_CHECK)
+                                      && (HWND)l != GetDlgItem(h, ID_A_AUTOSTART) ? (HWND)l : NULL);
     case WM_SETTINGCHANGE:
         if (l && wcscmp((const wchar_t *)l, L"ImmersiveColorSet") == 0) {
             ui_theme_apply();

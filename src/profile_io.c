@@ -5,6 +5,7 @@
 
 #include "app.h"
 #include "profile.h"
+#include "resource.h"
 
 #define PROFILE_MAX 4096
 
@@ -21,6 +22,44 @@ void app_profile_dir(const ff_app *a, wchar_t out[MAX_PATH])
         wcscpy(slash + 1, L"profiles");
     }
     CreateDirectoryW(out, NULL);
+}
+
+/* комплектные профили: номер ресурса и имя файла без .json */
+static const struct {
+    int id;
+    const wchar_t *name;
+} BUNDLED[] = {
+    { IDR_PROFILE_QD34, L"QD-OLED gen 3 4" },
+};
+
+void app_profile_install_bundled(const ff_app *a)
+{
+    size_t i;
+
+    for (i = 0; i < sizeof BUNDLED / sizeof BUNDLED[0]; i++) {
+        wchar_t path[MAX_PATH];
+        HRSRC res = FindResourceW(a->inst, MAKEINTRESOURCEW(BUNDLED[i].id), MAKEINTRESOURCEW((ULONG_PTR)RT_RCDATA));
+        HGLOBAL mem = res ? LoadResource(a->inst, res) : NULL;
+        const void *data = mem ? LockResource(mem) : NULL;
+        DWORD size = res ? SizeofResource(a->inst, res) : 0;
+        DWORD wrote = 0;
+        HANDLE f;
+
+        app_profile_dir(a, path);
+        if (!data || wcslen(path) + wcslen(BUNDLED[i].name) + 7 >= MAX_PATH) {
+            continue;
+        }
+        wcscat(path, L"\\");
+        wcscat(path, BUNDLED[i].name);
+        wcscat(path, L".json");
+        /* CREATE_NEW: если файл уже есть, вызов просто не удаётся и ничего не затирает */
+        f = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (f == INVALID_HANDLE_VALUE) {
+            continue;
+        }
+        WriteFile(f, data, size, &wrote, NULL);
+        CloseHandle(f);
+    }
 }
 
 void app_stats_path(const ff_app *a, wchar_t out[MAX_PATH])

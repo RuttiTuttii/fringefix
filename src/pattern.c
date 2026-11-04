@@ -1,46 +1,82 @@
 #include <windows.h>
+#include <string.h>
 
 #include "i18n.h"
-#include "output.h"
 #include "pattern.h"
 
-#define STEP 4
+/* толщина линий в физических пикселях: тонкая линия в один пиксель и есть проба субпикселей, поэтому dpi
+ * её не меняет. шаг при 96 dpi, на другом масштабе умножается на dpi окна настроек */
+#define THIN_W 1
+#define THIN_STEP 14
+#define THICK_W 5
+#define THICK_STEP 10
+#define BANDS 3
 
 static const wchar_t CLASS_NAME[] = L"fringefix_pattern";
 static HWND g_win;
+static UINT g_dpi = 96;
 
-/* линии толщиной в один пиксель с шагом STEP: на них каёмка видна лучше всего */
-static void draw_lines(HDC dc, const RECT *r)
+/* линии толщиной w с шагом step в прямоугольнике r: горизонтальные идут сверху вниз, вертикальные слева направо */
+static void draw_lines(HDC dc, const RECT *r, int horizontal, int w, int step, HBRUSH ink)
 {
-    HBRUSH white = (HBRUSH)GetStockObject(WHITE_BRUSH);
-    int half = r->right / 2;
     RECT line;
     int i;
 
-    for (i = 0; i < half; i += STEP) {
-        SetRect(&line, i, 0, i + 1, r->bottom);
-        FillRect(dc, &line, white);
+    if (step < w + 1) {
+        step = w + 1;
     }
-    for (i = 0; i < r->bottom; i += STEP) {
-        SetRect(&line, half, i, r->right, i + 1);
-        FillRect(dc, &line, white);
+    if (horizontal) {
+        for (i = r->top; i < r->bottom; i += step) {
+            SetRect(&line, r->left, i, r->right, i + w < r->bottom ? i + w : r->bottom);
+            FillRect(dc, &line, ink);
+        }
+    } else {
+        for (i = r->left; i < r->right; i += step) {
+            SetRect(&line, i, r->top, i + w < r->right ? i + w : r->right, r->bottom);
+            FillRect(dc, &line, ink);
+        }
     }
 }
 
-/* текст на чёрной плашке, чтобы линии его не портили */
-static void draw_text(HDC dc, const RECT *r)
+/* алфавит в нижней полосе; высота букв берётся от высоты полосы, чтобы четыре строки помещались при любом dpi */
+static void draw_alphabet(HDC dc, const RECT *r, COLORREF color)
 {
-    HFONT font = CreateFontW(-MulDiv(14, GetDeviceCaps(dc, LOGPIXELSX), 72), 0, 0, 0, FW_NORMAL,
-                             0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
+    int px = (r->bottom - r->top) / 5;
+    HFONT font = CreateFontW(-px, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0,
+                             CLEARTYPE_QUALITY, 0, L"Segoe UI");
     HGDIOBJ old = SelectObject(dc, font);
-    RECT box = { r->right / 2 - 420, r->bottom / 2 - 120, r->right / 2 + 420, r->bottom / 2 + 120 };
+    RECT box = *r;
 
-    FillRect(dc, &box, (HBRUSH)GetStockObject(BLACK_BRUSH));
     SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, RGB(255, 255, 255));
-    DrawTextW(dc, ff_tr(S_PATTERN_TEXT), -1, &box, DT_CENTER | DT_VCENTER | DT_WORDBREAK);
+    SetTextColor(dc, color);
+    DrawTextW(dc, ff_tr(S_PATTERN_ALPHABET), -1, &box, DT_CENTER | DT_VCENTER | DT_NOPREFIX);
     SelectObject(dc, old);
     DeleteObject(font);
+}
+
+/* одна из двух частей: фон, две полосы линий (слева горизонтальные, справа вертикальные) и полоса букв */
+static void draw_half(HDC dc, const RECT *half, int dark)
+{
+    HBRUSH paper = (HBRUSH)GetStockObject(dark ? BLACK_BRUSH : WHITE_BRUSH);
+    HBRUSH ink = (HBRUSH)GetStockObject(dark ? WHITE_BRUSH : BLACK_BRUSH);
+    int band = (half->bottom - half->top) / BANDS;
+    int mid = half->left + (half->right - half->left) / 2;
+    RECT r;
+
+    FillRect(dc, half, paper);
+
+    SetRect(&r, half->left, half->top, mid, half->top + band);
+    draw_lines(dc, &r, 1, THIN_W, MulDiv(THIN_STEP, g_dpi, 96), ink);
+    SetRect(&r, mid, half->top, half->right, half->top + band);
+    draw_lines(dc, &r, 0, THIN_W, MulDiv(THIN_STEP, g_dpi, 96), ink);
+
+    SetRect(&r, half->left, half->top + band, mid, half->top + 2 * band);
+    draw_lines(dc, &r, 1, THICK_W, MulDiv(THICK_STEP, g_dpi, 96), ink);
+    SetRect(&r, mid, half->top + band, half->right, half->top + 2 * band);
+    draw_lines(dc, &r, 0, THICK_W, MulDiv(THICK_STEP, g_dpi, 96), ink);
+
+    SetRect(&r, half->left, half->top + 2 * band, half->right, half->bottom);
+    draw_alphabet(dc, &r, dark ? RGB(255, 255, 255) : RGB(0, 0, 0));
 }
 
 static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
@@ -50,19 +86,18 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
         PAINTSTRUCT ps;
         HDC dc = BeginPaint(h, &ps);
         RECT r;
+        RECT half;
 
         GetClientRect(h, &r);
-        FillRect(dc, &r, (HBRUSH)GetStockObject(BLACK_BRUSH));
-        draw_lines(dc, &r);
-        draw_text(dc, &r);
+        SetRect(&half, r.left, r.top, r.right, r.top + r.bottom / 2);
+        draw_half(dc, &half, 0);
+        SetRect(&half, r.left, r.top + r.bottom / 2, r.right, r.bottom);
+        draw_half(dc, &half, 1);
         EndPaint(h, &ps);
         return 0;
     }
-    case WM_KEYDOWN:
-        if (w == VK_ESCAPE) {
-            DestroyWindow(h);
-        }
-        return 0;
+    case WM_ERASEBKGND:
+        return 1;
     case WM_LBUTTONDOWN:
         DestroyWindow(h);
         return 0;
@@ -73,6 +108,29 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
     return DefWindowProcW(h, m, w, l);
 }
 
+/* прямоугольник паттерна для окна anchor: справа от него, а если на мониторе не помещается, то слева */
+static void place(HWND anchor, RECT *out)
+{
+    RECT a;
+    MONITORINFO mi;
+    int w;
+
+    GetWindowRect(anchor, &a);
+    g_dpi = GetDpiForWindow(anchor);
+    if (g_dpi == 0) {
+        g_dpi = 96;
+    }
+    w = (a.right - a.left) / 2;
+    memset(&mi, 0, sizeof mi);
+    mi.cbSize = sizeof mi;
+    GetMonitorInfoW(MonitorFromWindow(anchor, MONITOR_DEFAULTTONEAREST), &mi);
+    if (a.right + w <= mi.rcMonitor.right) {
+        SetRect(out, a.right, a.top, a.right + w, a.bottom);
+    } else {
+        SetRect(out, a.left - w, a.top, a.left, a.bottom);
+    }
+}
+
 void pattern_close(void)
 {
     if (g_win) {
@@ -80,13 +138,31 @@ void pattern_close(void)
     }
 }
 
-void pattern_show(HINSTANCE inst, int monitor)
+int pattern_is_open(void)
+{
+    return g_win != NULL;
+}
+
+void pattern_follow(HWND anchor)
+{
+    RECT r;
+
+    if (!g_win) {
+        return;
+    }
+    place(anchor, &r);
+    SetWindowPos(g_win, HWND_TOPMOST, r.left, r.top, r.right - r.left, r.bottom - r.top,
+                 SWP_NOACTIVATE);
+    InvalidateRect(g_win, NULL, FALSE);
+}
+
+void pattern_show(HINSTANCE inst, HWND anchor)
 {
     static int registered;
     RECT r;
 
     if (g_win) {
-        SetForegroundWindow(g_win);
+        pattern_follow(anchor);
         return;
     }
     if (!registered) {
@@ -99,9 +175,9 @@ void pattern_show(HINSTANCE inst, int monitor)
         RegisterClassW(&wc);
         registered = 1;
     }
-    if (ff_output_rect(monitor, &r) != 0) {
-        SetRect(&r, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
-    }
-    g_win = CreateWindowExW(0, CLASS_NAME, L"fringefix pattern", WS_POPUP | WS_VISIBLE, r.left,
-                            r.top, r.right - r.left, r.bottom - r.top, NULL, NULL, inst, NULL);
+    place(anchor, &r);
+    /* не берёт фокус, чтобы окно настроек оставалось активным; поверх оверлея, как и окно настроек */
+    g_win = CreateWindowExW(WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW, CLASS_NAME,
+                            L"fringefix pattern", WS_POPUP | WS_VISIBLE, r.left, r.top,
+                            r.right - r.left, r.bottom - r.top, NULL, NULL, inst, NULL);
 }

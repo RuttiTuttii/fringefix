@@ -16,7 +16,7 @@ INC = -Iinclude
 PORTABLE = src/config.c src/release.c src/sha256.c src/profile.c src/i18n.c src/layout.c src/applist.c src/stats.c src/report.c src/urllist.c
 WIN_SRC = src/main.c src/app.c src/capture.c src/gfx.c src/gfx_frame.c src/gfx_sig.c src/shader.c \
 	src/output.c src/pattern.c src/ui_tray.c src/ui_settings.c src/ui_controls.c src/ui_paint.c src/ui_profile.c \
-	src/ui_update.c src/ui_wizard.c src/ui_versions.c src/ui_app.c src/ui_prefs.c src/ui_report.c src/report_send.c src/report_actions.c src/stats_store.c src/sysinfo.c src/gamedetect.c src/slider.c src/theme.c src/profile_io.c src/update.c src/update_install.c src/http.c $(PORTABLE)
+	src/ui_update.c src/ui_wizard.c src/ui_versions.c src/ui_app.c src/ui_prefs.c src/ui_report.c src/report_send.c src/report_actions.c src/stats_store.c src/sysinfo.c src/gamedetect.c src/slider.c src/theme.c src/autostart.c src/profile_io.c src/update.c src/update_install.c src/http.c $(PORTABLE)
 WIN_LIBS = -ld3d11 -ldxgi -ld3dcompiler -ldxguid -luuid -luser32 -lgdi32 -lcomctl32 \
 	-lshell32 -lwinhttp -lcomdlg32 -ldwmapi -luxtheme -ladvapi32 -lpsapi
 WIN_FLAGS = -std=gnu99 -O2 $(WARN) -fvisibility=hidden $(INC) -D_WIN32_WINNT=0x0A00 \
@@ -28,7 +28,7 @@ TESTS = config release sha256 profile i18n layout applist stats report urllist
 # собирается под Windows кросс-компилятором mingw-w64 или нативно в msys2 (CC_WIN=gcc WINDRES=windres)
 win: build/fringefix.exe
 
-build/fringefix.exe: $(WIN_SRC) $(wildcard include/*.h) $(wildcard src/res/*)
+build/fringefix.exe: $(WIN_SRC) $(wildcard include/*.h) $(wildcard src/res/*) $(wildcard profiles/*)
 	mkdir -p build
 	$(WINDRES) -O coff -i src/res/fringefix.rc -o build/fringefix_rc.o
 	$(CC_WIN) $(WIN_FLAGS) -mwindows -o $@ $(WIN_SRC) build/fringefix_rc.o $(WIN_LIBS) -static

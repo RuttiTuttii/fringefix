@@ -111,6 +111,7 @@ static void toggle(ff_app *a)
 {
     app_set_enabled(a, !a->enabled);
     tray_notify(a, NIM_MODIFY);
+    ui_settings_refresh_power();
 }
 
 static void check_updates(ff_app *a)
@@ -155,7 +156,7 @@ static void on_command(ff_app *a, int id)
         toggle(a);
         break;
     case IDM_PATTERN:
-        pattern_show(a->inst, a->cfg.monitor);
+        ui_pattern_show(a);
         break;
     case IDM_UPDATE:
         check_updates(a);
@@ -174,6 +175,7 @@ static void on_gfx_error(ff_app *a, char *msg)
     ui_utf8(msg, text, GFX_ERR_LEN);
     free(msg);
     tray_notify(a, NIM_MODIFY);
+    ui_settings_refresh_power();
     balloon(a, ff_tr(S_START_FAILED_TITLE), text);
 }
 

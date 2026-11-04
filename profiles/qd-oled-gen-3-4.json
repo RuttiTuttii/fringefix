@@ -1,0 +1,8 @@
+{
+  "format": "fringefix-profile",
+  "version": 1,
+  "red": { "x": -0.160, "y": -0.410 },
+  "green": { "x": 0.100, "y": 0.100 },
+  "blue": { "x": -0.050, "y": -0.220 },
+  "sharpen": -0.080
+}

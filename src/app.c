@@ -52,6 +52,7 @@ int app_init(ff_app *a, HINSTANCE inst)
     }
     resolve_ini(a->ini);
     load_ini(a);
+    app_profile_install_bundled(a);
     a->enabled = 1;
     return 0;
 }

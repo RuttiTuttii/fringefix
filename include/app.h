@@ -74,6 +74,10 @@ int app_profile_load(ff_app *a, const wchar_t *path);
 /* 0 или -1 */
 int app_profile_save(ff_app *a, const wchar_t *path);
 
+/* кладёт комплектные профили, вшитые в exe, в папку профилей; существующие файлы не трогает,
+ * поэтому правки пользователя сохраняются, а удалённый профиль вернётся при следующем запуске */
+void app_profile_install_bundled(const ff_app *a);
+
 /* путь файла локальной статистики рядом с настройками */
 void app_stats_path(const ff_app *a, wchar_t out[MAX_PATH]);
 

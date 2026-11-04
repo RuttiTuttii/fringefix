@@ -4,3 +4,5 @@
 10 ICON "src/res/flag_auto.ico"
 11 ICON "src/res/flag_ru.ico"
 12 ICON "src/res/flag_en.ico"
+/* комплектные профили, файлы лежат в profiles/; новый профиль это новая строка здесь, в resource.h и в BUNDLED (profile_io.c); имя файла в репозитории без пробелов, имя в BUNDLED то, что увидит пользователь */
+201 RCDATA "profiles/qd-oled-gen-3-4.json"

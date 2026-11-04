@@ -13,6 +13,9 @@ typedef struct {
     HWND slider[IDX_SHARPEN + 1];
     HWND edit[IDX_SHARPEN + 1];
     HWND monitor;
+    /* выключатель фильтра внизу слева: ползунок из двух положений и подпись */
+    HWND power;
+    HWND power_label;
     int dpi;
     /* больше нуля, пока поля правятся из кода: EN_CHANGE тогда не считается вводом пользователя */
     int sync;
@@ -26,13 +29,14 @@ enum {
     ID_SLIDER = 100,
     ID_EDIT = 120,
     ID_MONITOR = 140,
-    ID_WIZARD,
     ID_PROGRAM,
     ID_PROF_LOAD,
     ID_PROF_SAVE,
     ID_PATTERN,
     ID_RESET,
-    ID_SAVE
+    ID_SAVE,
+    ID_POWER,
+    ID_POWER_LABEL
 };
 
 /* создаёт все элементы по таблицам ui_layout.h */
@@ -43,6 +47,9 @@ void ctl_rebuild(void);
 
 /* значения конфига в ползунки, поля, список мониторов и флажок */
 void ctl_sync(void);
+
+/* выключатель и его подпись по a->enabled; вызывается и когда фильтр переключили из трея */
+void ctl_sync_power(void);
 
 /* шрифт и системная тема элементам, перерисовка окна */
 void ctl_restyle(void);

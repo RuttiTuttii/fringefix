@@ -101,14 +101,21 @@ static void on_command(int id, int code)
     } else if (id == ID_MONITOR && code == CBN_SELCHANGE) {
         c->monitor = (int)SendMessageW(ui.monitor, CB_GETCURSEL, 0, 0);
         app_reinit(ui.app);
-    } else if (id == ID_WIZARD) {
-        ui_wizard_show(ui.app);
+    } else if (id == ID_POWER && code == FFN_CHANGED) {
+        /* выключатель управляет тем же флагом, что хоткей и трей; значку в трее сообщаем сообщением */
+        app_set_enabled(ui.app, (int)SendMessageW(ui.power, FFS_GETPOS, 0, 0));
+        ctl_sync_power();
+        PostMessageW(ui.app->hwnd, WM_APP_STATE, 0, 0);
     } else if (id == ID_PROGRAM) {
         ui_app_show(ui.app);
     } else if (id == ID_PROF_LOAD || id == ID_PROF_SAVE) {
         on_profile(id == ID_PROF_SAVE);
     } else if (id == ID_PATTERN) {
-        pattern_show(ui.app->inst, c->monitor);
+        if (pattern_is_open()) {
+            pattern_close();
+        } else {
+            pattern_show(ui.app->inst, ui.win);
+        }
     } else if (id == ID_RESET) {
         ctl_reset();
     } else if (id == ID_SAVE) {
@@ -152,8 +159,20 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
         return 0;
     case WM_DPICHANGED:
         return on_dpi_changed(h, w, l);
+    case WM_WINDOWPOSCHANGED:
+        /* паттерн ходит за окном; обработку по умолчанию не отменяем, она шлёт WM_SIZE и WM_MOVE */
+        if (!IsIconic(h)) {
+            pattern_follow(h);
+        }
+        break;
+    case WM_SIZE:
+        if (w == SIZE_MINIMIZED) {
+            pattern_close();
+        }
+        break;
     case WM_CLOSE:
         /* окно только прячется, чтобы не пересоздавать элементы */
+        pattern_close();
         ShowWindow(h, SW_HIDE);
         app_set_fast(ui.app, 0);
         return 0;
@@ -217,10 +236,24 @@ void ui_settings_show(ff_app *a)
 
 void ui_settings_destroy(void)
 {
+    pattern_close();
     if (ui.win) {
         DestroyWindow(ui.win);
         ui.win = NULL;
         app_set_fast(ui.app, 0);
+    }
+}
+
+void ui_pattern_show(ff_app *a)
+{
+    ui_settings_show(a);
+    pattern_show(a->inst, ui.win);
+}
+
+void ui_settings_refresh_power(void)
+{
+    if (ui.win) {
+        ctl_sync_power();
     }
 }
 

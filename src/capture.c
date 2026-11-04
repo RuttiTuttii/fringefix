@@ -89,7 +89,8 @@ static void shutdown_gfx(ff_gfx *g)
     gfx_shutdown(g);
 }
 
-/* раз в DETECT_MS спрашивает, не игра ли на переднем плане, и выбирает действие по game_action */
+/* раз в DETECT_MS спрашивает, не игра ли на переднем плане, и выбирает действие по game_action;
+ * при auto_pause = 0 и паузе проверка выключена */
 static void update_game_state(ff_app *a, game_state *s)
 {
     static const char *const HOW[] = { "none", "fullscreen", "3d", "listed" };
@@ -97,6 +98,9 @@ static void update_game_state(ff_app *a, game_state *s)
     ff_config c = a->cfg;
     char exe[64];
     int how;
+
+    /* при включённой автопаузе всегда пауза; при выключенной облегчённый режим ищет игры сам */
+    ff_config_resolve_game(&c);
 
     if (c.auto_pause == 0) {
         set_state(a, s, 0, 0);

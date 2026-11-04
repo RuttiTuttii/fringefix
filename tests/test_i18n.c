@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include <wchar.h>
 
 #include "i18n.h"
@@ -29,6 +30,22 @@ int main(void)
     }
     CHECK(ff_tr_lang(FF_LANG_EN, (str_id)S_COUNT)[0] == L'\0');
     CHECK(ff_tr_lang(FF_LANG_EN, (str_id)-1)[0] == L'\0');
+
+    /* язык «как в системе»: русский только у русского Windows, остальные, в том числе европейские, получают английский.
+     * основные языки: 0x09 английский, 0x07 немецкий, 0x0c французский, 0x0a испанский, 0x10 итальянский,
+     * 0x15 польский, 0x13 нидерландский, 0x1d шведский, 0x22 украинский, 0x19 русский */
+    {
+        static const unsigned OTHER[] = { 0x09, 0x07, 0x0c, 0x0a, 0x10, 0x15, 0x13, 0x1d, 0x22, 0x00 };
+        size_t i;
+
+        for (i = 0; i < sizeof OTHER / sizeof OTHER[0]; i++) {
+            CHECK(ff_i18n_resolve(0, OTHER[i]) == FF_LANG_EN);
+        }
+        CHECK(ff_i18n_resolve(0, 0x19) == FF_LANG_RU);
+        /* ручной выбор сильнее системы в обе стороны */
+        CHECK(ff_i18n_resolve(1, 0x07) == FF_LANG_RU);
+        CHECK(ff_i18n_resolve(2, 0x19) == FF_LANG_EN);
+    }
 
     /* по умолчанию английский, после выбора русский */
     CHECK(wcscmp(ff_tr(S_MONITOR), L"Monitor") == 0);

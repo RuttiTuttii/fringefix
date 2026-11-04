@@ -68,6 +68,12 @@ static void set_pos(HWND h, slider_t *s, int pos, int notify)
     }
 }
 
+/* диапазон из двух положений работает как выключатель: клик переключает, а не ставит позицию под курсором */
+static int is_switch(const slider_t *s)
+{
+    return s->hi - s->lo == 1;
+}
+
 static void fill_round(HDC dc, COLORREF color, int x0, int y0, int x1, int y1)
 {
     HBRUSH b = CreateSolidBrush(color);
@@ -99,6 +105,7 @@ static void paint(HWND h, const slider_t *s)
     int track;
     HBRUSH tb;
     HPEN ring;
+    COLORREF thumb_color;
     HGDIOBJ obr;
     HGDIOBJ open;
 
@@ -131,7 +138,9 @@ static void paint(HWND h, const slider_t *s)
     }
 
     /* ползунок: круг цвета акцента с кольцом цвета карточки */
-    tb = CreateSolidBrush(p->accent);
+    /* выключенный выключатель серый, чтобы положение читалось и без заливки дорожки */
+    thumb_color = is_switch(s) && s->pos == s->lo ? p->muted : p->accent;
+    tb = CreateSolidBrush(thumb_color);
     ring = CreatePen(PS_SOLID, 2, p->card);
     obr = SelectObject(mem, tb);
     open = SelectObject(mem, ring);
@@ -218,8 +227,17 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
         InvalidateRect(h, NULL, FALSE);
         return 0;
     case WM_LBUTTONDOWN:
-        GetClientRect(h, &r);
+    case WM_LBUTTONDBLCLK:
         SetFocus(h);
+        if (is_switch(s)) {
+            set_pos(h, s, s->pos == s->hi ? s->lo : s->hi, 1);
+            return 0;
+        }
+        if (m == WM_LBUTTONDBLCLK) {
+            set_pos(h, s, clamp_pos(s, 0), 1);
+            return 0;
+        }
+        GetClientRect(h, &r);
         SetCapture(h);
         s->drag = 1;
         set_pos(h, s, x_to_pos(s, r.right, pad_of(h), GET_X_LPARAM(l)), 1);
@@ -233,9 +251,6 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
     case WM_LBUTTONUP:
         s->drag = 0;
         ReleaseCapture();
-        return 0;
-    case WM_LBUTTONDBLCLK:
-        set_pos(h, s, clamp_pos(s, 0), 1);
         return 0;
     case WM_MOUSEWHEEL:
         set_pos(h, s, s->pos + GET_WHEEL_DELTA_WPARAM(w) / WHEEL_DELTA * (GET_KEYSTATE_WPARAM(w) & MK_SHIFT ? BIG_STEP : 1), 1);

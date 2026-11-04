@@ -47,11 +47,8 @@ static const wchar_t *const RU[S_COUNT] = {
     [S_TIP_OFF] = L"выключен",
     [S_START_FAILED_TITLE] = L"fringefix не включился",
     [S_START_FAILED] = L"Не удалось запустить fringefix.",
-    [S_PATTERN_TEXT] =
-        L"fringefix: тестовый паттерн\n\n"
-        L"Плоские верх и низ (e f z s t) показывают вертикальную каёмку,\n"
-        L"прямые стойки (l i k d) показывают горизонтальную.\n\n"
-        L"Esc или клик закрывают окно",
+    [S_PATTERN_ALPHABET] =
+        L"абвгдеёжзийклмноп\nрстуфхцчшщъыьэюя\nАБВГДЕЁЖЗИЙКЛМНОП\nРСТУФХЦЧШЩЪЫЬЭЮЯ",
     [S_AUTOPAUSE] = L"Автопауза",
     [S_AP_OFF] = L"Выключена",
     [S_AP_FULLSCREEN] = L"В полноэкранных приложениях",
@@ -97,10 +94,10 @@ static const wchar_t *const RU[S_COUNT] = {
     [S_VER_CLOSE] = L"Закрыть",
     [S_VER_CONFIRM_UP] = L"Установить версию %ls? Сейчас %ls. Программа перезапустится.",
     [S_VER_CONFIRM_DOWN] = L"Откатиться на версию %ls? Сейчас %ls. Программа перезапустится.",
-    [S_BTN_PROGRAM] = L"Программа...",
-    [S_APP_TITLE] = L"fringefix: программа",
+    [S_BTN_PROGRAM] = L"Настройки",
+    [S_APP_TITLE] = L"fringefix: настройки программы",
     [S_CARD_INTERFACE] = L"Интерфейс",
-    [S_CARD_GAMES] = L"Игры",
+    [S_CARD_AUTOPAUSE] = L"Применение автопаузы",
     [S_CARD_DATA] = L"Обновления и данные",
     [S_LANGUAGE] = L"Язык",
     [S_LANG_AUTO] = L"Авто (как в системе)",
@@ -136,6 +133,17 @@ static const wchar_t *const RU[S_COUNT] = {
     [S_REP_ISSUE_BODY] = L"Вставь сюда отчёт (Ctrl+V), он уже в буфере обмена.",
     [S_REP_CONFIRM] = L"Отправить отчёт на сервер? Уйдёт ровно тот текст, что показан в окне.",
     [S_REP_TOO_BIG] = L"Отчёт слишком длинный, сократи комментарий",
+    [S_AP_3D_ONLY] = L"В 3D-приложениях",
+    [S_BTN_ADD_APP] = L"Добавить приложение для обязательного применения...",
+    [S_FORCE_ADDED] = L"Фильтр всегда применяется к %ls, что бы ни стояло в автопаузе.",
+    [S_FORCE_ASK_REMOVE] = L"%ls уже в списке обязательного применения. Убрать его из списка?",
+    [S_FORCE_REMOVED] = L"%ls убрано из списка обязательного применения.",
+    [S_FORCE_FAILED] = L"Не удалось добавить %ls: список полон или в имени файла есть не латинские символы.",
+    [S_CARD_AUTOSTART] = L"Автозапуск",
+    [S_AUTOSTART_CHECK] = L"Загружать вместе с Windows",
+    [S_AUTOSTART_FAILED] = L"Не удалось изменить автозапуск.",
+    [S_FILTER_ON] = L"Фильтр включён",
+    [S_FILTER_OFF] = L"Фильтр выключен",
 };
 
 static const wchar_t *const EN[S_COUNT] = {
@@ -183,11 +191,8 @@ static const wchar_t *const EN[S_COUNT] = {
     [S_TIP_OFF] = L"off",
     [S_START_FAILED_TITLE] = L"fringefix did not start",
     [S_START_FAILED] = L"fringefix could not start.",
-    [S_PATTERN_TEXT] =
-        L"fringefix: test pattern\n\n"
-        L"Flat tops and bottoms (e f z s t) show vertical fringing,\n"
-        L"upright stems (l i k d) show horizontal fringing.\n\n"
-        L"Esc or a click closes the window",
+    [S_PATTERN_ALPHABET] =
+        L"abcdefghijklm\nnopqrstuvwxyz\nABCDEFGHIJKLM\nNOPQRSTUVWXYZ",
     [S_AUTOPAUSE] = L"Auto-pause",
     [S_AP_OFF] = L"Off",
     [S_AP_FULLSCREEN] = L"In fullscreen apps",
@@ -233,10 +238,10 @@ static const wchar_t *const EN[S_COUNT] = {
     [S_VER_CLOSE] = L"Close",
     [S_VER_CONFIRM_UP] = L"Install version %ls? You have %ls. The program will restart.",
     [S_VER_CONFIRM_DOWN] = L"Roll back to version %ls? You have %ls. The program will restart.",
-    [S_BTN_PROGRAM] = L"Program...",
+    [S_BTN_PROGRAM] = L"Settings",
     [S_APP_TITLE] = L"fringefix program settings",
     [S_CARD_INTERFACE] = L"Interface",
-    [S_CARD_GAMES] = L"Games",
+    [S_CARD_AUTOPAUSE] = L"Auto-pause rules",
     [S_CARD_DATA] = L"Updates and data",
     [S_LANGUAGE] = L"Language",
     [S_LANG_AUTO] = L"Auto (as in the system)",
@@ -272,7 +277,32 @@ static const wchar_t *const EN[S_COUNT] = {
     [S_REP_ISSUE_BODY] = L"Paste the report here (Ctrl+V), it is already in the clipboard.",
     [S_REP_CONFIRM] = L"Send the report to the server? Exactly the text shown in the window goes out.",
     [S_REP_TOO_BIG] = L"The report is too long, shorten the comment",
+    [S_AP_3D_ONLY] = L"In 3D apps",
+    [S_BTN_ADD_APP] = L"Add an app that always gets the filter...",
+    [S_FORCE_ADDED] = L"The filter is always applied to %ls, whatever auto-pause is set to.",
+    [S_FORCE_ASK_REMOVE] = L"%ls is already in the always-apply list. Remove it from the list?",
+    [S_FORCE_REMOVED] = L"%ls was removed from the always-apply list.",
+    [S_FORCE_FAILED] = L"Could not add %ls: the list is full or the file name has non-Latin characters.",
+    [S_CARD_AUTOSTART] = L"Startup",
+    [S_AUTOSTART_CHECK] = L"Start with Windows",
+    [S_AUTOSTART_FAILED] = L"Could not change the startup setting.",
+    [S_FILTER_ON] = L"Filter on",
+    [S_FILTER_OFF] = L"Filter off",
 };
+
+/* PRIMARYLANGID русского в Windows, значение из winnt.h: модуль не зависит от платформы */
+#define FF_LANGID_RUSSIAN 0x19
+
+ff_lang ff_i18n_resolve(int mode, unsigned primary_langid)
+{
+    if (mode == 1) {
+        return FF_LANG_RU;
+    }
+    if (mode == 2) {
+        return FF_LANG_EN;
+    }
+    return primary_langid == FF_LANGID_RUSSIAN ? FF_LANG_RU : FF_LANG_EN;
+}
 
 void ff_i18n_set(ff_lang lang)
 {

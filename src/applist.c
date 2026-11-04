@@ -1,6 +1,9 @@
 #include "applist.h"
 
+#include "config.h"
+
 #include <ctype.h>
+#include <stdio.h>
 #include <string.h>
 #include <wctype.h>
 
@@ -15,6 +18,8 @@ static const wchar_t *const NONGAME[] = {
     L"telegram.exe", L"spotify.exe", L"winword.exe", L"excel.exe", L"powerpnt.exe",
     L"outlook.exe", L"onenote.exe", L"steam.exe", L"steamwebhelper.exe",
     L"epicgameslauncher.exe", L"claude.exe", L"blender.exe",
+    /* панель NVIDIA App на Electron грузит d3d11 и без этой строки считалась бы игрой */
+    L"nvidia app.exe", L"nvcplui.exe",
 };
 
 /* имя файла без папки в нижнем регистре; слишком длинное имя не может быть в списке */
@@ -121,4 +126,79 @@ int ff_app_list_has(const char *list, const wchar_t *exe)
         p = end ? end + 1 : p + strlen(p);
     }
     return 0;
+}
+
+/* копирует элементы списка, кроме совпавших с name, в out; возвращает число пропущенных */
+static int copy_without(const char *list, const char *name, char *out, size_t n)
+{
+    const char *p = list;
+    size_t used = 0;
+    int dropped = 0;
+
+    out[0] = '\0';
+    while (*p) {
+        const char *end = strchr(p, ';');
+        const char *a = p;
+        const char *b = end ? end : p + strlen(p);
+
+        while (a < b && (*a == ' ' || *a == '\t')) {
+            a++;
+        }
+        while (b > a && (b[-1] == ' ' || b[-1] == '\t')) {
+            b--;
+        }
+        if (b > a && item_matches(a, (size_t)(b - a), name)) {
+            dropped++;
+        } else if (b > a && used + (size_t)(b - a) + 2 <= n) {
+            used += (size_t)snprintf(out + used, n - used, "%s%.*s", used ? ";" : "", (int)(b - a), a);
+        }
+        p = end ? end + 1 : p + strlen(p);
+    }
+    return dropped;
+}
+
+int ff_app_list_add(char *list, size_t n, const wchar_t *exe)
+{
+    wchar_t base[NAME_MAX_W];
+    char name[NAME_MAX_W];
+    size_t len;
+    size_t have;
+
+    if (!exe || !base_lower(exe, base)) {
+        return -1;
+    }
+    narrow(base, name, sizeof name);
+    /* знак вопроса это заменённый не-ASCII символ: такое имя в списке никогда не совпадёт;
+     * точка с запятой в имени разорвала бы список */
+    if (strchr(name, '?') || strchr(name, ';')) {
+        return -1;
+    }
+    if (ff_app_list_has(list, exe)) {
+        return 0;
+    }
+    len = strlen(name);
+    have = strlen(list);
+    if (have + (have ? 1 : 0) + len + 1 > n) {
+        return -1;
+    }
+    snprintf(list + have, n - have, "%s%s", have ? ";" : "", name);
+    return 1;
+}
+
+int ff_app_list_remove(char *list, size_t n, const wchar_t *exe)
+{
+    wchar_t base[NAME_MAX_W];
+    char name[NAME_MAX_W];
+    char out[FF_APPS_MAX];
+    int dropped;
+
+    if (!exe || !base_lower(exe, base) || n > sizeof out) {
+        return 0;
+    }
+    narrow(base, name, sizeof name);
+    dropped = copy_without(list, name, out, sizeof out);
+    if (dropped) {
+        snprintf(list, n, "%s", out);
+    }
+    return dropped > 0;
 }

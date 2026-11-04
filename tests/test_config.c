@@ -36,7 +36,8 @@ static void test_clamp(void)
     /* минус у резкости разрешён, плюс зажимается единицей */
     CHECK(ff_config_parse("sharpen=-0.5\n", &c) == 1 && c.sharpen == -0.5f);
     CHECK(ff_config_parse("sharpen=7\n", &c) == 1 && c.sharpen == 1.0f);
-    CHECK(ff_config_parse("auto_pause=9\n", &c) == 1 && c.auto_pause == 2);
+    CHECK(ff_config_parse("auto_pause=3\n", &c) == 1 && c.auto_pause == 3);
+    CHECK(ff_config_parse("auto_pause=9\n", &c) == 1 && c.auto_pause == 3);
     CHECK(ff_config_parse("auto_pause=-1\n", &c) == 1 && c.auto_pause == 0);
     CHECK(ff_config_parse("monitor=1000\n", &c) == 1 && c.monitor == 15);
 }
@@ -62,6 +63,28 @@ static void test_game_keys(void)
     memset(text + 11, 'a', 280);
     strcpy(text + 291, "\n");
     CHECK(ff_config_parse(text, &c) == 0 && strcmp(c.pause_apps, "a.exe;b.exe") == 0);
+}
+
+static void test_resolve_game(void)
+{
+    ff_config c;
+
+    ff_config_defaults(&c);
+    /* автопауза включена: действие всегда пауза, как бы оно ни было записано */
+    c.auto_pause = 3;
+    c.game_action = 1;
+    ff_config_resolve_game(&c);
+    CHECK(c.auto_pause == 3 && c.game_action == 0);
+    /* выключена и облегчённый режим: игры ищутся как в режиме 2 */
+    c.auto_pause = 0;
+    c.game_action = 1;
+    ff_config_resolve_game(&c);
+    CHECK(c.auto_pause == 2 && c.game_action == 1);
+    /* выключена и пауза: ничего не ищется */
+    c.auto_pause = 0;
+    c.game_action = 0;
+    ff_config_resolve_game(&c);
+    CHECK(c.auto_pause == 0 && c.game_action == 0);
 }
 
 static void test_junk(void)
@@ -110,7 +133,7 @@ static void test_roundtrip(void)
     a.sharpen = 0.5f;
     a.monitor = 2;
     a.check_updates = 0;
-    a.auto_pause = 2;
+    a.auto_pause = 3;
     a.game_action = 1;
     a.gpu_priority = -4;
     a.language = 1;
@@ -134,6 +157,7 @@ int main(void)
     test_values();
     test_clamp();
     test_game_keys();
+    test_resolve_game();
     test_junk();
     test_line_endings();
     test_long_line();

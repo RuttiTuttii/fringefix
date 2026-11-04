@@ -9,9 +9,7 @@
 
 void ui_language_apply(int mode)
 {
-    int russian = mode == 1 || (mode == 0 && PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_RUSSIAN);
-
-    ff_i18n_set(russian ? FF_LANG_RU : FF_LANG_EN);
+    ff_i18n_set(ff_i18n_resolve(mode, PRIMARYLANGID(GetUserDefaultUILanguage())));
 }
 
 /* окна fringefix этого потока, у которых есть что перекрасить: трей и паттерн свою тему не имеют */

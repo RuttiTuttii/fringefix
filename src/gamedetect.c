@@ -33,6 +33,16 @@ static int is_shell_window(HWND h)
     return 0;
 }
 
+/* окна на движке Chromium (Electron, CEF, браузеры) грузят d3d11 ради композитинга, игрой они не бывают:
+ * иначе любая панель на Electron, например NVIDIA App, считалась бы 3D-приложением */
+static int is_chromium_window(HWND h)
+{
+    wchar_t cls[32];
+
+    return GetClassNameW(h, cls, 32) > 0 && (wcsncmp(cls, L"Chrome_WidgetWin", 16) == 0
+                                             || wcsncmp(cls, L"CefBrowserWindow", 16) == 0);
+}
+
 /* пустой прямоугольник монитора не покрывает никто: иначе любое окно у левого края сошло бы за полный экран */
 static int covers_monitor(HWND h, const RECT *mon)
 {
@@ -159,12 +169,13 @@ int game_detect(const ff_config *cfg, const RECT *monitor, char exe[64])
     if (path[0] && ff_app_list_has(cfg->pause_apps, path)) {
         return GAME_LISTED;
     }
-    if (covers_monitor(fg, monitor)) {
+    /* режимы: 1 полный экран, 2 полный экран и 3D, 3 только 3D */
+    if (cfg->auto_pause != 3 && covers_monitor(fg, monitor)) {
         return GAME_FULLSCREEN;
     }
     /* 3D-приложение считается, только если его окно лежит на мониторе оверлея */
-    if (cfg->auto_pause >= 2 && GetWindowRect(fg, &wr) && IntersectRect(&overlap, &wr, monitor)
-        && is_3d_app(pid)) {
+    if (cfg->auto_pause >= 2 && !is_chromium_window(fg) && GetWindowRect(fg, &wr)
+        && IntersectRect(&overlap, &wr, monitor) && is_3d_app(pid)) {
         return GAME_3D;
     }
     return GAME_NONE;
