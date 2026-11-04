@@ -107,7 +107,7 @@ static void paint(HWND h, const slider_t *s)
     cy = r.bottom / 2;
     pad = pad_of(h);
     thumb = r.bottom / 3 + (GetFocus() == h ? 2 : 0);
-    track = r.bottom / 9 + 1;
+    track = r.bottom / 14;
     bmp = CreateCompatibleBitmap(dc, r.right, r.bottom);
     old = SelectObject(mem, bmp);
 
