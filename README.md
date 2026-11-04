@@ -4,12 +4,12 @@
 
 A Windows overlay that shifts the colour channels of the finished frame by fractions of a pixel to cancel colour fringing on QD-OLED panels with the triangular subpixel layout (4th generation and earlier). Lives in the tray, tuned with sliders, updates from GitHub Releases.
 
-> limitations: the project builds with mingw-w64 without warnings and the portable-module tests pass (`make test`). Version 0.1.0 ran on one machine with a 4K QD-OLED in SDR: the tray, settings window and overlay worked. The HDR path, updater, version picker, dark theme, typed values, profiles, the wizard, auto-pause and light mode are unverified. Requires Windows 10 2004 or newer. Updates work only with a public repository: for a private one the GitHub API answers 404 without a token.
+> limitations: the project builds with mingw-w64 without warnings and the portable-module tests pass (`make test`). Version 0.1.0 ran on one machine with a 4K QD-OLED in SDR: the tray, settings window and overlay worked. The HDR path, updater, version picker, dark theme, typed values, profiles, the wizard, auto-pause, light mode, language and theme choice, statistics and report sending are unverified. Requires Windows 10 2004 or newer. Updates work only with a public repository: for a private one the GitHub API answers 404 without a token.
 
 ## running
 
 - download `fringefix.exe` from the latest release and put it in any folder
-- start it, a tray icon of three coloured bars appears (grey means off)
+- start it, a tray icon of three balls in a triangle appears (black and white means off or paused)
 - double click opens settings, right click opens the menu with profiles
 - `Ctrl+Alt+F` toggles the overlay, `Ctrl+Alt+Q` quits
 - settings live in `%APPDATA%\fringefix\fringefix.ini`, the Save button writes them
@@ -101,20 +101,57 @@ the "Versions..." button in the settings window opens a list of the repository r
 
 Out-of-range values are clamped, broken ones are skipped, a file without the `format` field is rejected whole.
 
-## language and theme
+## language, theme and icons
 
-- the interface is Russian if Windows display language is Russian, English otherwise
-- the theme is light or dark by the Windows "app mode" setting, a change applies to an open window without restart
+- "Program..." in the settings window opens a window with the language and theme choice
+- language: "Auto" follows the Windows display language (Russian or English), "Русский" and "English" are picked by hand; every list item has a flag
+- theme: "Auto" follows the Windows "app mode" setting, "Light" and "Dark" are set by hand; a change applies to open windows at once
+- a language change recreates the windows, settings are kept
 - the slider accent colour comes from the system one
+- the application icon: three balls in a triangle, green on top, red and blue below, like QD-OLED subpixels. The drawings live in `assets/` as SVG: `icon.svg` with a tile that turns light in the light theme, `mark.svg` without a tile for small sizes, and the flags in `assets/flags/`. The drawing is flat, with no gradients or glow
+- the icon of a disabled overlay is the same drawing under a monochrome filter
+- the exe ICO files are built from the SVG with `make icons` (needs `rsvg-convert`), the ready ones are in `src/res/`
+
+## statistics and reports
+
+everything below is off until you turn it on yourself. Nothing is sent on its own.
+
+- in the "Program..." window the "Report and statistics..." button opens the report window
+- the "Keep statistics on this computer" checkbox turns on local counters: frames, skipped echo frames, device recreations, pauses, overlay errors and the games that caused a pause. The `stats.txt` file sits next to the settings in `%APPDATA%\fringefix` and goes nowhere
+- the window shows exactly the JSON text that would go over the network; you can untick the System, Settings and Statistics sections and add a comment
+- there are three ways to send: to the project server with the Send button (with a confirmation), through a new GitHub issue (the report is copied to the clipboard and you paste it into the issue yourself), or just save it to a file
+- "Clear statistics" resets the counters and deletes the file
+
+what the report holds: the program version and language; the Windows build number, the GPU name, the monitor resolution and an HDR flag; channel shifts, sharpness, auto-pause mode, the action in games and GPU priority; counters; overlay error texts; for games only the exe name without a path, how it was detected, what the overlay did, the number of sessions and minutes; your comment.
+
+what the report does not hold: user name, computer name, file paths, window titles, monitor serial numbers, a permanent identifier and the send time.
+
+the receiver on the server checks the report against a whitelist of fields, limits the size and the rate (5 per hour per address), stores each report as its own file with mode 0600 and records the client address nowhere: the rate limit keeps only a salt and a hash in memory. The receiver code and instructions are in `server/`. The receiving address goes into the exe at build time from the `REPORT_URL` variable and is not in the sources; if it is not set, the Send button is disabled and the other ways keep working. The server still sees the network address at the moment of the request, which is a property of any network connection.
+
+## support the project
+
+I make fringefix alone and it is free. If it was useful to you:
+
+- star the repository on GitHub <img src="assets/star.svg" width="16" height="16" alt=""> it really helps: the project becomes more visible
+- send any amount in crypto. Life in Russia is hard right now and even a small coin is very welcome and supports me a lot
+
+| network | address |
+| --- | --- |
+| USDT on TON | `UQBHrA4BaeTkLgJ-R7KBFUJ6hoXHqCfvcmysTHboh3kxRSh4` |
+| Bitcoin | `bc1qlsehpmp77xnfqmasr4tzhs3fsmtfjcwq75r2t6` |
+| USDT on TRON (TRC-20) | `TB49TjDG5F9pDMiVEHAuVxdGtqmEnfEfyv` |
+
+check the network before sending: a transfer to the wrong network cannot be recovered.
 
 ## how it works
 
 ```
 main.c ─ ui_tray.c ─ ui_settings.c ─ ui_controls.c, ui_paint.c, slider.c, theme.c
   │         │            └─ ui_profile.c, ui_wizard.c ─ layout.c, pattern.c
-  │         │            └─ ui_versions.c
+  │         │            └─ ui_versions.c, ui_app.c, ui_prefs.c
+  │         │            └─ ui_report.c ─ report_actions.c, report_send.c, report.c
   │         └─ ui_update.c ─ update.c, update_install.c ─ http.c, sha256.c, release.c
-  └─ app.c ─ config.c, profile.c, profile_io.c, i18n.c
+  └─ app.c ─ config.c, profile.c, profile_io.c, i18n.c, stats.c, stats_store.c
        └─ capture.c (own thread) ─ gamedetect.c ─ applist.c
             └─ gfx.c, gfx_frame.c, gfx_sig.c ─ shader.c, output.c
 ```
@@ -170,7 +207,8 @@ git tag v0.1.0 && git push origin v0.1.0
 - `linux`: tests of the portable modules on Ubuntu with two compilers (gcc and clang) under ASan and UBSan, warnings as errors
 - `cross`: a full exe build with the mingw-w64 cross compiler on Ubuntu, warnings as errors, the imported DLL list in the log, the exe in artifacts
 - `build`: the release build in msys2 UCRT64 on a Windows runner
-- `release`: on a `vX.Y.Z` tag, only if all three previous jobs are green
+- `server`: tests and ruff for the report receiver in Python
+- `release`: on a `vX.Y.Z` tag, only if all four previous jobs are green
 
 the application runs on Windows only: capture through DXGI Desktop Duplication and output through Direct3D 11 do not port to Linux. On Linux the CI checks the code and builds the exe but does not run it.
 
@@ -182,5 +220,6 @@ the application runs on Windows only: capture through DXGI Desktop Duplication a
 - rotated monitors
 - start with Windows
 - code signing and release signing
-- manual choice of language and theme: they come from the system only
+- a Linux version: planned (a GNOME Shell extension, a KWin effect or a Hyprland shader), capture through DXGI does not port to Linux
+- languages other than Russian and English
 - the overlay adds one frame of latency over the desktop
