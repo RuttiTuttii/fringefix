@@ -136,7 +136,7 @@ the Auto-pause rules card of the program settings window has three items:
 
 - "Auto-pause": when to consider a game running (fullscreen, 3D, fullscreen and 3D, off)
 - "Action in games": it can be changed only while auto-pause is off, in any other mode it shows a locked "Pause". "Pause" releases the device and the overlay window, "Light mode" keeps the overlay but the shader does one shift per channel without the laplacian and sharpness and costs almost nothing. Light mode does not remove DWM composition, so only a pause lifts the game latency. With auto-pause off and light mode, games are looked for as in the "fullscreen and 3D apps" mode and light mode is used instead of a pause; with auto-pause off and "Pause" nothing is looked for
-- "Add an app that always gets the filter...": picks an exe that goes into `ignore_apps`. The filter is always applied to it, whatever auto-pause is set to: photo viewers, players. Picking the same exe again offers to remove it from the list. The file name must be Latin and the list is limited to 256 characters
+- "Add an app that always gets the filter...": picks an exe that goes into `ignore_apps`. The filter is always applied to it, whatever auto-pause is set to: photo viewers, players. Picking the same exe again offers to remove it from the list. The file name must be Latin and the list is limited to 255 bytes
 
 more in `fringefix.ini`:
 
@@ -147,7 +147,7 @@ more in `fringefix.ini`:
 ## versions and rollback
 
 
-the "Versions..." button in the settings window opens a list of the repository releases (up to the latest 30 that have `fringefix.exe` and `fringefix.exe.sha256`). Picking a version newer than the current one installs an update, older installs a rollback. Versions are not compared during installation: the hash check and the exe swap are the same as in a normal update, settings in `%APPDATA%` stay. Old releases are not overwritten: to go back to a version it must stay in Releases.
+the "Versions..." button in the program settings window opens a list of the repository releases (up to the latest 30 that have `fringefix.exe` and `fringefix.exe.sha256`). Picking a version newer than the current one installs an update, older installs a rollback. Versions are not compared during installation: the hash check and the exe swap are the same as in a normal update, settings in `%APPDATA%` stay. Old releases are not overwritten: to go back to a version it must stay in Releases.
 
 ## profiles
 
