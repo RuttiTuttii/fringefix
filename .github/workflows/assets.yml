@@ -1,0 +1,39 @@
+name: assets
+
+# рисунки окон и баннер для README пересобираются из строк интерфейса и коммитятся обратно
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/i18n.c
+      - server/tests/fixtures/report_v1.json
+      - tools/make_screens.py
+      - tools/make_readme_assets.py
+
+permissions:
+  contents: write
+
+# два запуска подряд не должны писать в main одновременно
+concurrency:
+  group: assets
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -I tools/make_screens.py && python3 -I tools/make_readme_assets.py
+      # коммит только если рисунки изменились; [skip ci] не даёт запуститься остальным проверкам
+      - name: commit
+        run: |
+          git add assets
+          if git diff --cached --quiet; then
+            echo "рисунки не изменились"
+            exit 0
+          fi
+          git config user.name "RuttiTuttii"
+          git config user.email "61704909+RuttiTuttii@users.noreply.github.com"
+          git commit -m "chore(assets): rebuild readme graphics [skip ci]"
+          git pull --rebase origin main
+          git push origin main
