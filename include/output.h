@@ -26,4 +26,8 @@ int ff_output_info_get(int index, ff_output_info *info);
 /* прямоугольник монитора в координатах рабочего стола; 0 или -1 */
 int ff_output_rect(int index, RECT *rect);
 
+/* дескриптор монитора выхода: по нему GetMonitorInfoW дёшево отдаёт актуальный прямоугольник
+ * без перебора адаптеров; NULL, если выхода нет */
+HMONITOR ff_output_hmonitor(int index);
+
 #endif

@@ -27,6 +27,9 @@ typedef struct {
     int clear;
     ULONGLONG next;
     RECT mon;
+    /* монитор оверлея: по дескриптору прямоугольник перечитывается на каждой проверке */
+    HMONITOR hmon;
+    int mon_index;
     /* открытый сеанс игры для статистики */
     char exe[64];
     int in_game;
@@ -89,6 +92,25 @@ static void shutdown_gfx(ff_gfx *g)
     gfx_shutdown(g);
 }
 
+/* прямоугольник монитора оверлея по текущему режиму. монопольный полный экран меняет разрешение, а захват
+ * в этот момент закрыт, поэтому прямоугольник из gfx_init устаревает и окно игры не совпало бы с ним */
+static void refresh_monitor(game_state *s, int index)
+{
+    MONITORINFO mi;
+
+    if (!s->hmon || s->mon_index != index) {
+        s->hmon = ff_output_hmonitor(index);
+        s->mon_index = index;
+    }
+    mi.cbSize = sizeof mi;
+    if (s->hmon && GetMonitorInfoW(s->hmon, &mi)) {
+        s->mon = mi.rcMonitor;
+    } else {
+        /* дескриптор устарел после смены конфигурации мониторов: следующая проверка найдёт его заново */
+        s->hmon = NULL;
+    }
+}
+
 /* раз в DETECT_MS спрашивает, не игра ли на переднем плане, и выбирает действие по game_action;
  * при auto_pause = 0 и паузе проверка выключена */
 static void update_game_state(ff_app *a, game_state *s)
@@ -108,6 +130,7 @@ static void update_game_state(ff_app *a, game_state *s)
         s->clear = 0;
     } else if (now >= s->next) {
         s->next = now + DETECT_MS;
+        refresh_monitor(s, c.monitor);
         how = game_detect(&c, &s->mon, exe);
         if (how != GAME_NONE) {
             s->clear = 0;

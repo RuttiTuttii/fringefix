@@ -141,3 +141,21 @@ int ff_output_rect(int index, RECT *rect)
     FF_REL(ad);
     return rc;
 }
+
+HMONITOR ff_output_hmonitor(int index)
+{
+    IDXGIAdapter1 *ad = NULL;
+    IDXGIOutput6 *out = NULL;
+    DXGI_OUTPUT_DESC1 d;
+    HMONITOR mon = NULL;
+
+    if (ff_output_pick(index, &ad, &out) != 0) {
+        return NULL;
+    }
+    if (SUCCEEDED(IDXGIOutput6_GetDesc1(out, &d))) {
+        mon = d.Monitor;
+    }
+    FF_REL(out);
+    FF_REL(ad);
+    return mon;
+}
