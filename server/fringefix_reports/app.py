@@ -122,7 +122,7 @@ class Handler(BaseHTTPRequestHandler):
     def _accept(self, body: bytes) -> None:
         try:
             report = validate_report(json.loads(body.decode("utf-8")))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (UnicodeDecodeError, json.JSONDecodeError, RecursionError, ValueError):
             self._send(HTTPStatus.BAD_REQUEST, {"error": "bad_json"})
             return
         except ReportError as exc:
