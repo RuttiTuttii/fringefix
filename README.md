@@ -6,7 +6,7 @@
 
 A Windows overlay that shifts the colour channels of the finished frame by fractions of a pixel to cancel colour fringing on QD-OLED panels with the triangular subpixel layout (4th generation and earlier). Lives in the tray, tuned with sliders, updates from GitHub Releases.
 
-> limitations: the project builds with mingw-w64 without warnings, the portable-module tests (10 suites) pass under ASan and UBSan, the report receiver was checked from outside on both addresses. Version 0.1.0 ran on one machine with a 4K QD-OLED in SDR: the tray, settings window and overlay worked. Everything added later has not run on Windows: the HDR path, the updater and version picker, the wizard, auto-pause and light mode, the dark theme, language and theme choice, statistics and report sending. Requires Windows 10 2004 or newer. The pictures in the screenshots section are mockups, not screen captures.
+> limitations: the project builds with mingw-w64 without warnings, the portable-module tests (10 suites) pass under ASan and UBSan, the report receiver was checked from outside on both addresses. Version 0.1.0 ran on one machine with a 4K QD-OLED in SDR: the tray, settings window and overlay worked. Everything added later has not run on Windows: the HDR path, the updater and version picker, the wizard, auto-pause and light mode, the dark theme, language and theme choice, statistics and report sending. Requires Windows 10 2004 or newer.
 
 ## what the problem looks like
 
