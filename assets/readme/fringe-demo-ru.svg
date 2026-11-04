@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1084 576" width="1084" height="576" role="img" aria-labelledby="t">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1084 544" width="1084" height="544" role="img" aria-labelledby="t">
   <title id="t">Без коррекции / С fringefix</title>
   <style>
     .bg { fill: #101522; }
@@ -10,7 +10,7 @@
       .sub { fill: #566079; }
     }
   </style>
-  <rect class="bg" width="1084" height="576" rx="14"/>
+  <rect class="bg" width="1084" height="544" rx="14"/>
   <text class="lbl" x="24" y="32">Без коррекции</text>
   <text class="lbl" x="556" y="32">С fringefix</text>
   <text class="sub" x="24" y="60">Как видит глаз</text>
@@ -1021,5 +1021,4 @@
 <rect x="1047.0" y="502.5" width="7.9" height="7.9" rx="1.6" fill="#2dff5a" fill-opacity="0.38"/>
 <rect x="1051.5" y="511.5" width="7.9" height="7.9" rx="1.6" fill="#3d6bff" fill-opacity="0.28"/>
   </g>
-  <text class="sub" x="24" y="558">Симуляция по модели субпикселей QD-OLED с треугольной раскладкой, не фотография</text>
 </svg>

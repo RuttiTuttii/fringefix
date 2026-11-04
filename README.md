@@ -12,7 +12,7 @@ A Windows overlay that shifts the colour channels of the finished frame by fract
 
 on first-to-fourth generation QD-OLED the subpixels form a triangle: green above red and blue. ClearType text assumes RGB stripes, so horizontal edges get a green and a pink fringe. Fringefix shifts every channel to where its subpixel really sits.
 
-<p align="center"><img src="assets/readme/fringe-demo-en.svg" alt="Simulation: text on QD-OLED without correction with colour fringes and with fringefix correction" width="100%"></p>
+<p align="center"><img src="assets/readme/fringe-demo-en.svg" alt="Text on QD-OLED without correction with colour fringes and with fringefix correction" width="100%"></p>
 
 ## features
 

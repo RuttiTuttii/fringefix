@@ -3,7 +3,7 @@
 Настоящий шрифт растеризуется ImageMagick в серую картинку, затем каждый её пиксель разбирается на три
 субпикселя треугольной раскладки: красный и синий снизу от центра на 0.25 влево и вправо, зелёный сверху
 на 0.25. Слева панель, как её видит глаз без коррекции, справа с коррекцией: каждый субпиксель показывает
-картинку там, где он стоит физически. Это симуляция, а не фотография.
+картинку там, где он стоит физически. 
 
 Нужен ImageMagick (magick). Запуск из корня репозитория: python3 tools/make_demo.py
 """
@@ -32,10 +32,8 @@ COLORS = {"r": "#ff2d2d", "g": "#2dff5a", "b": "#3d6bff"}
 SUB = 0.44
 
 TEXT = {
-    "ru": ("Без коррекции", "С fringefix", "Как видит глаз", "Под лупой: субпиксели",
-           "Симуляция по модели субпикселей QD-OLED с треугольной раскладкой, не фотография"),
-    "en": ("Without correction", "With fringefix", "What the eye sees", "Under a magnifier: subpixels",
-           "A simulation of the QD-OLED triangular subpixel layout, not a photo"),
+    "ru": ("Без коррекции", "С fringefix", "Как видит глаз", "Под лупой: субпиксели"),
+    "en": ("Without correction", "With fringefix", "What the eye sees", "Under a magnifier: subpixels"),
 }
 
 
@@ -141,12 +139,12 @@ def build(lang: str) -> str:
     pw = WIDTH * EYE
     eye_h = HEIGHT * EYE
     lens_h = (CROP[3] - CROP[1]) * LENS
-    before, after, eye, lens, note = TEXT[lang]
+    before, after, eye, lens = TEXT[lang]
     gap, margin, head, sub = 28, 24, 44, 26
     width = pw * 2 + gap + margin * 2
     row1 = head + sub
     row2 = row1 + eye_h + 16 + sub
-    height = row2 + lens_h + 56
+    height = row2 + lens_h + 24
     lx, rx = margin, margin + pw + gap
     return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}" role="img" aria-labelledby="t">
   <title id="t">{before} / {after}</title>
@@ -175,7 +173,6 @@ def build(lang: str) -> str:
   <g>
 {lens_panel(img, True, rx, row2)}
   </g>
-  <text class="sub" x="{margin}" y="{height - 18}">{note}</text>
 </svg>
 """
 
