@@ -27,7 +27,7 @@ static const char HLSL[] =
     "    int2 q = int2(floor(p));\n"
     "    float lap = ld(q + int2(-1, 0), ch) + ld(q + int2(1, 0), ch)\n"
     "              + ld(q + int2(0, -1), ch) + ld(q + int2(0, 1), ch) - 4.0 * ld(q, ch);\n"
-    "    float k = min(1.72 * dot(f, f), 0.35) + shiftBX.z * 0.25;\n"
+    "    float k = min(1.72 * dot(f, f), 0.35) + shiftBX.z * 0.35;\n"
     "    v -= k * lap;\n"
     "    return shiftBX.w > 0.5 ? v : saturate(v);\n"
     "}\n"
