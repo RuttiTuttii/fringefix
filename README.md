@@ -4,7 +4,7 @@
 
 A Windows overlay that shifts the colour channels of the finished frame by fractions of a pixel to cancel colour fringing on QD-OLED panels with the triangular subpixel layout (4th generation and earlier). Lives in the tray, tuned with sliders, updates from GitHub Releases.
 
-> limitations: the project builds with mingw-w64 without warnings and the portable-module tests pass (`make test`). Version 0.1.0 ran on one machine with a 4K QD-OLED in SDR: the tray, settings window and overlay worked. The HDR path, updater, dark theme, typed values and profiles are unverified. Requires Windows 10 2004 or newer. Updates work only with a public repository: for a private one the GitHub API answers 404 without a token.
+> limitations: the project builds with mingw-w64 without warnings and the portable-module tests pass (`make test`). Version 0.1.0 ran on one machine with a 4K QD-OLED in SDR: the tray, settings window and overlay worked. The HDR path, updater, dark theme, typed values, profiles, the wizard and auto-pause are unverified. Requires Windows 10 2004 or newer. Updates work only with a public repository: for a private one the GitHub API answers 404 without a token.
 
 ## running
 
@@ -30,6 +30,40 @@ The window is split into cards by colour: red, green and blue each have a horizo
 - sharpness is from -1 to 1: plus strengthens contours, minus softens them
 
 A sub-pixel shift goes through bilinear interpolation, which blurs. The shader restores sharpness up front with a laplacian of strength `min(1.72 * f^2, 0.35)`, where `f` is the fractional part of the shift. So with non-zero shifts a small contour boost exists even at sharpness 0, and with zero shifts there is none. Sharpness -1 cancels the maximum of that boost completely.
+
+## setup wizard
+
+the "Setup wizard..." button in the window. Three steps:
+
+1. panel type: QD-OLED with triangular subpixels (gen 1-4) or RGB stripes where no correction is needed
+2. vertical strength with the test pattern open: look at the horizontal lines in the right half
+3. horizontal strength: look at the vertical lines in the left half
+
+for the triangular layout the shifts are computed from the geometry: red and blue sit side by side at the bottom, green above them in the middle, offsets from the pixel centre are 0.25 each. A channel must show the picture where it physically sits, so the shift is minus the offset: green vertical +0.25, red and blue vertical -0.25, red horizontal +0.25, blue -0.25. The vertical signs match the values the original's author found by hand (green plus, red and blue minus).
+
+both strengths go from -3 to 3 and scale the offsets along their axis, a minus mirrors the layout: useful if the panel has green at the bottom or red and blue the other way round. Finish keeps the values and saves the settings, Cancel restores the previous shifts. The horizontal strength often has to be reduced: ClearType already shifts text horizontally for RGB stripes.
+
+the calculation follows a panel model, not a measurement: there is no automatic fringing measurement, for example from a phone photo.
+
+## auto-pause
+
+the mode is chosen in the Image card, the `auto_pause` key in the ini:
+
+- 0 off
+- 1 in fullscreen apps (default)
+- 2 in fullscreen and 3D apps
+
+a fullscreen app is an active window with no title bar or frame that covers the whole overlay monitor (2 pixel slack): a borderless game, exclusive fullscreen, F11 video in a browser. A 3D app is the active window's process that loaded d3d9, d3d11, d3d12, vulkan-1 or opengl32 and is not in the built-in list of known non-games (browsers, editors, messengers, office, the shell). A process protected from reading (anti-cheat) is detected by fullscreen only.
+
+- the check runs every 0.5 seconds, the pause is lifted after two consecutive checks without a game so alt-tab back and forth does not recreate the device
+- while paused the D3D device and the overlay window are released and the tray icon is grey
+- why: an overlay over a fullscreen game takes away its direct output that bypasses DWM composition (independent flip, per the documentation), adds a frame of latency and loads the GPU itself
+
+## latency
+
+- the device frame queue is limited to one frame instead of the default three
+- the rest of the latency is built into the scheme: the desktop is captured after DWM composition, the overlay is drawn and composed again, at least one or two frames. For games the answer is auto-pause
+- I did not measure values in milliseconds
 
 ## profiles
 
@@ -60,10 +94,10 @@ Out-of-range values are clamped, broken ones are skipped, a file without the `fo
 
 ```
 main.c ─ ui_tray.c ─ ui_settings.c ─ ui_controls.c, ui_paint.c, slider.c, theme.c
-  │         │            └─ ui_profile.c, pattern.c
+  │         │            └─ ui_profile.c, ui_wizard.c ─ layout.c, pattern.c
   │         └─ ui_update.c ─ update.c ─ http.c, sha256.c, release.c
   └─ app.c ─ config.c, profile.c, profile_io.c, i18n.c
-       └─ capture.c (own thread)
+       └─ capture.c (own thread) ─ gamedetect.c ─ applist.c
             └─ gfx.c, gfx_frame.c, gfx_sig.c ─ shader.c, output.c
 ```
 
@@ -110,7 +144,8 @@ git tag v0.1.0 && git push origin v0.1.0
 
 ## not done
 
-- auto-suspend in games: switch it off by hand, a full-screen shader loads the GPU noticeably
+- automatic fringing measurement, for example from a photo of the screen: the wizard follows a panel model
+- layouts other than the QD-OLED triangle: WOLED, for example, arranges subpixels differently
 - text-only mask for sharpening: sharpening applies to the whole screen
 - rotated monitors
 - start with Windows
