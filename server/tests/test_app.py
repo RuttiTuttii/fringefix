@@ -66,7 +66,8 @@ class AppTest(unittest.TestCase):
         self.assertEqual(self.post(b"{not json")[0], 400)
         self.assertEqual(self.post(b"[]")[0], 422)
         self.assertEqual(self.post(b"\xff\xfe")[0], 400)
-        # целое длиннее лимита int (4300 цифр) бросает ValueError в json.loads: ответ 400, а не обрыв соединения
+        # целое длиннее лимита int (4300 цифр) бросает ValueError в json.loads:
+        # ответ 400, а не обрыв соединения
         huge = b"1" * 5000
         self.assertEqual(self.post(huge, **{"X-Forwarded-For": "198.51.100.77"})[0], 400)
         status, _ = self.request("POST", "/v1/reports", b"{}", {"Content-Type": "text/plain"})
