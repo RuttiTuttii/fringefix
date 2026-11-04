@@ -1,0 +1,246 @@
+#define COBJMACROS
+#include <windows.h>
+#include <d3dcompiler.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "com.h"
+#include "gfx.h"
+#include "output.h"
+#include "shader.h"
+
+#ifndef WDA_EXCLUDEFROMCAPTURE
+#define WDA_EXCLUDEFROMCAPTURE 0x00000011
+#endif
+
+static const wchar_t OVERLAY_CLASS[] = L"fringefix_overlay";
+
+#define FAILMSG(text)                                  \
+    do {                                               \
+        snprintf(err, GFX_ERR_LEN, "%s", text);        \
+        goto done;                                     \
+    } while (0)
+
+#define TRY(call, what)                                                               \
+    do {                                                                              \
+        hr = (call);                                                                  \
+        if (FAILED(hr)) {                                                             \
+            snprintf(err, GFX_ERR_LEN, "%s failed (0x%08lx)", what, (unsigned long)hr); \
+            goto done;                                                                \
+        }                                                                             \
+    } while (0)
+
+void gfx_shutdown(ff_gfx *g)
+{
+    if (g->ctx) {
+        ID3D11DeviceContext_ClearState(g->ctx);
+    }
+    FF_REL(g->cb);
+    FF_REL(g->smp);
+    FF_REL(g->ps);
+    FF_REL(g->vs);
+    FF_REL(g->rtv);
+    FF_REL(g->sc);
+    FF_REL(g->srv);
+    FF_REL(g->frame);
+    FF_REL(g->dup);
+    FF_REL(g->ctx);
+    FF_REL(g->dev);
+    if (g->hwnd) {
+        DestroyWindow(g->hwnd);
+    }
+    memset(g, 0, sizeof *g);
+}
+
+/* устройство на адаптере монитора, захват рабочего стола и своя копия кадра для шейдера */
+static int open_capture(ff_gfx *g, int monitor, RECT *rect, char *err)
+{
+    HRESULT hr;
+    int rc = -1;
+    IDXGIAdapter1 *ad = NULL;
+    IDXGIOutput6 *out = NULL;
+    DXGI_OUTPUT_DESC1 od;
+    DXGI_OUTDUPL_DESC dd;
+    DXGI_FORMAT want;
+    D3D11_TEXTURE2D_DESC td;
+
+    if (ff_output_pick(monitor, &ad, &out) != 0) {
+        FAILMSG("monitor not found");
+    }
+    TRY(IDXGIOutput6_GetDesc1(out, &od), "GetDesc1");
+    g->hdr = od.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
+    *rect = od.DesktopCoordinates;
+
+    TRY(D3D11CreateDevice((IDXGIAdapter *)ad, D3D_DRIVER_TYPE_UNKNOWN, NULL,
+                          D3D11_CREATE_DEVICE_BGRA_SUPPORT, NULL, 0, D3D11_SDK_VERSION,
+                          &g->dev, NULL, &g->ctx), "D3D11CreateDevice");
+
+    /* формат кадра выбирает режим рабочего стола: FP16 scRGB в HDR, 8 бит в SDR */
+    want = g->hdr ? DXGI_FORMAT_R16G16B16A16_FLOAT : DXGI_FORMAT_B8G8R8A8_UNORM;
+    TRY(IDXGIOutput6_DuplicateOutput1(out, (IUnknown *)g->dev, 0, 1, &want, &g->dup),
+        "DuplicateOutput1");
+    IDXGIOutputDuplication_GetDesc(g->dup, &dd);
+    g->fmt = dd.ModeDesc.Format;
+    g->w = dd.ModeDesc.Width;
+    g->h = dd.ModeDesc.Height;
+
+    /* дублированную текстуру шейдеру напрямую не отдать, поэтому держим свою копию кадра */
+    memset(&td, 0, sizeof td);
+    td.Width = g->w;
+    td.Height = g->h;
+    td.MipLevels = 1;
+    td.ArraySize = 1;
+    td.Format = g->fmt;
+    td.SampleDesc.Count = 1;
+    td.Usage = D3D11_USAGE_DEFAULT;
+    td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    TRY(ID3D11Device_CreateTexture2D(g->dev, &td, NULL, &g->frame), "CreateTexture2D");
+    TRY(ID3D11Device_CreateShaderResourceView(g->dev, (ID3D11Resource *)g->frame, NULL, &g->srv),
+        "CreateShaderResourceView");
+    rc = 0;
+
+done:
+    FF_REL(out);
+    FF_REL(ad);
+    return rc;
+}
+
+/* окно прозрачно для мыши и исключено из захвата: без этого кадр снимал бы сам оверлей */
+static int open_window(ff_gfx *g, const RECT *rect, char *err)
+{
+    static int registered;
+
+    if (!registered) {
+        WNDCLASSW wc;
+
+        memset(&wc, 0, sizeof wc);
+        wc.lpfnWndProc = DefWindowProcW;
+        wc.hInstance = GetModuleHandleW(NULL);
+        wc.lpszClassName = OVERLAY_CLASS;
+        RegisterClassW(&wc);
+        registered = 1;
+    }
+    g->hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TRANSPARENT
+                                  | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
+                              OVERLAY_CLASS, L"fringefix", WS_POPUP, rect->left, rect->top,
+                              (int)g->w, (int)g->h, NULL, NULL, GetModuleHandleW(NULL), NULL);
+    if (!g->hwnd) {
+        snprintf(err, GFX_ERR_LEN, "CreateWindowEx failed (%lu)", GetLastError());
+        return -1;
+    }
+    SetLayeredWindowAttributes(g->hwnd, 0, 255, LWA_ALPHA);
+    if (!SetWindowDisplayAffinity(g->hwnd, WDA_EXCLUDEFROMCAPTURE)) {
+        snprintf(err, GFX_ERR_LEN, "SetWindowDisplayAffinity failed, need Windows 10 2004+");
+        return -1;
+    }
+    return 0;
+}
+
+static int open_swapchain(ff_gfx *g, char *err)
+{
+    HRESULT hr;
+    int rc = -1;
+    IDXGIDevice *dxdev = NULL;
+    IDXGIAdapter *ad = NULL;
+    IDXGIFactory2 *fac = NULL;
+    IDXGISwapChain3 *sc3 = NULL;
+    DXGI_SWAP_CHAIN_DESC1 sd;
+
+    TRY(ID3D11Device_QueryInterface(g->dev, &IID_IDXGIDevice, (void **)&dxdev), "IDXGIDevice");
+    TRY(IDXGIDevice_GetAdapter(dxdev, &ad), "GetAdapter");
+    TRY(IDXGIAdapter_GetParent(ad, &IID_IDXGIFactory2, (void **)&fac), "GetParent");
+
+    memset(&sd, 0, sizeof sd);
+    sd.Width = g->w;
+    sd.Height = g->h;
+    sd.Format = g->fmt;
+    sd.SampleDesc.Count = 1;
+    sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    sd.BufferCount = 2;
+    sd.Scaling = DXGI_SCALING_STRETCH;
+    sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    sd.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
+    TRY(IDXGIFactory2_CreateSwapChainForHwnd(fac, (IUnknown *)g->dev, g->hwnd, &sd, NULL, NULL,
+                                             &g->sc), "CreateSwapChainForHwnd");
+    if (g->hdr) {
+        TRY(IDXGISwapChain1_QueryInterface(g->sc, &IID_IDXGISwapChain3, (void **)&sc3),
+            "IDXGISwapChain3");
+        TRY(IDXGISwapChain3_SetColorSpace1(sc3, DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709),
+            "SetColorSpace1");
+    }
+    rc = 0;
+
+done:
+    FF_REL(sc3);
+    FF_REL(fac);
+    FF_REL(ad);
+    FF_REL(dxdev);
+    return rc;
+}
+
+/* целевой буфер, шейдеры, константы и сэмплер */
+static int open_pipeline(ff_gfx *g, char *err)
+{
+    HRESULT hr;
+    int rc = -1;
+    ID3D11Texture2D *bb = NULL;
+    ID3DBlob *blob = NULL;
+    D3D11_BUFFER_DESC bd;
+    D3D11_SAMPLER_DESC sm;
+
+    TRY(IDXGISwapChain1_GetBuffer(g->sc, 0, &IID_ID3D11Texture2D, (void **)&bb), "GetBuffer");
+    TRY(ID3D11Device_CreateRenderTargetView(g->dev, (ID3D11Resource *)bb, NULL, &g->rtv),
+        "CreateRenderTargetView");
+
+    hr = ff_shader_compile("vsmain", "vs_5_0", &blob, err, GFX_ERR_LEN);
+    if (FAILED(hr)) {
+        goto done;
+    }
+    TRY(ID3D11Device_CreateVertexShader(g->dev, ID3D10Blob_GetBufferPointer(blob),
+                                        ID3D10Blob_GetBufferSize(blob), NULL, &g->vs),
+        "CreateVertexShader");
+    FF_REL(blob);
+    hr = ff_shader_compile("psmain", "ps_5_0", &blob, err, GFX_ERR_LEN);
+    if (FAILED(hr)) {
+        goto done;
+    }
+    TRY(ID3D11Device_CreatePixelShader(g->dev, ID3D10Blob_GetBufferPointer(blob),
+                                       ID3D10Blob_GetBufferSize(blob), NULL, &g->ps),
+        "CreatePixelShader");
+
+    memset(&bd, 0, sizeof bd);
+    bd.ByteWidth = 32;
+    bd.Usage = D3D11_USAGE_DYNAMIC;
+    bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    TRY(ID3D11Device_CreateBuffer(g->dev, &bd, NULL, &g->cb), "CreateBuffer");
+
+    memset(&sm, 0, sizeof sm);
+    sm.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    sm.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sm.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sm.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sm.MaxLOD = D3D11_FLOAT32_MAX;
+    TRY(ID3D11Device_CreateSamplerState(g->dev, &sm, &g->smp), "CreateSamplerState");
+    rc = 0;
+
+done:
+    FF_REL(blob);
+    FF_REL(bb);
+    return rc;
+}
+
+int gfx_init(ff_gfx *g, int monitor, char *err)
+{
+    RECT rect;
+
+    memset(g, 0, sizeof *g);
+    err[0] = '\0';
+    if (open_capture(g, monitor, &rect, err) != 0 || open_window(g, &rect, err) != 0
+        || open_swapchain(g, err) != 0 || open_pipeline(g, err) != 0) {
+        gfx_shutdown(g);
+        return -1;
+    }
+    g->alive = 1;
+    return 0;
+}
