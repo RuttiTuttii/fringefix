@@ -54,7 +54,7 @@ static void fetch_release(const char *repo, ff_update_info *info)
     info->newer = ff_version_cmp(rem, cur) > 0;
 }
 
-/* релизы по одной странице, этого хватает на откат на несколько версий назад */
+/* релизы по одной странице (30 по умолчанию у GitHub), этого хватает на откат на несколько версий назад */
 static void fetch_list(const char *repo, ff_release_list *list)
 {
     char url[160];
@@ -62,8 +62,8 @@ static void fetch_list(const char *repo, ff_release_list *list)
     size_t len = 0;
     int n;
 
-    if (snprintf(url, sizeof url, "https://api.github.com/repos/%s/releases?per_page=%d", repo,
-                 FF_RELEASES_MAX) >= (int)sizeof url) {
+    /* без ?per_page: ff_http_get отвергает адреса с ? и #, а страница GitHub по умолчанию и так на 30 релизов */
+    if (snprintf(url, sizeof url, "https://api.github.com/repos/%s/releases", repo) >= (int)sizeof url) {
         snprintf(list->err, sizeof list->err, "repository name is too long");
         return;
     }
