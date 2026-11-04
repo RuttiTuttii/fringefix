@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define SHIFT_LIMIT 2.0
 #define MONITOR_MAX 15
 #define LINE_MAX_LEN 128
 
@@ -67,7 +66,7 @@ static int parse_line(char *line, ff_config *cfg)
 
     for (i = 0; i < 6; i++) {
         if (strcmp(key, SHIFT_KEYS[i]) == 0) {
-            if (!parse_number(val, -SHIFT_LIMIT, SHIFT_LIMIT, &v)) {
+            if (!parse_number(val, -FF_SHIFT_LIMIT, FF_SHIFT_LIMIT, &v)) {
                 return 0;
             }
             cfg->shift[i / 2][i % 2] = (float)v;
@@ -75,7 +74,7 @@ static int parse_line(char *line, ff_config *cfg)
         }
     }
     if (strcmp(key, "sharpen") == 0) {
-        if (!parse_number(val, 0.0, 1.0, &v)) {
+        if (!parse_number(val, -FF_SHARPEN_LIMIT, FF_SHARPEN_LIMIT, &v)) {
             return 0;
         }
         cfg->sharpen = (float)v;
@@ -131,7 +130,7 @@ int ff_config_format(const ff_config *cfg, char *buf, size_t n)
         "red_x = %.3f\nred_y = %.3f\n"
         "green_x = %.3f\ngreen_y = %.3f\n"
         "blue_x = %.3f\nblue_y = %.3f\n"
-        "\n; резкость от 0 до 1\nsharpen = %.3f\n"
+        "\n; резкость от -1 до 1, минус смягчает картинку\nsharpen = %.3f\n"
         "\n; номер монитора, выходы всех видеокарт считаются подряд с нуля\nmonitor = %d\n"
         "\n; проверять обновления при запуске, 0 или 1\ncheck_updates = %d\n",
         (double)cfg->shift[0][0], (double)cfg->shift[0][1],

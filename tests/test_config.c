@@ -28,9 +28,12 @@ static void test_clamp(void)
 {
     ff_config c;
     ff_config_defaults(&c);
-    CHECK(ff_config_parse("red_x=99\ngreen_x=-99\nsharpen=-1\nmonitor=-3\n", &c) == 4);
+    CHECK(ff_config_parse("red_x=99\ngreen_x=-99\nsharpen=-5\nmonitor=-3\n", &c) == 4);
     CHECK(c.shift[0][0] == 2.0f && c.shift[1][0] == -2.0f);
-    CHECK(c.sharpen == 0.0f && c.monitor == 0);
+    CHECK(c.sharpen == -1.0f && c.monitor == 0);
+    /* минус у резкости разрешён, плюс зажимается единицей */
+    CHECK(ff_config_parse("sharpen=-0.5\n", &c) == 1 && c.sharpen == -0.5f);
+    CHECK(ff_config_parse("sharpen=7\n", &c) == 1 && c.sharpen == 1.0f);
     CHECK(ff_config_parse("monitor=1000\n", &c) == 1 && c.monitor == 15);
 }
 
