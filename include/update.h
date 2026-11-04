@@ -13,6 +13,13 @@ typedef struct {
     char err[160];
 } ff_update_info;
 
+/* список релизов для окна версий; приходит в WM_APP_RELEASE_LIST как lParam, освобождает получатель */
+typedef struct {
+    int count;
+    ff_release rel[FF_RELEASES_MAX];
+    char err[160];
+} ff_release_list;
+
 /* результат установки; приходит в WM_APP_INSTALL_DONE как lParam, освобождает получатель */
 typedef struct {
     int ok;
@@ -24,9 +31,13 @@ typedef struct {
  * manual значит, что проверку запустил пользователь и тишина в ответ не нужна */
 void update_check_async(HWND notify, const char *repo, int manual);
 
+/* запрашивает у GitHub последние релизы repo и присылает их списком, новые первыми */
+void update_list_async(HWND notify, const char *repo);
+
 /* скачивает exe релиза, сверяет sha256 с файлом рядом и подменяет текущий exe; в фоновом потоке.
  * старый остаётся рядом как fringefix.exe.old, его удаляет update_cleanup при следующем запуске */
 void update_install_async(HWND notify, const ff_update_info *info);
+/* ставить можно и старый релиз: версии не сравниваются, это и есть откат */
 
 /* удаляет остатки прошлого обновления */
 void update_cleanup(void);
