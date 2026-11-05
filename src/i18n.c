@@ -148,8 +148,8 @@ static const wchar_t *const RU[S_COUNT] = {
     [S_CARD_HOTKEYS] = L"Сочетания клавиш",
     [S_HK_TOGGLE] = L"Включить и выключить",
     [S_HK_QUIT] = L"Выход",
-    [S_HK_BAD] = L"Сочетание не разобрано. Примеры: F10, Ctrl+Shift+F, none (выключено). "
-                 L"Букву или цифру нужно сочетать с Ctrl, Alt, Shift или Win.",
+    [S_HK_BAD] = (L"Сочетание не разобрано. Примеры: F10, Ctrl+Shift+F, none (выключено). "
+                  L"Букву или цифру нужно сочетать с Ctrl, Alt, Shift или Win."),
     [S_HK_BUSY] = L"Это сочетание занято другой программой.",
 };
 
@@ -299,8 +299,8 @@ static const wchar_t *const EN[S_COUNT] = {
     [S_CARD_HOTKEYS] = L"Hotkeys",
     [S_HK_TOGGLE] = L"Turn on and off",
     [S_HK_QUIT] = L"Quit",
-    [S_HK_BAD] = L"Could not read the hotkey. Examples: F10, Ctrl+Shift+F, none (off). "
-                 L"A letter or digit needs Ctrl, Alt, Shift or Win.",
+    [S_HK_BAD] = (L"Could not read the hotkey. Examples: F10, Ctrl+Shift+F, none (off). "
+                  L"A letter or digit needs Ctrl, Alt, Shift or Win."),
     [S_HK_BUSY] = L"Another program already uses this hotkey.",
 };
 
