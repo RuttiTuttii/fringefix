@@ -17,6 +17,9 @@ void ff_config_defaults(ff_config *cfg)
     memset(cfg, 0, sizeof *cfg);
     cfg->check_updates = 1;
     cfg->auto_pause = 1;
+    /* глобальное сочетание без модификатора забирает клавишу у всех программ: F11 это полноэкранный режим браузеров */
+    cfg->hotkey_toggle.vk = FF_VK_F10;
+    cfg->hotkey_quit.vk = FF_VK_F11;
 }
 
 void ff_config_resolve_game(ff_config *cfg)
@@ -148,6 +151,22 @@ static int parse_line(char *line, ff_config *cfg)
     if (strcmp(key, "ignore_apps") == 0) {
         return copy_string(val, cfg->ignore_apps, sizeof cfg->ignore_apps);
     }
+    if (strcmp(key, "hotkey_toggle") == 0 || strcmp(key, "hotkey_quit") == 0) {
+        ff_hotkey h;
+
+        if (ff_hotkey_parse(val, &h) != 0) {
+            return 0;
+        }
+        *(key[7] == 't' ? &cfg->hotkey_toggle : &cfg->hotkey_quit) = h;
+        return 1;
+    }
+    if (strcmp(key, "beta") == 0) {
+        if (!parse_number(val, 0.0, 1.0, &v)) {
+            return 0;
+        }
+        cfg->beta = v >= 0.5;
+        return 1;
+    }
     if (strcmp(key, "check_updates") == 0) {
         if (!parse_number(val, 0.0, 1.0, &v)) {
             return 0;
@@ -190,7 +209,13 @@ int ff_config_parse(const char *text, ff_config *cfg)
 
 int ff_config_format(const ff_config *cfg, char *buf, size_t n)
 {
-    int w = snprintf(buf, n,
+    char hk_toggle[32];
+    char hk_quit[32];
+    int w;
+
+    ff_hotkey_format(&cfg->hotkey_toggle, hk_toggle, sizeof hk_toggle);
+    ff_hotkey_format(&cfg->hotkey_quit, hk_quit, sizeof hk_quit);
+    w = snprintf(buf, n,
         "; на сколько пикселей экрана уезжает содержимое канала, плюс означает вправо и вниз\n"
         "; диапазон от -2 до 2, комментарии только на отдельной строке\n"
         "red_x = %.3f\nred_y = %.3f\n"
@@ -199,6 +224,10 @@ int ff_config_format(const ff_config *cfg, char *buf, size_t n)
         "\n; резкость от -1 до 1, минус смягчает картинку\nsharpen = %.3f\n"
         "\n; номер монитора, выходы всех видеокарт считаются подряд с нуля\nmonitor = %d\n"
         "\n; проверять обновления при запуске, 0 или 1\ncheck_updates = %d\n"
+        "\n; получать бета-версии при проверке обновлений, 0 или 1\nbeta = %d\n"
+        "\n; глобальные сочетания: включить или выключить оверлей и закрыть программу\n"
+        "; F1-F24 или буква и цифра с Ctrl, Alt, Shift, Win через плюс, none выключает\n"
+        "hotkey_toggle = %s\nhotkey_quit = %s\n"
         "\n; автопауза: 0 выключена, 1 в полноэкранных приложениях, 2 в полноэкранных и 3D-приложениях, 3 только в 3D-приложениях\nauto_pause = %d\n"
         "\n; что делать в игре, выбирается при auto_pause = 0: 0 пауза, 1 облегчённый режим без резкости и лапласиана\ngame_action = %d\n"
         "\n; приоритет GPU оверлея от -7 до 7, ниже ноля уступает видеокарту игре\ngpu_priority = %d\n"
@@ -209,7 +238,7 @@ int ff_config_format(const ff_config *cfg, char *buf, size_t n)
         (double)cfg->shift[0][0], (double)cfg->shift[0][1],
         (double)cfg->shift[1][0], (double)cfg->shift[1][1],
         (double)cfg->shift[2][0], (double)cfg->shift[2][1],
-        (double)cfg->sharpen, cfg->monitor, cfg->check_updates, cfg->auto_pause, cfg->game_action, cfg->gpu_priority,
+        (double)cfg->sharpen, cfg->monitor, cfg->check_updates, cfg->beta, hk_toggle, hk_quit, cfg->auto_pause, cfg->game_action, cfg->gpu_priority,
         cfg->pause_apps, cfg->ignore_apps, cfg->language, cfg->theme, cfg->stats);
 
     return (w < 0 || (size_t)w >= n) ? -1 : w;

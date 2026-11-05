@@ -14,12 +14,37 @@
 typedef struct {
     HWND notify;
     int manual;
+    int beta;
     char repo[96];
     ff_update_info info;
 } job_t;
 
-/* сравнивает текущую версию с последним релизом */
-static void fetch_release(const char *repo, ff_update_info *info)
+/* самый новый по номеру среди релизов страницы, беты включены: /releases/latest их не отдаёт.
+ * коды как у ff_release_parse */
+static int newest_release(const char *json, const char *repo, ff_release *out)
+{
+    ff_release list[FF_RELEASES_MAX];
+    int n = ff_release_list_parse(json, repo, list, FF_RELEASES_MAX);
+    int best = 0;
+    int i;
+
+    if (n < 0) {
+        return -1;
+    }
+    if (n == 0) {
+        return -2;
+    }
+    for (i = 1; i < n; i++) {
+        if (ff_tag_cmp(list[i].tag, list[best].tag) > 0) {
+            best = i;
+        }
+    }
+    *out = list[best];
+    return 0;
+}
+
+/* сравнивает текущую версию с последним релизом; в бета-канале последним считается и бета */
+static void fetch_release(const char *repo, int beta, ff_update_info *info)
 {
     char url[160];
     unsigned char *body = NULL;
@@ -32,15 +57,16 @@ static void fetch_release(const char *repo, ff_update_info *info)
         snprintf(info->err, sizeof info->err, "dev build, updates are disabled");
         return;
     }
-    if (snprintf(url, sizeof url, "https://api.github.com/repos/%s/releases/latest", repo)
-        >= (int)sizeof url) {
+    if (snprintf(url, sizeof url, "https://api.github.com/repos/%s/releases%s", repo,
+                 beta ? "" : "/latest") >= (int)sizeof url) {
         snprintf(info->err, sizeof info->err, "repository name is too long");
         return;
     }
     if (ff_http_get(url, API_MAX, &body, &len, info->err, sizeof info->err) != 0) {
         return;
     }
-    rc = ff_release_parse((const char *)body, repo, &info->rel);
+    rc = beta ? newest_release((const char *)body, repo, &info->rel)
+              : ff_release_parse((const char *)body, repo, &info->rel);
     free(body);
     if (rc != 0) {
         snprintf(info->err, sizeof info->err,
@@ -51,7 +77,7 @@ static void fetch_release(const char *repo, ff_update_info *info)
         snprintf(info->err, sizeof info->err, "release tag %s is not vX.Y.Z", info->rel.tag);
         return;
     }
-    info->newer = ff_version_cmp(rem, cur) > 0;
+    info->newer = ff_tag_cmp(info->rel.tag, FF_VERSION) > 0;
 }
 
 /* релизы по одной странице (30 по умолчанию у GitHub), этого хватает на откат на несколько версий назад */
@@ -120,7 +146,7 @@ static DWORD WINAPI check_thread(LPVOID arg)
 
     if (info) {
         info->manual = job->manual;
-        fetch_release(job->repo, info);
+        fetch_release(job->repo, job->beta, info);
         if (!PostMessageW(job->notify, WM_APP_UPDATE_INFO, 0, (LPARAM)info)) {
             free(info);
         }
@@ -129,7 +155,7 @@ static DWORD WINAPI check_thread(LPVOID arg)
     return 0;
 }
 
-void update_check_async(HWND notify, const char *repo, int manual)
+void update_check_async(HWND notify, const char *repo, int manual, int beta)
 {
     job_t *job = calloc(1, sizeof *job);
     HANDLE t;
@@ -139,6 +165,7 @@ void update_check_async(HWND notify, const char *repo, int manual)
     }
     job->notify = notify;
     job->manual = manual;
+    job->beta = beta;
     snprintf(job->repo, sizeof job->repo, "%s", repo);
     t = CreateThread(NULL, 0, check_thread, job, 0, NULL);
     if (!t) {

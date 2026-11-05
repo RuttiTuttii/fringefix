@@ -3,7 +3,7 @@ name: ci
 on:
   push:
     branches: [main]
-    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+    tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-beta.[0-9]+']
   pull_request:
 
 permissions:
@@ -96,6 +96,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: fringefix-windows
-      - run: gh release create "$GITHUB_REF_NAME" fringefix.exe fringefix.exe.sha256 --repo "$GITHUB_REPOSITORY" --generate-notes
+      # тег с -beta.N выходит как prerelease: /releases/latest его не отдаёт, и обычные пользователи обновляются мимо беты
+      - run: |
+          flag=""
+          case "$GITHUB_REF_NAME" in *-beta.*) flag="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" fringefix.exe fringefix.exe.sha256 --repo "$GITHUB_REPOSITORY" --generate-notes $flag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

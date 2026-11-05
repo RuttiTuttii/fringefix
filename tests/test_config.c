@@ -13,6 +13,33 @@ static void test_defaults(void)
     CHECK(c.game_action == 0 && c.gpu_priority == 0 && c.language == 0 && c.theme == 0 && c.stats == 0 && c.pause_apps[0] == '\0' && c.ignore_apps[0] == '\0');
 }
 
+static void test_hotkeys_and_beta(void)
+{
+    ff_config c;
+    ff_config b;
+    char buf[4096];
+
+    ff_config_defaults(&c);
+    CHECK(c.beta == 0);
+    CHECK(c.hotkey_toggle.vk == 0x79 && c.hotkey_toggle.mods == 0);
+    CHECK(c.hotkey_quit.vk == 0x7A && c.hotkey_quit.mods == 0);
+
+    CHECK(ff_config_parse("hotkey_toggle = Ctrl+Alt+F\nhotkey_quit = none\nbeta = 1\n", &c) == 3);
+    CHECK(c.hotkey_toggle.mods == (FF_MOD_CTRL | FF_MOD_ALT) && c.hotkey_toggle.vk == 'F');
+    CHECK(c.hotkey_quit.vk == 0 && c.beta == 1);
+
+    /* плохое сочетание отбрасывается, прежнее остаётся */
+    CHECK(ff_config_parse("hotkey_toggle = Q\nhotkey_quit = Ctrl+Nope\nbeta = 2\n", &c) == 1);
+    CHECK(c.hotkey_toggle.vk == 'F' && c.hotkey_quit.vk == 0 && c.beta == 1);
+
+    /* круг запись-чтение */
+    CHECK(ff_config_format(&c, buf, sizeof buf) > 0);
+    ff_config_defaults(&b);
+    ff_config_parse(buf, &b);
+    CHECK(b.beta == 1 && b.hotkey_toggle.vk == 'F' && b.hotkey_toggle.mods == (FF_MOD_CTRL | FF_MOD_ALT));
+    CHECK(b.hotkey_quit.vk == 0);
+}
+
 static void test_values(void)
 {
     ff_config c;
@@ -132,7 +159,7 @@ static void test_roundtrip(void)
 {
     ff_config a;
     ff_config b;
-    char buf[2048];
+    char buf[4096];
     char tiny[16];
     int n;
 
@@ -155,7 +182,7 @@ static void test_roundtrip(void)
     n = ff_config_format(&a, buf, sizeof buf);
     CHECK(n > 0);
     ff_config_defaults(&b);
-    CHECK(ff_config_parse(buf, &b) == 17);
+    CHECK(ff_config_parse(buf, &b) == 20);
     CHECK(memcmp(&a, &b, sizeof a) == 0);
     /* маленький буфер не должен молча обрезать файл */
     CHECK(ff_config_format(&a, tiny, sizeof tiny) == -1);
@@ -165,6 +192,7 @@ int main(void)
 {
     test_defaults();
     test_values();
+    test_hotkeys_and_beta();
     test_clamp();
     test_game_keys();
     test_resolve_game();

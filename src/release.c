@@ -26,7 +26,8 @@ static int read_num(const char **p, int *out)
     return 0;
 }
 
-int ff_version_parse(const char *s, int v[3])
+/* три числа и указатель на то, что идёт за ними */
+static int parse3(const char *s, int v[3], const char **end)
 {
     int i;
 
@@ -44,7 +45,15 @@ int ff_version_parse(const char *s, int v[3])
             s++;
         }
     }
+    *end = s;
     return 0;
+}
+
+int ff_version_parse(const char *s, int v[3])
+{
+    const char *end;
+
+    return parse3(s, v, &end);
 }
 
 int ff_version_cmp(const int a[3], const int b[3])
@@ -57,6 +66,46 @@ int ff_version_cmp(const int a[3], const int b[3])
         }
     }
     return 0;
+}
+
+int ff_version_beta(const char *s)
+{
+    int v[3];
+    const char *end;
+    int n = 0;
+
+    if (parse3(s, v, &end) != 0 || strncmp(end, "-beta.", 6) != 0) {
+        return 0;
+    }
+    end += 6;
+    return read_num(&end, &n) == 0 ? n : 0;
+}
+
+int ff_tag_cmp(const char *a, const char *b)
+{
+    int va[3];
+    int vb[3];
+    int ba;
+    int bb;
+    int c;
+
+    if (ff_version_parse(a, va) != 0 || ff_version_parse(b, vb) != 0) {
+        return 0;
+    }
+    c = ff_version_cmp(va, vb);
+    if (c != 0) {
+        return c;
+    }
+    /* бета предшествует релизу с тем же номером, беты между собой идут по своему номеру */
+    ba = ff_version_beta(a);
+    bb = ff_version_beta(b);
+    if (ba == bb) {
+        return 0;
+    }
+    if (ba == 0 || bb == 0) {
+        return ba == 0 ? 1 : -1;
+    }
+    return ba < bb ? -1 : 1;
 }
 
 static int starts_with_ci(const char *s, const char *prefix)

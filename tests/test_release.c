@@ -32,6 +32,25 @@ static void test_version(void)
     CHECK(ff_version_parse("v1.2.99999999999", a) == -1);
 }
 
+static void test_beta(void)
+{
+    CHECK(ff_version_beta("v1.2.3-beta.4") == 4);
+    CHECK(ff_version_beta("v1.2.3-beta.12-3-gabc1234") == 12);
+    CHECK(ff_version_beta("v1.2.3") == 0 && ff_version_beta("v1.2.3-3-gabc1234") == 0);
+    CHECK(ff_version_beta("v1.2.3-beta.") == 0 && ff_version_beta("v1.2.3-beta") == 0);
+    CHECK(ff_version_beta("dev") == 0);
+
+    /* бета старее релиза с тем же номером и новее предыдущего релиза */
+    CHECK(ff_tag_cmp("v1.2.3-beta.1", "v1.2.3") < 0);
+    CHECK(ff_tag_cmp("v1.2.3", "v1.2.3-beta.9") > 0);
+    CHECK(ff_tag_cmp("v1.2.3-beta.1", "v1.2.2") > 0);
+    CHECK(ff_tag_cmp("v1.2.3-beta.2", "v1.2.3-beta.10") < 0);
+    CHECK(ff_tag_cmp("v1.2.3-beta.2", "v1.2.3-beta.2-5-gabc") == 0);
+    CHECK(ff_tag_cmp("v1.3.0-beta.1", "v1.2.9") > 0);
+    /* неразбираемый тег не считается ни новее, ни старее */
+    CHECK(ff_tag_cmp("dev", "v1.2.3") == 0 && ff_tag_cmp("v1.2.3", "v1.2") == 0);
+}
+
 static void test_parse_ok(void)
 {
     ff_release r;
@@ -131,6 +150,7 @@ static void test_list(void)
 int main(void)
 {
     test_version();
+    test_beta();
     test_parse_ok();
     test_parse_rejects();
     test_parse_repo_validation();

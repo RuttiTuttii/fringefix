@@ -76,7 +76,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show)
         return 1;
     }
     if (app.cfg.check_updates && FF_REPO[0]) {
-        update_check_async(app.hwnd, FF_REPO, 0);
+        update_check_async(app.hwnd, FF_REPO, 0, app.cfg.beta);
     }
 
     while (GetMessageW(&m, NULL, 0, 0) > 0) {

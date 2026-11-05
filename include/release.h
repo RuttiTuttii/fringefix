@@ -16,6 +16,13 @@ int ff_version_parse(const char *s, int v[3]);
 /* меньше нуля, ноль или больше нуля, как у strcmp */
 int ff_version_cmp(const int a[3], const int b[3]);
 
+/* номер беты из "v1.2.3-beta.4" это 4, у остальных тегов ноль; хвост после номера ("-3-gabc1234") игнорируется */
+int ff_version_beta(const char *s);
+
+/* сравнение тегов как у strcmp, с учётом беты: v1.2.3-beta.2 новее beta.1 и старее v1.2.3.
+ * ноль, если один из тегов не разобрать */
+int ff_tag_cmp(const char *a, const char *b);
+
 /* достаёт тег и ссылки из JSON ответа releases/latest.
  * принимает только ссылки на github.com/<repo>/releases/download/, остальные отбрасывает.
  * 0 при успехе, -1 нет тега или плохой repo, -2 нет exe или sha256 среди файлов релиза */

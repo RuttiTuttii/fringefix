@@ -45,7 +45,7 @@ static int compare_selected(int sel)
     if (sel < 0 || !g_data || sel >= g_data->count || ff_version_parse(g_data->rel[sel].tag, v) != 0) {
         return 0;
     }
-    return g_cur_ok ? ff_version_cmp(v, g_cur) : 1;
+    return g_cur_ok ? ff_tag_cmp(g_data->rel[sel].tag, FF_VERSION) : 1;
 }
 
 /* подпись кнопки зависит от выбора: установить, откатить или версия уже стоит */

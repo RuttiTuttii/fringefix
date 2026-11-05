@@ -99,18 +99,36 @@ static HMENU profiles_menu(ff_app *a)
     return sub;
 }
 
+/* пункт меню с сочетанием справа: подпись берётся из конфига, поэтому смена сочетания видна сразу */
+static void append_with_key(HMENU m, UINT id, const wchar_t *text, const ff_hotkey *h)
+{
+    wchar_t label[96];
+    wchar_t key[32];
+    char utf8[32];
+
+    if (h->vk && ff_hotkey_format(h, utf8, sizeof utf8) > 0) {
+        ui_utf8(utf8, key, 32);
+        _snwprintf(label, 96, L"%ls\t%ls", text, key);
+        label[95] = L'\0';
+        AppendMenuW(m, MF_STRING, id, label);
+    } else {
+        AppendMenuW(m, MF_STRING, id, text);
+    }
+}
+
 static void show_menu(ff_app *a)
 {
     HMENU m = CreatePopupMenu();
     POINT pt;
 
     AppendMenuW(m, MF_STRING, IDM_SETTINGS, ff_tr(S_MENU_SETTINGS));
-    AppendMenuW(m, MF_STRING, IDM_TOGGLE, ff_tr(a->enabled ? S_MENU_DISABLE : S_MENU_ENABLE));
+    append_with_key(m, IDM_TOGGLE, ff_tr(a->enabled ? S_MENU_DISABLE : S_MENU_ENABLE),
+                    &a->cfg.hotkey_toggle);
     AppendMenuW(m, MF_POPUP, (UINT_PTR)profiles_menu(a), ff_tr(S_MENU_PROFILES));
     AppendMenuW(m, MF_STRING, IDM_PATTERN, ff_tr(S_MENU_PATTERN));
     AppendMenuW(m, MF_STRING, IDM_UPDATE, ff_tr(S_MENU_UPDATES));
     AppendMenuW(m, MF_SEPARATOR, 0, NULL);
-    AppendMenuW(m, MF_STRING, IDM_QUIT, ff_tr(S_MENU_QUIT));
+    append_with_key(m, IDM_QUIT, ff_tr(S_MENU_QUIT), &a->cfg.hotkey_quit);
     GetCursorPos(&pt);
     /* без SetForegroundWindow меню не закрывается по клику мимо */
     SetForegroundWindow(a->hwnd);
@@ -134,7 +152,7 @@ static void check_updates(ff_app *a)
         return;
     }
     ui_settings_set_status(ff_tr(S_CHECKING));
-    update_check_async(a->hwnd, FF_REPO, 1);
+    update_check_async(a->hwnd, FF_REPO, 1, a->cfg.beta);
 }
 
 static void load_profile(ff_app *a, int n)
@@ -263,6 +281,18 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
     return DefWindowProcW(h, m, w, l);
 }
 
+/* Ctrl+Alt это AltGr: сочетание с ним съедало бы символы вроде @ на немецкой и [ на венгерской раскладке */
+static int bind_one(ff_app *a, int id, const ff_hotkey *h)
+{
+    UnregisterHotKey(a->hwnd, id);
+    return h->vk == 0 || RegisterHotKey(a->hwnd, id, h->mods | MOD_NOREPEAT, h->vk) ? 0 : 1;
+}
+
+int ui_tray_bind_hotkeys(ff_app *a)
+{
+    return bind_one(a, HK_TOGGLE, &a->cfg.hotkey_toggle) | (bind_one(a, HK_QUIT, &a->cfg.hotkey_quit) << 1);
+}
+
 int ui_tray_create(ff_app *a)
 {
     WNDCLASSW wc;
@@ -284,9 +314,7 @@ int ui_tray_create(ff_app *a)
     if (!a->hwnd) {
         return -1;
     }
-    /* не Ctrl+Alt: это AltGr, и хоткей съедал бы символы вроде @ на немецкой и [ на венгерской раскладке */
-    RegisterHotKey(a->hwnd, HK_TOGGLE, MOD_WIN | MOD_ALT | MOD_NOREPEAT, 'F');
-    RegisterHotKey(a->hwnd, HK_QUIT, MOD_WIN | MOD_ALT | MOD_NOREPEAT, 'Q');
+    ui_tray_bind_hotkeys(a);
     tray_notify(a, NIM_ADD);
     return 0;
 }

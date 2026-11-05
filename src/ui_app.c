@@ -6,6 +6,7 @@
 
 #include "applist.h"
 #include "autostart.h"
+#include "hotkey.h"
 #include "i18n.h"
 #include "resource.h"
 #include "theme.h"
@@ -16,7 +17,7 @@
 #include "version.h"
 
 #define APP_W 520
-#define APP_H 496
+#define APP_H 630
 #define CARD_ROW 30
 #define CARD_INNER_W 488
 #define WM_REOPEN (WM_APP + 40)
@@ -30,10 +31,13 @@ enum {
     ID_A_ACTION,
     ID_A_ADDAPP,
     ID_A_CHECK,
+    ID_A_BETA,
     ID_A_AUTOSTART,
     ID_A_UPDATE,
     ID_A_VERSIONS,
     ID_A_REPORT,
+    ID_A_HK_TOGGLE,
+    ID_A_HK_QUIT,
     ID_A_CLOSE
 };
 
@@ -53,12 +57,13 @@ typedef struct {
     int h;
 } card_t;
 
-/* карточки идут сверху вниз с зазором CARD_GAP; автопауза занимает три строки, автозапуск одну */
+/* карточки идут сверху вниз с зазором CARD_GAP; автопауза и данные занимают три строки, автозапуск одну */
 static const card_t CARDS_A[] = {
     { S_CARD_INTERFACE, 16, CARD_HEAD + 2 * CARD_ROW + CARD_PAD },
     { S_CARD_AUTOPAUSE, 120, CARD_HEAD + 3 * CARD_ROW + CARD_PAD },
-    { S_CARD_DATA, 254, CARD_HEAD + 2 * CARD_ROW + CARD_PAD },
-    { S_CARD_AUTOSTART, 358, CARD_HEAD + 1 * CARD_ROW + CARD_PAD },
+    { S_CARD_DATA, 254, CARD_HEAD + 3 * CARD_ROW + CARD_PAD },
+    { S_CARD_AUTOSTART, 388, CARD_HEAD + 1 * CARD_ROW + CARD_PAD },
+    { S_CARD_HOTKEYS, 462, CARD_HEAD + 2 * CARD_ROW + CARD_PAD },
 };
 #define NCARDS_A ((int)(sizeof CARDS_A / sizeof CARDS_A[0]))
 
@@ -74,6 +79,7 @@ typedef struct {
 
 static const label_t LABELS[] = {
     { S_LANGUAGE, 0, 0 }, { S_THEME, 0, 1 }, { S_AUTOPAUSE, 1, 0 }, { S_GAMEACTION, 1, 1 },
+    { S_HK_TOGGLE, 4, 0 }, { S_HK_QUIT, 4, 1 },
 };
 
 static HWND child(const wchar_t *cls, const wchar_t *text, DWORD style, int x, int y, int w, int h,
@@ -128,6 +134,51 @@ static void add_items(HWND c, const str_id *ids, int n, int selected)
     SendMessageW(c, CB_SETCURSEL, (WPARAM)selected, 0);
 }
 
+/* сочетание в поле в виде "Ctrl+Alt+F10" */
+static void show_hotkey(int id, const ff_hotkey *h)
+{
+    char utf8[32];
+    wchar_t text[32];
+
+    if (ff_hotkey_format(h, utf8, sizeof utf8) < 0) {
+        utf8[0] = '\0';
+    }
+    ui_utf8(utf8, text, 32);
+    SetWindowTextW(GetDlgItem(g_win, id), text);
+}
+
+/* текст поля становится сочетанием: непонятное или занятое возвращается к прежнему с пояснением */
+static void apply_hotkey(int id)
+{
+    ff_config *c = &ui.app->cfg;
+    ff_hotkey *slot = id == ID_A_HK_TOGGLE ? &c->hotkey_toggle : &c->hotkey_quit;
+    ff_hotkey old = *slot;
+    ff_hotkey h;
+    wchar_t text[32];
+    char utf8[96];
+
+    GetWindowTextW(GetDlgItem(g_win, id), text, 32);
+    if (WideCharToMultiByte(CP_UTF8, 0, text, -1, utf8, sizeof utf8, NULL, NULL) == 0
+        || ff_hotkey_parse(utf8, &h) != 0) {
+        show_hotkey(id, slot);
+        MessageBoxW(g_win, ff_tr(S_HK_BAD), L"fringefix", MB_ICONWARNING | MB_TOPMOST);
+        return;
+    }
+    if (h.vk != old.vk || h.mods != old.mods) {
+        *slot = h;
+        /* бит 0 это сочетание включения, бит 1 выход: чужая неудача не мешает */
+        if (ui_tray_bind_hotkeys(ui.app) & (id == ID_A_HK_TOGGLE ? 1 : 2)) {
+            *slot = old;
+            ui_tray_bind_hotkeys(ui.app);
+            show_hotkey(id, slot);
+            MessageBoxW(g_win, ff_tr(S_HK_BUSY), L"fringefix", MB_ICONWARNING | MB_TOPMOST);
+            return;
+        }
+        app_save(ui.app);
+    }
+    show_hotkey(id, slot);
+}
+
 static void build(void)
 {
     static const str_id LANGS[] = { S_LANG_AUTO, S_LANG_RU, S_LANG_EN };
@@ -136,9 +187,11 @@ static void build(void)
     static const str_id ACTIONS[] = { S_GA_PAUSE, S_GA_LIGHT };
     const ff_config *c = &ui.app->cfg;
     int bw = (CARD_INNER_W - 2 * 16 - 2 * 8) / 3;
-    int by = row_top(2, 1) + 1;
+    int by = row_top(2, 2) + 1;
     HWND check;
+    HWND beta;
     HWND autostart;
+    int i;
 
     g_lang = combo(0, 0, ID_A_LANG, 1);
     add_items(g_lang, LANGS, 3, c->language);
@@ -152,6 +205,9 @@ static void build(void)
     check = child(L"BUTTON", ff_tr(S_CHECK_UPDATES), BS_AUTOCHECKBOX | WS_TABSTOP,
                   MARGIN + COL_LABEL, row_top(2, 0), CARD_INNER_W - 2 * COL_LABEL, 24, ID_A_CHECK);
     SendMessageW(check, BM_SETCHECK, c->check_updates ? BST_CHECKED : BST_UNCHECKED, 0);
+    beta = child(L"BUTTON", ff_tr(S_BETA_CHECK), BS_AUTOCHECKBOX | WS_TABSTOP,
+                 MARGIN + COL_LABEL, row_top(2, 1), CARD_INNER_W - 2 * COL_LABEL, 24, ID_A_BETA);
+    SendMessageW(beta, BM_SETCHECK, c->beta ? BST_CHECKED : BST_UNCHECKED, 0);
     child(L"BUTTON", ff_tr(S_MENU_UPDATES), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + 16, by, bw, BTN_H,
           ID_A_UPDATE);
     child(L"BUTTON", ff_tr(S_BTN_VERSIONS), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + 16 + bw + 8, by, bw,
@@ -162,6 +218,13 @@ static void build(void)
                       MARGIN + COL_LABEL, row_top(3, 0), CARD_INNER_W - 2 * COL_LABEL, 24,
                       ID_A_AUTOSTART);
     SendMessageW(autostart, BM_SETCHECK, autostart_get() ? BST_CHECKED : BST_UNCHECKED, 0);
+    /* поля сочетаний: текст разбирается, когда поле теряет фокус */
+    for (i = 0; i < 2; i++) {
+        CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | WS_TABSTOP,
+                        S(MARGIN + COL_SLIDER), S(row_top(4, i) + 2), S(160), S(24), g_win,
+                        (HMENU)(INT_PTR)(ID_A_HK_TOGGLE + i), ui.app->inst, NULL);
+        show_hotkey(ID_A_HK_TOGGLE + i, i == 0 ? &c->hotkey_toggle : &c->hotkey_quit);
+    }
     child(L"BUTTON", ff_tr(S_VER_CLOSE), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + CARD_INNER_W - 120,
           CARDS_A[NCARDS_A - 1].y + CARDS_A[NCARDS_A - 1].h + 16, 120, BTN_H, ID_A_CLOSE);
     ctl_restyle_window(g_win);
@@ -312,13 +375,18 @@ static void on_command(int id, int code)
     } else if (id == ID_A_CHECK) {
         c->check_updates = SendMessageW(GetDlgItem(g_win, ID_A_CHECK), BM_GETCHECK, 0, 0) == BST_CHECKED;
         app_save(ui.app);
+    } else if (id == ID_A_BETA) {
+        c->beta = SendMessageW(GetDlgItem(g_win, ID_A_BETA), BM_GETCHECK, 0, 0) == BST_CHECKED;
+        app_save(ui.app);
+    } else if ((id == ID_A_HK_TOGGLE || id == ID_A_HK_QUIT) && code == EN_KILLFOCUS) {
+        apply_hotkey(id);
     } else if (id == ID_A_ADDAPP) {
         edit_force_list();
     } else if (id == ID_A_AUTOSTART) {
         set_autostart(SendMessageW(GetDlgItem(g_win, ID_A_AUTOSTART), BM_GETCHECK, 0, 0) == BST_CHECKED);
     } else if (id == ID_A_UPDATE && FF_REPO[0]) {
         ui_settings_set_status(ff_tr(S_CHECKING));
-        update_check_async(ui.app->hwnd, FF_REPO, 1);
+        update_check_async(ui.app->hwnd, FF_REPO, 1, c->beta);
     } else if (id == ID_A_UPDATE) {
         MessageBoxW(g_win, ff_tr(S_NO_REPO), L"fringefix", MB_ICONINFORMATION | MB_TOPMOST);
     } else if (id == ID_A_VERSIONS) {
@@ -365,6 +433,7 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
         /* списки окна красятся как поля, флажок и кнопки как фон */
         return paint_ctlcolor(m, (HDC)w, (HWND)l,
                               (HWND)l != GetDlgItem(h, ID_A_CHECK)
+                                      && (HWND)l != GetDlgItem(h, ID_A_BETA)
                                       && (HWND)l != GetDlgItem(h, ID_A_AUTOSTART) ? (HWND)l : NULL);
     case WM_SETTINGCHANGE:
         if (l && wcscmp((const wchar_t *)l, L"ImmersiveColorSet") == 0) {
@@ -388,6 +457,9 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
         return 0;
     }
     case WM_CLOSE:
+        /* закрытие крестиком не отнимает фокус у поля, поэтому правка сочетания принимается здесь */
+        apply_hotkey(ID_A_HK_TOGGLE);
+        apply_hotkey(ID_A_HK_QUIT);
         DestroyWindow(h);
         return 0;
     case WM_DESTROY:

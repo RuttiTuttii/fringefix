@@ -28,8 +28,9 @@ typedef struct {
 } ff_install_result;
 
 /* спрашивает GitHub про последний релиз repo (owner/name) в фоновом потоке.
- * manual значит, что проверку запустил пользователь и тишина в ответ не нужна */
-void update_check_async(HWND notify, const char *repo, int manual);
+ * manual значит, что проверку запустил пользователь и тишина в ответ не нужна;
+ * beta включает в выбор релизы-беты (prerelease), без неё берётся только последний обычный */
+void update_check_async(HWND notify, const char *repo, int manual, int beta);
 
 /* запрашивает у GitHub последние релизы repo и присылает их списком, новые первыми */
 void update_list_async(HWND notify, const char *repo);

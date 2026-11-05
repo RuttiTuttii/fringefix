@@ -36,13 +36,13 @@ static const wchar_t *const RU[S_COUNT] = {
     [S_PROFILE_BAD] = L"Это не профиль fringefix",
     [S_PROFILE_SAVE_FAILED] = L"Не удалось сохранить профиль",
     [S_MENU_SETTINGS] = L"Настройки",
-    [S_MENU_ENABLE] = L"Включить\tWin+Alt+F",
-    [S_MENU_DISABLE] = L"Выключить\tWin+Alt+F",
+    [S_MENU_ENABLE] = L"Включить",
+    [S_MENU_DISABLE] = L"Выключить",
     [S_MENU_PATTERN] = L"Тестовый паттерн",
     [S_MENU_PROFILES] = L"Профили",
     [S_MENU_NO_PROFILES] = L"(нет профилей)",
     [S_MENU_UPDATES] = L"Проверить обновления",
-    [S_MENU_QUIT] = L"Выход\tWin+Alt+Q",
+    [S_MENU_QUIT] = L"Выход",
     [S_TIP_ON] = L"включён",
     [S_TIP_OFF] = L"выключен",
     [S_START_FAILED_TITLE] = L"fringefix не включился",
@@ -144,6 +144,13 @@ static const wchar_t *const RU[S_COUNT] = {
     [S_AUTOSTART_FAILED] = L"Не удалось изменить автозапуск.",
     [S_FILTER_ON] = L"Фильтр включён",
     [S_FILTER_OFF] = L"Фильтр выключен",
+    [S_BETA_CHECK] = L"Получать бета-версии",
+    [S_CARD_HOTKEYS] = L"Сочетания клавиш",
+    [S_HK_TOGGLE] = L"Включить и выключить",
+    [S_HK_QUIT] = L"Выход",
+    [S_HK_BAD] = L"Сочетание не разобрано. Примеры: F10, Ctrl+Shift+F, none (выключено). "
+                 L"Букву или цифру нужно сочетать с Ctrl, Alt, Shift или Win.",
+    [S_HK_BUSY] = L"Это сочетание занято другой программой.",
 };
 
 static const wchar_t *const EN[S_COUNT] = {
@@ -180,13 +187,13 @@ static const wchar_t *const EN[S_COUNT] = {
     [S_PROFILE_BAD] = L"This is not a fringefix profile",
     [S_PROFILE_SAVE_FAILED] = L"Could not save the profile",
     [S_MENU_SETTINGS] = L"Settings",
-    [S_MENU_ENABLE] = L"Enable\tWin+Alt+F",
-    [S_MENU_DISABLE] = L"Disable\tWin+Alt+F",
+    [S_MENU_ENABLE] = L"Enable",
+    [S_MENU_DISABLE] = L"Disable",
     [S_MENU_PATTERN] = L"Test pattern",
     [S_MENU_PROFILES] = L"Profiles",
     [S_MENU_NO_PROFILES] = L"(no profiles)",
     [S_MENU_UPDATES] = L"Check for updates",
-    [S_MENU_QUIT] = L"Quit\tWin+Alt+Q",
+    [S_MENU_QUIT] = L"Quit",
     [S_TIP_ON] = L"on",
     [S_TIP_OFF] = L"off",
     [S_START_FAILED_TITLE] = L"fringefix did not start",
@@ -288,6 +295,13 @@ static const wchar_t *const EN[S_COUNT] = {
     [S_AUTOSTART_FAILED] = L"Could not change the startup setting.",
     [S_FILTER_ON] = L"Filter on",
     [S_FILTER_OFF] = L"Filter off",
+    [S_BETA_CHECK] = L"Get beta versions",
+    [S_CARD_HOTKEYS] = L"Hotkeys",
+    [S_HK_TOGGLE] = L"Turn on and off",
+    [S_HK_QUIT] = L"Quit",
+    [S_HK_BAD] = L"Could not read the hotkey. Examples: F10, Ctrl+Shift+F, none (off). "
+                 L"A letter or digit needs Ctrl, Alt, Shift or Win.",
+    [S_HK_BUSY] = L"Another program already uses this hotkey.",
 };
 
 /* PRIMARYLANGID русского в Windows, значение из winnt.h: модуль не зависит от платформы */

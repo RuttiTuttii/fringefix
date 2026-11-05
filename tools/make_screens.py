@@ -217,7 +217,7 @@ def settings(pal: Palette, t: dict[str, str]) -> str:
 
 def program(pal: Palette, t: dict[str, str]) -> str:
     c = Canvas(pal)
-    height = 496
+    height = 630
     c.add(f'<rect width="520" height="{height}" fill="{pal.bg}"/>')
     langname = t["LANG_RU"] if t["LANGUAGE"] == "Язык" else t["LANG_EN"]
     flag = "ru" if t["LANGUAGE"] == "Язык" else "en"
@@ -235,14 +235,19 @@ def program(pal: Palette, t: dict[str, str]) -> str:
     # при включённой автопаузе действие заблокировано на «Пауза»
     c.combo(MARGIN + COL_SLIDER, 120 + 56 + 1, combo_w, t["GA_PAUSE"], locked=True)
     c.button(MARGIN + 16, 120 + 86 + 1, CARD_W - 32, t["BTN_ADD_APP"])
-    c.card(MARGIN, 254, CARD_W, 96, t["CARD_DATA"])
+    c.card(MARGIN, 254, CARD_W, 126, t["CARD_DATA"])
     c.checkbox(MARGIN + COL_LABEL, 254 + 26 + 4, t["CHECK_UPDATES"])
+    c.checkbox(MARGIN + COL_LABEL, 254 + 56 + 4, t["BETA_CHECK"], on=False)
     bw = (CARD_W - 32 - 16) // 3
     for i, key in enumerate(("MENU_UPDATES", "BTN_VERSIONS", "BTN_REPORT")):
-        c.button(MARGIN + 16 + i * (bw + 8), 254 + 56 + 1, bw, t[key].replace("...", "…") if i else t[key])
-    c.card(MARGIN, 358, CARD_W, 66, t["CARD_AUTOSTART"])
-    c.checkbox(MARGIN + COL_LABEL, 358 + 26 + 4, t["AUTOSTART_CHECK"], on=False)
-    c.button(MARGIN + CARD_W - 120, 440, 120, t["VER_CLOSE"])
+        c.button(MARGIN + 16 + i * (bw + 8), 254 + 86 + 1, bw, t[key].replace("...", "…") if i else t[key])
+    c.card(MARGIN, 388, CARD_W, 66, t["CARD_AUTOSTART"])
+    c.checkbox(MARGIN + COL_LABEL, 388 + 26 + 4, t["AUTOSTART_CHECK"], on=False)
+    c.card(MARGIN, 462, CARD_W, 96, t["CARD_HOTKEYS"])
+    for row, (key, value) in enumerate((("HK_TOGGLE", "F10"), ("HK_QUIT", "F11"))):
+        c.text(MARGIN + COL_LABEL, 462 + 26 + row * 30 + 19, t[key])
+        c.edit(MARGIN + COL_SLIDER, 462 + 26 + row * 30 + 2, 160, 24, value)
+    c.button(MARGIN + CARD_W - 120, 574, 120, t["VER_CLOSE"])
     return svg(window(c, t["APP_TITLE"], 520, height), 520, height, t["APP_TITLE"])
 
 

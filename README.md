@@ -6,7 +6,7 @@
 
 A Windows overlay that shifts the colour channels of the finished frame by fractions of a pixel to cancel colour fringing on QD-OLED panels with the triangular subpixel layout (4th generation and earlier). Lives in the tray, tuned with sliders, updates from GitHub Releases.
 
-> limitations: the project builds with mingw-w64 without warnings, the portable-module tests (10 suites) pass under ASan and UBSan, the report receiver was checked from outside on both addresses. Version 0.1.0 ran on one machine with a 4K QD-OLED in SDR: the tray, settings window and overlay worked. Everything added later has not run on Windows: the HDR path, the updater and version picker, the wizard, auto-pause and light mode, the dark theme, language and theme choice, statistics and report sending, the filter switch, the new test pattern, four auto-pause modes, the always-apply list, start with Windows and the bundled profile. Requires Windows 10 2004 or newer.
+> limitations: the project builds with mingw-w64 without warnings, the portable-module tests (11 suites) pass under ASan and UBSan, the report receiver was checked from outside on both addresses. Version 0.1.0 ran on one machine with a 4K QD-OLED in SDR: the tray, settings window and overlay worked. Everything added later has not run on Windows: the HDR path, the updater and version picker, the wizard, auto-pause and light mode, the dark theme, language and theme choice, statistics and report sending, the filter switch, the new test pattern, four auto-pause modes, the always-apply list, start with Windows and the bundled profile. Requires Windows 10 2004 or newer.
 
 ## what the problem looks like
 
@@ -62,8 +62,8 @@ check the network before sending: a transfer to the wrong network cannot be reco
 - download `fringefix.exe` from the latest release and put it in any folder
 - start it, a tray icon of three balls in a triangle appears (black and white means off or paused)
 - double click opens settings, right click opens the menu with profiles
-- the "Filter" switch at the bottom left of the settings window does the same as `Win+Alt+F`; with the filter off the picture is left unchanged
-- `Win+Alt+F` toggles the overlay, `Win+Alt+Q` quits
+- the "Filter" switch at the bottom left of the settings window does the same as the toggle hotkey; with the filter off the picture is left unchanged
+- `F10` toggles the overlay, `F11` quits. A global hotkey takes the key away from every program, `F11` is fullscreen in browsers: change both in the "Hotkeys" card of the program settings window or with `hotkey_toggle` and `hotkey_quit` in the ini. The format is `F1`-`F24` alone, or a letter or digit with `Ctrl`, `Alt`, `Shift`, `Win` joined by `+` (`Ctrl+Shift+F`), `none` turns a hotkey off. The Win key cannot be typed into a hotkey field of Windows, so here it is typed as text
 - settings live in `%APPDATA%\fringefix\fringefix.ini`, the Save button writes them
 - the "Start with Windows" checkbox in the Startup card (the "Settings" button) writes `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, no administrator rights needed. The state is read from the registry: if the exe moved to another folder the checkbox is off, turning it on again updates the path
 
@@ -231,6 +231,7 @@ main.c ─ ui_tray.c ─ ui_settings.c ─ ui_controls.c, ui_paint.c, slider.c, 
 - only links of the form `https://github.com/<repo>/releases/download/` are accepted, others are dropped
 - the old exe is renamed to `fringefix.exe.old`, the new one takes its place, the program restarts
 - the startup check is turned off by the checkbox in settings or `check_updates = 0` in the ini
+- the "Get beta versions" checkbox (`beta = 1` in the ini) makes the check take the newest release by number from the whole list, betas included. A beta is a release with a tag `vX.Y.Z-beta.N` marked as a pre-release on GitHub: `releases/latest` never returns it, so users without the checkbox are not offered betas. `v0.5.0-beta.2` is newer than `v0.5.0-beta.1` and older than `v0.5.0`. The version list shows betas to everyone
 - a non-tag build (`dev`) does not check for updates
 
 Protection is limited to TLS to github.com and a hash match against a file from the same release. If the account or the release is compromised, the hash is forged together with the exe. There is no code signing.
