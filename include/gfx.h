@@ -54,6 +54,10 @@ typedef struct {
  * (GFX_ERR_LEN байт) и возвращает -1 */
 int gfx_init(ff_gfx *g, const ff_config *cfg, char *err);
 
+/* пересоздаёт копии кадра и цепочку под другой формат поверхности; 0 при успехе, -1 при сбое.
+ * зовётся из gfx_pump, когда формат полученной текстуры не совпал с ожидаемым */
+int gfx_reformat(ff_gfx *g, DXGI_FORMAT fmt);
+
 /* безопасен для нулевой структуры и для повторного вызова */
 void gfx_shutdown(ff_gfx *g);
 

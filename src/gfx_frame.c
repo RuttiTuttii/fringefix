@@ -146,7 +146,19 @@ int gfx_pump(ff_gfx *g, UINT timeout_ms, int force)
             ID3D11Texture2D *tex = NULL;
 
             if (SUCCEEDED(IDXGIResource_QueryInterface(res, &IID_ID3D11Texture2D, (void **)&tex))) {
-                int first = !g->have_frame;
+                int first;
+                D3D11_TEXTURE2D_DESC td;
+
+                /* формат настоящей поверхности важнее ожидаемого: при несовпадении CopyResource ничего не делает
+                 * и оверлей показывал бы чёрный или застывший кадр */
+                ID3D11Texture2D_GetDesc(tex, &td);
+                if (td.Format != g->fmt && gfx_reformat(g, td.Format) != 0) {
+                    ID3D11Texture2D_Release(tex);
+                    IDXGIResource_Release(res);
+                    IDXGIOutputDuplication_ReleaseFrame(g->dup);
+                    return 0;
+                }
+                first = !g->have_frame;
 
                 /* новый кадр ложится во вторую копию, прежний остаётся для сравнения */
                 g->cur = !g->cur;

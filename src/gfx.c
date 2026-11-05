@@ -45,6 +45,33 @@ void gfx_shutdown(ff_gfx *g)
     memset(g, 0, sizeof *g);
 }
 
+/* две копии кадра, текущая и предыдущая: дублированную текстуру шейдеру напрямую не отдать */
+static int make_frames(ff_gfx *g, char *err)
+{
+    HRESULT hr;
+    D3D11_TEXTURE2D_DESC td;
+    int i;
+
+    memset(&td, 0, sizeof td);
+    td.Width = g->w;
+    td.Height = g->h;
+    td.MipLevels = 1;
+    td.ArraySize = 1;
+    td.Format = g->fmt;
+    td.SampleDesc.Count = 1;
+    td.Usage = D3D11_USAGE_DEFAULT;
+    td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    for (i = 0; i < 2; i++) {
+        TRY(ID3D11Device_CreateTexture2D(g->dev, &td, NULL, &g->frame[i]), "CreateTexture2D");
+        TRY(ID3D11Device_CreateShaderResourceView(g->dev, (ID3D11Resource *)g->frame[i], NULL,
+                                                  &g->srv[i]), "CreateShaderResourceView");
+    }
+    return 0;
+
+done:
+    return -1;
+}
+
 /* устройство на адаптере монитора, захват рабочего стола и своя копия кадра для шейдера */
 static int open_capture(ff_gfx *g, int monitor, RECT *rect, char *err)
 {
@@ -55,8 +82,6 @@ static int open_capture(ff_gfx *g, int monitor, RECT *rect, char *err)
     DXGI_OUTPUT_DESC1 od;
     DXGI_OUTDUPL_DESC dd;
     DXGI_FORMAT want;
-    D3D11_TEXTURE2D_DESC td;
-    int i;
 
     if (ff_output_pick(monitor, &ad, &out) != 0) {
         FAILMSG("monitor not found");
@@ -74,24 +99,19 @@ static int open_capture(ff_gfx *g, int monitor, RECT *rect, char *err)
     TRY(IDXGIOutput6_DuplicateOutput1(out, (IUnknown *)g->dev, 0, 1, &want, &g->dup),
         "DuplicateOutput1");
     IDXGIOutputDuplication_GetDesc(g->dup, &dd);
-    g->fmt = dd.ModeDesc.Format;
+    /* поверхность кадра приходит в запрошенном формате, а ModeDesc.Format это формат режима рабочего стола
+     * и в HDR с ним не совпадает; настоящий формат ещё сверяется по первой полученной текстуре */
+    g->fmt = want;
     g->w = dd.ModeDesc.Width;
     g->h = dd.ModeDesc.Height;
+    /* у повёрнутого монитора поверхность лежит в ориентации панели, а окно и шейдер этого не учитывают:
+     * вместо мусора поверх экрана остановка с понятной ошибкой */
+    if (dd.Rotation != DXGI_MODE_ROTATION_IDENTITY && dd.Rotation != DXGI_MODE_ROTATION_UNSPECIFIED) {
+        FAILMSG("rotated monitors are not supported, set the display orientation to landscape");
+    }
 
-    /* дублированную текстуру шейдеру напрямую не отдать, поэтому держим свои копии кадра: текущую и предыдущую */
-    memset(&td, 0, sizeof td);
-    td.Width = g->w;
-    td.Height = g->h;
-    td.MipLevels = 1;
-    td.ArraySize = 1;
-    td.Format = g->fmt;
-    td.SampleDesc.Count = 1;
-    td.Usage = D3D11_USAGE_DEFAULT;
-    td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-    for (i = 0; i < 2; i++) {
-        TRY(ID3D11Device_CreateTexture2D(g->dev, &td, NULL, &g->frame[i]), "CreateTexture2D");
-        TRY(ID3D11Device_CreateShaderResourceView(g->dev, (ID3D11Resource *)g->frame[i], NULL,
-                                                  &g->srv[i]), "CreateShaderResourceView");
+    if (make_frames(g, err) != 0) {
+        goto done;
     }
     rc = 0;
 
@@ -182,19 +202,35 @@ done:
     return rc;
 }
 
+/* целевой вид на задний буфер цепочки */
+static int make_rtv(ff_gfx *g, char *err)
+{
+    HRESULT hr;
+    int rc = -1;
+    ID3D11Texture2D *bb = NULL;
+
+    TRY(IDXGISwapChain1_GetBuffer(g->sc, 0, &IID_ID3D11Texture2D, (void **)&bb), "GetBuffer");
+    TRY(ID3D11Device_CreateRenderTargetView(g->dev, (ID3D11Resource *)bb, NULL, &g->rtv),
+        "CreateRenderTargetView");
+    rc = 0;
+
+done:
+    FF_REL(bb);
+    return rc;
+}
+
 /* целевой буфер, шейдеры, константы и сэмплер */
 static int open_pipeline(ff_gfx *g, char *err)
 {
     HRESULT hr;
     int rc = -1;
-    ID3D11Texture2D *bb = NULL;
     ID3DBlob *blob = NULL;
     D3D11_BUFFER_DESC bd;
     D3D11_SAMPLER_DESC sm;
 
-    TRY(IDXGISwapChain1_GetBuffer(g->sc, 0, &IID_ID3D11Texture2D, (void **)&bb), "GetBuffer");
-    TRY(ID3D11Device_CreateRenderTargetView(g->dev, (ID3D11Resource *)bb, NULL, &g->rtv),
-        "CreateRenderTargetView");
+    if (make_rtv(g, err) != 0) {
+        goto done;
+    }
 
     hr = ff_shader_compile("vsmain", "vs_5_0", &blob, err, GFX_ERR_LEN);
     if (FAILED(hr)) {
@@ -230,7 +266,41 @@ static int open_pipeline(ff_gfx *g, char *err)
 
 done:
     FF_REL(blob);
-    FF_REL(bb);
+    return rc;
+}
+
+int gfx_reformat(ff_gfx *g, DXGI_FORMAT fmt)
+{
+    HRESULT hr;
+    char err[GFX_ERR_LEN];
+    IDXGISwapChain3 *sc3 = NULL;
+    int rc = -1;
+
+    /* всё, что держит старый формат, отпускается до ResizeBuffers */
+    ID3D11DeviceContext_ClearState(g->ctx);
+    FF_REL(g->rtv);
+    FF_REL(g->srv[0]);
+    FF_REL(g->srv[1]);
+    FF_REL(g->frame[0]);
+    FF_REL(g->frame[1]);
+    g->fmt = fmt;
+    TRY(IDXGISwapChain1_ResizeBuffers(g->sc, 0, 0, 0, fmt, 0), "ResizeBuffers");
+    if (g->hdr) {
+        TRY(IDXGISwapChain1_QueryInterface(g->sc, &IID_IDXGISwapChain3, (void **)&sc3),
+            "IDXGISwapChain3");
+        TRY(IDXGISwapChain3_SetColorSpace1(sc3, DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709),
+            "SetColorSpace1");
+    }
+    if (make_rtv(g, err) != 0 || make_frames(g, err) != 0) {
+        goto done;
+    }
+    /* предыдущего кадра в новом формате нет: следующий считается первым и рисуется целиком */
+    g->have_frame = 0;
+    g->cur = 0;
+    rc = 0;
+
+done:
+    FF_REL(sc3);
     return rc;
 }
 
