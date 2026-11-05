@@ -222,12 +222,31 @@ void ui_versions_show(ff_app *a)
 }
 
 /* список пришёл из фонового потока; окно могли закрыть раньше, тогда он просто освобождается */
+/* без галочки «Получать бета-версии» беты в списке не показываются и не ставятся */
+static void drop_betas(ff_release_list *list)
+{
+    int i;
+    int kept = 0;
+
+    for (i = 0; i < list->count; i++) {
+        if (ff_version_beta(list->rel[i].tag) == 0) {
+            list->rel[kept++] = list->rel[i];
+        }
+    }
+    list->count = kept;
+    if (kept == 0 && !list->err[0]) {
+        snprintf(list->err, sizeof list->err, "no stable releases with fringefix.exe and its sha256");
+    }
+}
+
 void ui_versions_on_list(ff_app *a, ff_release_list *list)
 {
-    (void)a;
     if (!g_win) {
         free(list);
         return;
+    }
+    if (!a->cfg.beta) {
+        drop_betas(list);
     }
     free(g_data);
     g_data = list;

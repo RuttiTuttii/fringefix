@@ -207,3 +207,76 @@ int ff_app_list_remove(char *list, size_t n, const wchar_t *exe)
     }
     return dropped > 0;
 }
+
+int ff_app_list_item(const char *list, int index, char *out, size_t n)
+{
+    const char *p = list;
+
+    while (list && *p) {
+        const char *end = strchr(p, ';');
+        const char *a = p;
+        const char *b = end ? end : p + strlen(p);
+
+        while (a < b && (*a == ' ' || *a == '\t')) {
+            a++;
+        }
+        while (b > a && (b[-1] == ' ' || b[-1] == '\t')) {
+            b--;
+        }
+        if (b > a && index-- == 0) {
+            if ((size_t)(b - a) + 1 > n) {
+                return 0;
+            }
+            memcpy(out, a, (size_t)(b - a));
+            out[b - a] = '\0';
+            return 1;
+        }
+        p = end ? end + 1 : p + strlen(p);
+    }
+    return 0;
+}
+
+/* нижний регистр для ASCII и кириллицы: towlower в C-локали остальное не трогает, а заголовки окон бывают русскими.
+ * shortcut: другие алфавиты (греческий, латиница с диакритикой) различаются по регистру, добавить таблицу при жалобах */
+static wchar_t lower(wchar_t c)
+{
+    if (c >= L'A' && c <= L'Z') {
+        return (wchar_t)(c + 0x20);
+    }
+    if (c >= 0x410 && c <= 0x42F) {
+        return (wchar_t)(c + 0x20);
+    }
+    return c == 0x401 ? (wchar_t)0x451 : c;
+}
+
+/* вхождение needle (len символов) в hay без учёта регистра */
+static int contains_ci(const wchar_t *hay, const wchar_t *needle, size_t len)
+{
+    size_t i;
+
+    if (!hay) {
+        return 0;
+    }
+    for (; *hay; hay++) {
+        for (i = 0; i < len && hay[i] && lower(hay[i]) == lower(needle[i]); i++) {
+        }
+        if (i == len) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int ff_app_query_match(const wchar_t *query, const wchar_t *exe, const wchar_t *title)
+{
+    size_t len;
+
+    while (*query == L' ' || *query == L'\t') {
+        query++;
+    }
+    len = wcslen(query);
+    while (len > 0 && (query[len - 1] == L' ' || query[len - 1] == L'\t')) {
+        len--;
+    }
+    return len == 0 || contains_ci(exe, query, len) || contains_ci(title, query, len);
+}

@@ -6,7 +6,7 @@
 
 A Windows overlay that shifts the colour channels of the finished frame by fractions of a pixel to cancel colour fringing on QD-OLED panels with the triangular subpixel layout (4th generation and earlier). Lives in the tray, tuned with sliders, updates from GitHub Releases.
 
-> limitations: the project builds with mingw-w64 without warnings, the portable-module tests (11 suites) pass under ASan and UBSan, the report receiver was checked from outside on both addresses. Version 0.1.0 ran on one machine with a 4K QD-OLED in SDR: the tray, settings window and overlay worked. Everything added later has not run on Windows: the HDR path, the updater and version picker, the wizard, auto-pause and light mode, the dark theme, language and theme choice, statistics and report sending, the filter switch, the new test pattern, four auto-pause modes, the always-apply list, start with Windows and the bundled profile. Requires Windows 10 2004 or newer.
+> limitations: the project builds with mingw-w64 without warnings, the portable-module tests (12 suites) pass under ASan and UBSan, the report receiver was checked from outside on both addresses. Version 0.1.0 ran on one machine with a 4K QD-OLED in SDR: the tray, settings window and overlay worked. Everything added later has not run on Windows: the HDR path, the updater and version picker, the wizard, auto-pause and light mode, the dark theme, language and theme choice, statistics and report sending, the filter switch, the new test pattern, four auto-pause modes, the app lists window with the process picker, the beta channel, reopening windows after an update, start with Windows and the bundled profile. The frame comparison fix and the HDR surface format were checked on one machine by the tester. Requires Windows 10 2004 or newer.
 
 ## what the problem looks like
 
@@ -136,7 +136,7 @@ the Auto-pause rules card of the program settings window has three items:
 
 - "Auto-pause": when to consider a game running (fullscreen, 3D, fullscreen and 3D, off)
 - "Action in games": it can be changed only while auto-pause is off, in any other mode it shows a locked "Pause". "Pause" releases the device and the overlay window, "Light mode" keeps the overlay but the shader does one shift per channel without the laplacian and sharpness and costs almost nothing. Light mode does not remove DWM composition, so only a pause lifts the game latency. With auto-pause off and light mode, games are looked for as in the "fullscreen and 3D apps" mode and light mode is used instead of a pause; with auto-pause off and "Pause" nothing is looked for
-- "Add an app that always gets the filter...": picks an exe that goes into `ignore_apps`. The filter is always applied to it, whatever auto-pause is set to: photo viewers, players. Picking the same exe again offers to remove it from the list. The file name must be Latin and the list is limited to 255 bytes
+- "App lists...": a window with two lists, "Always apply the filter" (`ignore_apps`: photo viewers, players, whatever auto-pause is set to) and "Always pause" (`pause_apps`). The "+ Add..." button opens a picker with the running programs that have a visible window; the search box filters by process name or by window title. An app that is not running can be typed in by hand: when no row matches, the typed name is added. "− Remove" deletes the selected row. An app is in one list at a time: adding it to one list removes it from the other. The name must be Latin, each list takes up to 1023 bytes
 
 more in `fringefix.ini`:
 
@@ -147,7 +147,7 @@ more in `fringefix.ini`:
 ## versions and rollback
 
 
-the "Versions..." button in the program settings window opens a list of the repository releases (up to the latest 30 that have `fringefix.exe` and `fringefix.exe.sha256`). Picking a version newer than the current one installs an update, older installs a rollback. Versions are not compared during installation: the hash check and the exe swap are the same as in a normal update, settings in `%APPDATA%` stay. Old releases are not overwritten: to go back to a version it must stay in Releases.
+the "Versions..." button in the program settings window opens a list of the repository releases (up to the latest 30 that have `fringefix.exe` and `fringefix.exe.sha256`). Picking a version newer than the current one installs an update, older installs a rollback. Versions are not compared during installation: the hash check and the exe swap are the same as in a normal update, settings in `%APPDATA%` stay. Betas are hidden in the list until the "Get beta versions" checkbox is on. Old releases are not overwritten: to go back to a version it must stay in Releases.
 
 ## profiles
 
@@ -231,7 +231,7 @@ main.c ─ ui_tray.c ─ ui_settings.c ─ ui_controls.c, ui_paint.c, slider.c, 
 - only links of the form `https://github.com/<repo>/releases/download/` are accepted, others are dropped
 - the old exe is renamed to `fringefix.exe.old`, the new one takes its place, the program restarts
 - the startup check is turned off by the checkbox in settings or `check_updates = 0` in the ini
-- the "Get beta versions" checkbox (`beta = 1` in the ini) makes the check take the newest release by number from the whole list, betas included. A beta is a release with a tag `vX.Y.Z-beta.N` marked as a pre-release on GitHub: `releases/latest` never returns it, so users without the checkbox are not offered betas. `v0.5.0-beta.2` is newer than `v0.5.0-beta.1` and older than `v0.5.0`. The version list shows betas to everyone
+- the "Get beta versions" checkbox (`beta = 1` in the ini) makes the check take the newest release by number from the whole list, betas included. A beta is a release with a tag `vX.Y.Z-beta.N` marked as a pre-release on GitHub: `releases/latest` never returns it, so users without the checkbox are not offered betas. `v0.5.0-beta.2` is newer than `v0.5.0-beta.1` and older than `v0.5.0`. The version list shows betas only with the checkbox on. If a beta is installed and the checkbox is turned off, the check offers the newest stable release instead, even if it is older by number (a rollback). The windows that were open (settings, program, app lists) reopen at the same places after an update or rollback restart
 - a non-tag build (`dev`) does not check for updates
 
 Protection is limited to TLS to github.com and a hash match against a file from the same release. If the account or the release is compromised, the hash is forged together with the exe. There is no code signing.

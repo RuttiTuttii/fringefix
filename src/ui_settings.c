@@ -241,6 +241,27 @@ void ui_settings_show(ff_app *a)
     app_set_fast(a, 1);
 }
 
+int ui_settings_get_pos(POINT *p)
+{
+    RECT r;
+
+    if (!ui.win || !IsWindowVisible(ui.win) || !GetWindowRect(ui.win, &r)) {
+        p->x = p->y = 0;
+        return 0;
+    }
+    p->x = r.left;
+    p->y = r.top;
+    return 1;
+}
+
+void ui_settings_show_at(ff_app *a, int x, int y)
+{
+    g_saved.x = x;
+    g_saved.y = y;
+    g_have_saved = 1;
+    ui_settings_show(a);
+}
+
 void ui_settings_destroy(void)
 {
     pattern_close();

@@ -9,6 +9,8 @@
 typedef struct {
     int manual;
     int newer;
+    /* стоит бета, а бета-канал выключен: newer означает переход на стабильный релиз, даже старее по номеру */
+    int rollback;
     ff_release rel;
     char err[160];
 } ff_update_info;

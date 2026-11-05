@@ -77,7 +77,8 @@ static void fetch_release(const char *repo, int beta, ff_update_info *info)
         snprintf(info->err, sizeof info->err, "release tag %s is not vX.Y.Z", info->rel.tag);
         return;
     }
-    info->newer = ff_tag_cmp(info->rel.tag, FF_VERSION) > 0;
+    info->rollback = !beta && ff_version_beta(FF_VERSION) > 0;
+    info->newer = info->rollback || ff_tag_cmp(info->rel.tag, FF_VERSION) > 0;
 }
 
 /* релизы по одной странице (30 по умолчанию у GitHub), этого хватает на откат на несколько версий назад */

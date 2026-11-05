@@ -40,6 +40,25 @@ static void test_hotkeys_and_beta(void)
     CHECK(b.hotkey_quit.vk == 0);
 }
 
+static void test_long_lists(void)
+{
+    ff_config a;
+    ff_config b;
+    char buf[8192];
+    size_t i;
+
+    /* самый длинный список проходит запись и чтение целиком: строка ini длиннее старого предела в 320 байт */
+    ff_config_defaults(&a);
+    for (i = 0; i + 1 < sizeof a.pause_apps; i++) {
+        a.pause_apps[i] = i % 9 == 8 ? ';' : 'a';
+        a.ignore_apps[i] = i % 7 == 6 ? ';' : 'b';
+    }
+    CHECK(ff_config_format(&a, buf, sizeof buf) > 0);
+    ff_config_defaults(&b);
+    ff_config_parse(buf, &b);
+    CHECK(strcmp(a.pause_apps, b.pause_apps) == 0 && strcmp(a.ignore_apps, b.ignore_apps) == 0);
+}
+
 static void test_values(void)
 {
     ff_config c;
@@ -72,7 +91,7 @@ static void test_clamp(void)
 static void test_game_keys(void)
 {
     ff_config c;
-    char text[600];
+    char text[FF_APPS_MAX + 200];
 
     ff_config_defaults(&c);
     CHECK(ff_config_parse("game_action=1\ngpu_priority=-3\npause_apps = a.exe;b.exe\n"
@@ -87,8 +106,8 @@ static void test_game_keys(void)
     CHECK(c.game_action == 1 && c.gpu_priority == -7);
     /* слишком длинный список отбрасывается целиком, а не режется, прежнее значение остаётся */
     strcpy(text, "pause_apps=");
-    memset(text + 11, 'a', 280);
-    strcpy(text + 291, "\n");
+    memset(text + 11, 'a', FF_APPS_MAX + 80);
+    strcpy(text + 11 + FF_APPS_MAX + 80, "\n");
     CHECK(ff_config_parse(text, &c) == 0 && strcmp(c.pause_apps, "a.exe;b.exe") == 0);
 }
 
@@ -192,6 +211,7 @@ int main(void)
 {
     test_defaults();
     test_values();
+    test_long_lists();
     test_hotkeys_and_beta();
     test_clamp();
     test_game_keys();

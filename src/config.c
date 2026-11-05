@@ -6,7 +6,8 @@
 #include <string.h>
 
 #define MONITOR_MAX 15
-#define LINE_MAX_LEN 320
+/* строка ini с самым длинным списком программ плюс имя ключа и пробелы */
+#define LINE_MAX_LEN (FF_APPS_MAX + 64)
 
 static const char *const SHIFT_KEYS[6] = {
     "red_x", "red_y", "green_x", "green_y", "blue_x", "blue_y",

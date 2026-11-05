@@ -20,4 +20,12 @@ int ff_app_list_add(char *list, size_t n, const wchar_t *exe);
 /* убирает имя из списка; 1 если было, 0 если не было. список не длиннее FF_APPS_MAX из config.h */
 int ff_app_list_remove(char *list, size_t n, const wchar_t *exe);
 
+/* index-й непустой элемент списка без пробелов по краям, регистр как записан;
+ * 1 если он есть и поместился в out (n байт), 0 если элементов меньше или имя не влезло */
+int ff_app_list_item(const char *list, int index, char *out, size_t n);
+
+/* подходит ли запись окна под строку поиска: часть имени процесса или часть заголовка окна, регистр не важен,
+ * пробелы по краям запроса срезаются; пустой запрос подходит всему. title может быть NULL */
+int ff_app_query_match(const wchar_t *query, const wchar_t *exe, const wchar_t *title);
+
 #endif

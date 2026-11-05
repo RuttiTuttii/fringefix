@@ -34,8 +34,24 @@ void ui_settings_refresh_power(void);
 /* для главного цикла: Tab и Enter в окне настроек; ненулевой ответ значит сообщение съедено */
 int ui_settings_translate(MSG *m);
 
+/* списки программ «всегда применять» и «всегда на паузу» с выбором из запущенных окон */
+void ui_apps_show(ff_app *a);
+int ui_apps_get_pos(POINT *p);
+void ui_apps_show_at(ff_app *a, int x, int y);
+
 /* окно настроек программы: язык, тема, игры, обновления и отчёт */
 void ui_app_show(ff_app *a);
+int ui_app_get_pos(POINT *p);
+void ui_app_show_at(ff_app *a, int x, int y);
+
+/* положение окна настроек, если оно открыто; 1 или 0 */
+int ui_settings_get_pos(POINT *p);
+void ui_settings_show_at(ff_app *a, int x, int y);
+
+/* окна и их места на экране между запусками: перед перезапуском после обновления или отката строка с состоянием
+ * кладётся в аргумент --windows=, новый процесс открывает те же окна там же. cmdline это строка запуска целиком */
+void ui_windows_save(char *out, size_t n);
+void ui_windows_restore(ff_app *a, const char *cmdline);
 
 /* язык интерфейса: 0 как в системе, 1 русский, 2 английский; тему применяет ui_theme_apply после theme_set_mode */
 void ui_language_apply(int mode);

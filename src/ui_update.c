@@ -45,7 +45,11 @@ void ui_update_on_info(ff_app *a, ff_update_info *info)
             box(ff_tr(S_UP_TO_DATE), MB_ICONINFORMATION);
         }
     } else {
-        format(text, S_UPDATE_FOUND, tag, cur);
+        if (info->rollback) {
+            format(text, S_UPDATE_BETA_OFF, cur, tag);
+        } else {
+            format(text, S_UPDATE_FOUND, tag, cur);
+        }
         ui_settings_set_status(text);
         if (MessageBoxW(NULL, text, L"fringefix",
                         MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND | MB_TOPMOST) == IDYES) {
@@ -59,15 +63,19 @@ void ui_update_on_info(ff_app *a, ff_update_info *info)
 void ui_update_on_done(ff_app *a, ff_install_result *res)
 {
     if (res->ok) {
-        wchar_t cmd[MAX_PATH + 32];
+        wchar_t cmd[MAX_PATH + 160];
+        char windows[96];
         STARTUPINFOW si;
         PROCESS_INFORMATION pi;
 
         memset(&si, 0, sizeof si);
         si.cb = sizeof si;
-        /* новый процесс ждёт, пока этот отпустит мьютекс единственного экземпляра */
-        _snwprintf(cmd, MAX_PATH + 32, L"\"%ls\" --relaunch", res->exe);
-        cmd[MAX_PATH + 31] = L'\0';
+        /* новый процесс ждёт, пока этот отпустит мьютекс единственного экземпляра,
+         * и открывает те окна, что были открыты сейчас, на тех же местах */
+        ui_windows_save(windows, sizeof windows);
+        _snwprintf(cmd, MAX_PATH + 160, L"\"%ls\" --relaunch%hs%hs", res->exe,
+                   windows[0] ? " --windows=" : "", windows);
+        cmd[MAX_PATH + 159] = L'\0';
         if (CreateProcessW(res->exe, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
             CloseHandle(pi.hThread);
             CloseHandle(pi.hProcess);

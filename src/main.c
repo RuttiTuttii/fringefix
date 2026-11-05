@@ -75,6 +75,8 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show)
         MessageBoxW(NULL, ff_tr(S_START_FAILED), L"fringefix", MB_ICONERROR);
         return 1;
     }
+    /* после обновления или отката открываются те же окна на тех же местах */
+    ui_windows_restore(&app, cmd);
     if (app.cfg.check_updates && FF_REPO[0]) {
         update_check_async(app.hwnd, FF_REPO, 0, app.cfg.beta);
     }

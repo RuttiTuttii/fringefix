@@ -5,7 +5,7 @@
 #include "app.h"
 #include "fileio.h"
 
-#define INI_MAX 4096
+#define INI_MAX 8192
 
 /* настройки лежат в профиле пользователя, чтобы exe можно было обновлять в любой папке */
 static void resolve_ini(wchar_t out[MAX_PATH])

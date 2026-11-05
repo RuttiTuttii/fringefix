@@ -234,7 +234,7 @@ def program(pal: Palette, t: dict[str, str]) -> str:
     c.text(MARGIN + COL_LABEL, 120 + 56 + 19, t["GAMEACTION"])
     # при включённой автопаузе действие заблокировано на «Пауза»
     c.combo(MARGIN + COL_SLIDER, 120 + 56 + 1, combo_w, t["GA_PAUSE"], locked=True)
-    c.button(MARGIN + 16, 120 + 86 + 1, CARD_W - 32, t["BTN_ADD_APP"])
+    c.button(MARGIN + 16, 120 + 86 + 1, CARD_W - 32, t["BTN_APP_LISTS"])
     c.card(MARGIN, 254, CARD_W, 126, t["CARD_DATA"])
     c.checkbox(MARGIN + COL_LABEL, 254 + 26 + 4, t["CHECK_UPDATES"])
     c.checkbox(MARGIN + COL_LABEL, 254 + 56 + 4, t["BETA_CHECK"], on=False)

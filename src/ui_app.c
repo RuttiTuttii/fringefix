@@ -1,10 +1,8 @@
 #include <windows.h>
-#include <commdlg.h>
 #include <stdio.h>
 #include <string.h>
 #include <wchar.h>
 
-#include "applist.h"
 #include "autostart.h"
 #include "hotkey.h"
 #include "i18n.h"
@@ -200,7 +198,7 @@ static void build(void)
     g_action = combo(1, 1, ID_A_ACTION, 0);
     add_items(g_action, ACTIONS, 2, 0);
     sync_action();
-    child(L"BUTTON", ff_tr(S_BTN_ADD_APP), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + 16,
+    child(L"BUTTON", ff_tr(S_BTN_APP_LISTS), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + 16,
           row_top(1, 2) + 1, CARD_INNER_W - 32, BTN_H, ID_A_ADDAPP);
     check = child(L"BUTTON", ff_tr(S_CHECK_UPDATES), BS_AUTOCHECKBOX | WS_TABSTOP,
                   MARGIN + COL_LABEL, row_top(2, 0), CARD_INNER_W - 2 * COL_LABEL, 24, ID_A_CHECK);
@@ -298,54 +296,6 @@ static void set_autostart(int on)
     }
 }
 
-/* окно с текстом, в который подставлено имя файла */
-static int say(const str_id fmt, const wchar_t *name, UINT flags)
-{
-    wchar_t text[MAX_PATH + 128];
-
-    _snwprintf(text, sizeof text / sizeof text[0], ff_tr(fmt), name);
-    text[sizeof text / sizeof text[0] - 1] = L'\0';
-    return MessageBoxW(g_win, text, L"fringefix", flags | MB_TOPMOST);
-}
-
-/* выбор exe в список обязательного применения (ignore_apps: на паузу никогда, что бы ни стояло в автопаузе);
- * уже стоящее в списке предлагается убрать, так список правится одной кнопкой.
- * shortcut: строка списка правится на месте, а поток захвата копирует настройки целиком, поэтому
- * в худшем случае одна проверка за полсекунды увидит список наполовину записанным */
-static void edit_force_list(void)
-{
-    OPENFILENAMEW o;
-    wchar_t path[MAX_PATH] = L"";
-    const wchar_t *name;
-    ff_config *c = &ui.app->cfg;
-
-    memset(&o, 0, sizeof o);
-    o.lStructSize = sizeof o;
-    o.hwndOwner = g_win;
-    o.lpstrFilter = L"EXE (*.exe)\0*.exe\0";
-    o.lpstrFile = path;
-    o.nMaxFile = MAX_PATH;
-    o.Flags = OFN_EXPLORER | OFN_NOCHANGEDIR | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
-    if (!GetOpenFileNameW(&o)) {
-        return;
-    }
-    /* имя без папки для сообщений; в список и поиск уходит как есть, они сами берут имя из пути */
-    name = wcsrchr(path, L'\\') ? wcsrchr(path, L'\\') + 1 : path;
-    if (ff_app_list_has(c->ignore_apps, path)) {
-        if (say(S_FORCE_ASK_REMOVE, name, MB_YESNO | MB_ICONQUESTION) == IDYES) {
-            ff_app_list_remove(c->ignore_apps, sizeof c->ignore_apps, path);
-            say(S_FORCE_REMOVED, name, MB_ICONINFORMATION);
-        }
-    } else if (ff_app_list_add(c->ignore_apps, sizeof c->ignore_apps, path) < 0) {
-        say(S_FORCE_FAILED, name, MB_ICONWARNING);
-        return;
-    } else {
-        say(S_FORCE_ADDED, name, MB_ICONINFORMATION);
-    }
-    app_wake(ui.app);
-    app_save(ui.app);
-}
-
 static void on_command(int id, int code)
 {
     ff_config *c = &ui.app->cfg;
@@ -378,10 +328,15 @@ static void on_command(int id, int code)
     } else if (id == ID_A_BETA) {
         c->beta = SendMessageW(GetDlgItem(g_win, ID_A_BETA), BM_GETCHECK, 0, 0) == BST_CHECKED;
         app_save(ui.app);
+        /* бету выключили, а она стоит: проверка предложит стабильный релиз вместо неё */
+        if (!c->beta && ff_version_beta(FF_VERSION) > 0 && FF_REPO[0]) {
+            ui_settings_set_status(ff_tr(S_CHECKING));
+            update_check_async(ui.app->hwnd, FF_REPO, 1, 0);
+        }
     } else if ((id == ID_A_HK_TOGGLE || id == ID_A_HK_QUIT) && code == EN_KILLFOCUS) {
         apply_hotkey(id);
     } else if (id == ID_A_ADDAPP) {
-        edit_force_list();
+        ui_apps_show(ui.app);
     } else if (id == ID_A_AUTOSTART) {
         set_autostart(SendMessageW(GetDlgItem(g_win, ID_A_AUTOSTART), BM_GETCHECK, 0, 0) == BST_CHECKED);
     } else if (id == ID_A_UPDATE && FF_REPO[0]) {
@@ -518,4 +473,25 @@ void ui_app_show(ff_app *a)
     build();
     ShowWindow(g_win, SW_SHOW);
     SetForegroundWindow(g_win);
+}
+
+int ui_app_get_pos(POINT *p)
+{
+    RECT r;
+
+    if (!g_win || !GetWindowRect(g_win, &r)) {
+        p->x = p->y = 0;
+        return 0;
+    }
+    p->x = r.left;
+    p->y = r.top;
+    return 1;
+}
+
+void ui_app_show_at(ff_app *a, int x, int y)
+{
+    g_pos.x = x;
+    g_pos.y = y;
+    g_have_pos = 1;
+    ui_app_show(a);
 }

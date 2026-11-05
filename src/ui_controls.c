@@ -185,7 +185,8 @@ static BOOL CALLBACK restyle_one(HWND c, LPARAM unused)
     GetClassNameW(c, cls, 16);
     if (wcscmp(cls, L"Button") == 0) {
         theme_apply_control(c, 0);
-    } else if (wcscmp(cls, L"Edit") == 0 || wcscmp(cls, L"ComboBox") == 0) {
+    } else if (wcscmp(cls, L"Edit") == 0 || wcscmp(cls, L"ComboBox") == 0
+               || wcscmp(cls, L"ListBox") == 0) {
         theme_apply_control(c, 1);
     }
     return TRUE;
