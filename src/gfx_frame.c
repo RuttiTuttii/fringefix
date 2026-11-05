@@ -47,7 +47,7 @@ static void draw(ff_gfx *g)
     ID3D11DeviceContext_IASetPrimitiveTopology(g->ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     ID3D11DeviceContext_VSSetShader(g->ctx, g->vs, NULL, 0);
     ID3D11DeviceContext_PSSetShader(g->ctx, g->ps, NULL, 0);
-    ID3D11DeviceContext_PSSetShaderResources(g->ctx, 0, 1, &g->srv);
+    ID3D11DeviceContext_PSSetShaderResources(g->ctx, 0, 1, &g->srv[g->cur]);
     ID3D11DeviceContext_PSSetSamplers(g->ctx, 0, 1, &g->smp);
     ID3D11DeviceContext_PSSetConstantBuffers(g->ctx, 0, 1, &g->cb);
     ID3D11DeviceContext_Draw(g->ctx, 3, 0);
@@ -99,15 +99,16 @@ static int read_rects(ff_gfx *g, const DXGI_OUTDUPL_FRAME_INFO *info, UINT *nmov
     return 1;
 }
 
-/* настоящее ли изменение экрана; кадр уже скопирован в g->frame.
+/* настоящее ли изменение экрана; кадр уже скопирован в g->frame[g->cur], предыдущий лежит во второй копии.
  * сам оверлей тоже будит захват: DWM пересобирает рабочий стол после каждого Present, и без этой
- * проверки каждая отрисовка рождала бы следующую на полной частоте обновления */
+ * проверки каждая отрисовка рождала бы следующую на полной частоте обновления.
+ * браузеры отдают DWM окно целиком, поэтому набор текста приходит с большой областью и должен
+ * сравниваться по всем пикселям: выборочное сравнение пропускало такие кадры и экран замирал */
 static int frame_changed(ff_gfx *g, const DXGI_OUTDUPL_FRAME_INFO *info)
 {
     UINT nmove;
     UINT ndirty;
     long long area;
-    unsigned sig;
     int changed;
 
     if (!read_rects(g, info, &nmove, &ndirty, &area)) {
@@ -116,17 +117,13 @@ static int frame_changed(ff_gfx *g, const DXGI_OUTDUPL_FRAME_INFO *info)
     if (nmove == 0 && ndirty == 0 && info->LastPresentTime.QuadPart == 0) {
         return 0;
     }
-    /* прокрутка и малые области всегда настоящие: каретка в один столбец не ловится разреженным хешем */
+    /* прокрутка и малые области настоящие без сравнения */
     if (nmove > 0 || (ndirty > 0 && area < (long long)g->w * g->h / SMALL_AREA_DIV)) {
-        g->sig_valid = 0;
         return 1;
     }
-    if (gfx_sig_read(g, &sig) != 0) {
+    if (gfx_sig_diff(g, &changed) != 0) {
         return 1;
     }
-    changed = !g->sig_valid || sig != g->sig;
-    g->sig = sig;
-    g->sig_valid = 1;
     if (!changed) {
         g->echo_skipped++;
     }
@@ -151,7 +148,9 @@ int gfx_pump(ff_gfx *g, UINT timeout_ms, int force)
             if (SUCCEEDED(IDXGIResource_QueryInterface(res, &IID_ID3D11Texture2D, (void **)&tex))) {
                 int first = !g->have_frame;
 
-                ID3D11DeviceContext_CopyResource(g->ctx, (ID3D11Resource *)g->frame,
+                /* новый кадр ложится во вторую копию, прежний остаётся для сравнения */
+                g->cur = !g->cur;
+                ID3D11DeviceContext_CopyResource(g->ctx, (ID3D11Resource *)g->frame[g->cur],
                                                  (ID3D11Resource *)tex);
                 ID3D11Texture2D_Release(tex);
                 g->have_frame = 1;

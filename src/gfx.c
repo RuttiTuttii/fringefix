@@ -32,8 +32,10 @@ void gfx_shutdown(ff_gfx *g)
     FF_REL(g->vs);
     FF_REL(g->rtv);
     FF_REL(g->sc);
-    FF_REL(g->srv);
-    FF_REL(g->frame);
+    FF_REL(g->srv[0]);
+    FF_REL(g->srv[1]);
+    FF_REL(g->frame[0]);
+    FF_REL(g->frame[1]);
     FF_REL(g->dup);
     FF_REL(g->ctx);
     FF_REL(g->dev);
@@ -54,6 +56,7 @@ static int open_capture(ff_gfx *g, int monitor, RECT *rect, char *err)
     DXGI_OUTDUPL_DESC dd;
     DXGI_FORMAT want;
     D3D11_TEXTURE2D_DESC td;
+    int i;
 
     if (ff_output_pick(monitor, &ad, &out) != 0) {
         FAILMSG("monitor not found");
@@ -75,7 +78,7 @@ static int open_capture(ff_gfx *g, int monitor, RECT *rect, char *err)
     g->w = dd.ModeDesc.Width;
     g->h = dd.ModeDesc.Height;
 
-    /* дублированную текстуру шейдеру напрямую не отдать, поэтому держим свою копию кадра */
+    /* дублированную текстуру шейдеру напрямую не отдать, поэтому держим свои копии кадра: текущую и предыдущую */
     memset(&td, 0, sizeof td);
     td.Width = g->w;
     td.Height = g->h;
@@ -85,9 +88,11 @@ static int open_capture(ff_gfx *g, int monitor, RECT *rect, char *err)
     td.SampleDesc.Count = 1;
     td.Usage = D3D11_USAGE_DEFAULT;
     td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-    TRY(ID3D11Device_CreateTexture2D(g->dev, &td, NULL, &g->frame), "CreateTexture2D");
-    TRY(ID3D11Device_CreateShaderResourceView(g->dev, (ID3D11Resource *)g->frame, NULL, &g->srv),
-        "CreateShaderResourceView");
+    for (i = 0; i < 2; i++) {
+        TRY(ID3D11Device_CreateTexture2D(g->dev, &td, NULL, &g->frame[i]), "CreateTexture2D");
+        TRY(ID3D11Device_CreateShaderResourceView(g->dev, (ID3D11Resource *)g->frame[i], NULL,
+                                                  &g->srv[i]), "CreateShaderResourceView");
+    }
     rc = 0;
 
 done:

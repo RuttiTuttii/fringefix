@@ -30,19 +30,21 @@ typedef struct {
     IDXGIOutputDuplication *dup;
     IDXGISwapChain1 *sc;
     ID3D11RenderTargetView *rtv;
-    ID3D11Texture2D *frame;
-    ID3D11ShaderResourceView *srv;
+    /* две копии кадра: cur это последний полученный, вторая предыдущий, они нужны для точного сравнения */
+    ID3D11Texture2D *frame[2];
+    ID3D11ShaderResourceView *srv[2];
+    int cur;
     ID3D11VertexShader *vs;
     ID3D11PixelShader *ps;
     ID3D11Buffer *cb;
     ID3D11SamplerState *smp;
-    /* подпись кадра: разреженный хеш на GPU, чтобы отличить настоящее изменение от эха собственного оверлея */
+    /* сравнение кадров на GPU: по флагу на блок 16x16, чтобы отличить настоящее изменение от эха собственного оверлея */
     ID3D11PixelShader *sig_ps;
     ID3D11Texture2D *sig_tex;
     ID3D11RenderTargetView *sig_rtv;
     ID3D11Texture2D *sig_stage;
-    unsigned sig;
-    int sig_valid;
+    UINT sig_w;
+    UINT sig_h;
     /* буфер метаданных dirty и move прямоугольников */
     unsigned char *meta;
     size_t meta_cap;
@@ -64,8 +66,9 @@ int gfx_pump(ff_gfx *g, UINT timeout_ms, int force);
 /* возвращает окно в самый верх: полноэкранные приложения и блокировка экрана сбивают z-порядок */
 void gfx_reassert(ff_gfx *g);
 
-/* ресурсы подписи кадра и её чтение: рендер хеша в текстуру 1x1 и считывание четырёх байт */
+/* ресурсы сравнения кадров и само сравнение: шейдер пишет флаг на каждый блок 16x16, процессор читает флаги.
+ * в *changed попадает 1, если текущий и предыдущий кадр различаются хоть в одном пикселе; -1 при сбое чтения */
 int gfx_sig_open(ff_gfx *g, char *err);
-int gfx_sig_read(ff_gfx *g, unsigned *out);
+int gfx_sig_diff(ff_gfx *g, int *changed);
 
 #endif
