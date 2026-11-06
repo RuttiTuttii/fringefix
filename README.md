@@ -6,7 +6,7 @@
 
 A Windows overlay that shifts the colour channels of the finished frame by fractions of a pixel to cancel colour fringing on QD-OLED panels with the triangular subpixel layout (4th generation and earlier). Lives in the tray, tuned with sliders, updates from GitHub Releases.
 
-> limitations: checked by hand on one configuration: RTX 4070 Ti and Gigabyte MO32U24 (31.5", 4K, 240 Hz, QD-OLED gen 3), Windows. Everything in the feature list that can be checked on it works. Not checked: AMD and Intel GPUs, other panels, several monitors on different GPUs, DRM video, update authenticity (the hash lives in the same release as the exe). Rotated monitors are not supported, the program stops with an error. The Linux part of CI only checks the portable modules and builds the exe; the overlay itself does not run on Linux. Requires Windows 10 2004 or newer. More in the "limitations and not done" section.
+> limitations: checked by hand on one configuration: RTX 4070 Ti and Gigabyte MO32U24 (31.5", 4K, 240 Hz, QD-OLED gen 3), Windows. Everything in the feature list that can be checked on it works. Not checked: AMD and Intel GPUs, other panels, several monitors on different GPUs, DRM video, update authenticity (the hash lives in the same release as the exe). Rotated monitors are not supported, the program stops with an error. The Linux part of CI only checks the portable modules and builds the exe; the overlay itself does not run on Linux. Requires Windows 10 2004 or newer. The ReShade add-on (beta) has not run with a real ReShade or inside a game. More in the "limitations and not done" section.
 
 ## what the problem looks like
 
@@ -181,6 +181,46 @@ what the report does not hold: user name, computer name, file paths, window titl
 
 the receiver on the server checks the report against a whitelist of fields, limits the size and the rate (5 per hour per address), stores each report as its own file with mode 0600 and records the client address nowhere: the rate limit keeps only a salt and a hash in memory. The receiver code and instructions are in `server/`. The receiving address goes into the exe at build time from the `REPORT_URL` variable and is not in the sources; if it is not set, the Send button is disabled and the other ways keep working. The server still sees the network address at the moment of the request, which is a property of any network connection.
 
+## ReShade add-on (beta)
+
+> beta: the dll is built by mingw-w64 and has not started with a real ReShade or inside a game. Checked: the effect compiles with the real `d3dcompiler_47` (under wine, 8-bit and FP16 variants), the value exchange between the app and a second process and the add-on marker work under wine, `ReShade.ini` parsing is covered by a test. Not checked: loading of the dll by a real ReShade (which is built with MSVC), GPU timestamps in D3D11, D3D12, Vulkan and OpenGL, the tab in the ReShade overlay.
+
+The add-on draws the same filter as engine 2, but inside the game's frame: no desktop capture, no frame comparison and no overlay window. What moves over from the app is `kernel.c` (the 3x3 window weights per channel are computed on the CPU) and the `psk` shader rewritten in the ReShade effect language (`addon/fringefix.fx`). Two files: `fringefix.addon64` (a C++17 dll, about 290 KB) and `fringefix.fx`. Both are embedded in the exe.
+
+**install.** The "Program" window, the "Diagnostics and ReShade" card, the "Install into a game..." button, pick the game exe:
+
+- the add-on is copied next to the game's `ReShade.ini` (or into `AddonPath` from its `[ADDON]` section)
+- the effect is copied into the first folder of `EffectSearchPaths` in `[GENERAL]`, `reshade-shaders\Shaders` by default
+- ReShade itself is not installed or downloaded; if it is not visible in the folder (no `ReShade.ini` and no proxy dll larger than a megabyte) the program asks whether to copy the files anyway
+- a running game holds the dll, so the replace fails: close the game first
+- "Remove from a game..." deletes both files. After updating the app, install the add-on again: its version is embedded in the exe
+
+Requires ReShade 6.8.0 or newer built with full add-on support: the regular ("limited") build skips `*.addon64`. The version is tied to ReShade because the add-on asks it for the Dear ImGui 1.92.5 (19250) function table and ReShade 6.8.0 offers no other. 64-bit games only. The effect is on by default (the `enabled` annotation); put it last in the technique list: the fringe is computed from the final picture.
+
+**where the settings come from.** The order is below, the fringefix tab in the ReShade overlay names the source in use:
+
+| source | when | what it is |
+| --- | --- | --- |
+| the app, live values | the app is running | what the sliders show right now, before "Save"; the filter switch too. Named shared memory `Local\fringefix_live_v1`, the add-on reads it every 0.5 seconds |
+| `fringefix.ini` | the app is closed | what was last saved in `%APPDATA%\fringefix`; re-read when its write time changes |
+| own values | the "Follow the fringefix app" box is off or there is no ini | six shifts and sharpness from the tab, kept in the game's `ReShade.ini`, section `[FRINGEFIX]` |
+
+**overlay pause.** While the effect is loaded and enabled in ReShade, the add-on holds a named mutex `Local\fringefix_addon_<pid>` in the game process. Every 0.5 seconds the app checks the process of the active window, and if the window lies on the overlay monitor and the mutex exists, the overlay pauses in any auto-pause mode; the "never pause" lists do not apply in that case, otherwise the shift would be applied twice. The tray tip reads "paused, the ReShade add-on is running in the game". A report marks such a session `how = addon`.
+
+**the fringefix tab in the ReShade overlay.** The source, the checkbox, six shift sliders and sharpness (editable only on own values), measurements in the spirit of the diagnostics window. Measurements run only while the tab is open:
+
+- GPU time of the effect pass: timestamps between the end of the previous ReShade technique and the end of ours, including the frame copy ReShade makes for each technique
+- CPU time of all ReShade effects per frame, frame interval and frame rate
+- GPU power, load and clock through `nvml.dll`, NVIDIA only
+- three graphs over the last 240 frames and a summary of mean, p95 and maximum
+
+Add-on limitations:
+
+- works only in games with ReShade: the desktop, browsers and other windows without it stay on the overlay
+- ReShade in games with anti-cheat (EAC, BattlEye and similar) can get an account banned; the app's overlay does not carry that risk
+- a game without the add-on follows the auto-pause rules as before; the add-on affects only the process it is loaded into
+- ReShade may write the effect's service uniforms into the preset; the add-on pushes its own values again every time a preset or the effects are loaded
+
 ## diagnostics and engines (beta)
 
 > beta: engines 1 and 2 and the diagnostics window were written without running on a real GPU. The shaders compile with the real `d3dcompiler_47`, the 3x3 kernel math is checked against the classic shader formulas by a test over 400 shift sets, and on D3D11 under wine (software GL) the kernel shader differs from the classic one by at most 0.003 while the compute comparison flags match the pixel one block for block. The first run shows time and power on real hardware.
@@ -220,11 +260,14 @@ main.c ─ ui_tray.c ─ ui_settings.c ─ ui_controls.c, ui_paint.c, slider.c, 
   │         │            └─ ui_profile.c, pattern.c
   │         │            └─ ui_bench.c ─ bench.c, power.c, benchstat.c
   │         │            └─ ui_versions.c, ui_app.c, ui_prefs.c, autostart.c
+  │         │            └─ ui_reshade.c ─ reshade_inst.c, rspaths.c
   │         │            └─ ui_report.c ─ report_actions.c, report_send.c, report.c
   │         └─ ui_update.c ─ update.c, update_install.c ─ http.c, sha256.c, release.c
-  └─ app.c ─ config.c, profile.c, profile_io.c, i18n.c, stats.c, stats_store.c
+  └─ app.c ─ config.c, profile.c, profile_io.c, i18n.c, stats.c, stats_store.c, live.c
        └─ capture.c (own thread) ─ gamedetect.c ─ applist.c
             └─ gfx.c, gfx_frame.c, gfx_sig.c, gfx_prof.c ─ shader.c, kernel.c, output.c
+
+add-on (own dll, src/ is shared):  addon/addon.cpp ─ fringefix.fx, kernel.c, config.c, live.c, power.c, benchstat.c
 ```
 
 - the frame comes from `IDXGIOutput6::DuplicateOutput1`, format follows the desktop mode: 8-bit in SDR, FP16 scRGB in HDR
@@ -264,13 +307,13 @@ make test SAN=1 WERROR=1
 ```
 
 ```bash
-# Windows build with the mingw-w64 cross compiler, REPO enables update checks
+# Windows build with the mingw-w64 cross compiler (gcc and g++: the ReShade add-on is C++ and is embedded in the exe), REPO enables update checks
 make win REPO=owner/fringefix
 ```
 
 ```bash
 # native build in msys2 UCRT64
-make win CC_WIN=gcc WINDRES=windres REPO=owner/fringefix
+make win CC_WIN=gcc CXX_WIN=g++ WINDRES=windres REPO=owner/fringefix
 ```
 
 ```bash
@@ -301,5 +344,6 @@ the application runs on Windows only: capture through DXGI Desktop Duplication a
 - languages other than Russian and English
 - the overlay adds at least one frame of latency over the desktop, I did not measure it in milliseconds
 - the overlay turns off a game's independent flip path around DWM, which is why auto-pause exists
+- the ReShade add-on: checked up to loading (build, shader compile, value exchange under wine), it has not run in a game; 32-bit games are not supported; in games with anti-cheat ReShade can get an account banned
 
 [GPL-3.0](LICENSE)

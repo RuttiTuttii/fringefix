@@ -5,6 +5,7 @@
 #include "app.h"
 #include "bench.h"
 #include "fileio.h"
+#include "live.h"
 
 #define INI_MAX 8192
 
@@ -57,12 +58,17 @@ int app_init(ff_app *a, HINSTANCE inst)
     load_ini(a);
     app_profile_install_bundled(a);
     a->enabled = 1;
+    /* аддон ReShade читает отсюда живые значения; без памяти он берёт ini, поэтому сбой не фатален */
+    if (live_publish_open() == 0) {
+        live_publish(&a->cfg, 1);
+    }
     return 0;
 }
 
 void app_shutdown(ff_app *a)
 {
     capture_stop(a);
+    live_publish_close();
     if (a->wake) {
         CloseHandle(a->wake);
         a->wake = NULL;
@@ -79,6 +85,7 @@ int app_save(ff_app *a)
 
 void app_apply(ff_app *a)
 {
+    live_publish(&a->cfg, a->enabled);
     InterlockedExchange(&a->dirty, 1);
     SetEvent(a->wake);
 }
@@ -86,6 +93,7 @@ void app_apply(ff_app *a)
 void app_set_enabled(ff_app *a, int on)
 {
     InterlockedExchange(&a->enabled, on ? 1 : 0);
+    live_publish(&a->cfg, on);
     SetEvent(a->wake);
 }
 

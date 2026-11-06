@@ -51,7 +51,8 @@ static void tray_notify(ff_app *a, DWORD msg)
     nid.uCallbackMessage = WM_APP_TRAY;
     nid.hIcon = a->enabled && !a->suspended ? g_icon_on : g_icon_off;
     _snwprintf(nid.szTip, 128, L"fringefix %ls: %ls", L"" FF_VERSION,
-               ff_tr(!a->enabled ? S_TIP_OFF : (a->suspended ? S_TIP_PAUSED : S_TIP_ON)));
+               ff_tr(!a->enabled ? S_TIP_OFF
+                     : (a->suspended ? (a->pause_addon ? S_TIP_ADDON : S_TIP_PAUSED) : S_TIP_ON)));
     nid.szTip[127] = L'\0';
     Shell_NotifyIconW(msg, &nid);
 }

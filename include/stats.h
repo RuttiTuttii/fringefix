@@ -11,7 +11,7 @@
 /* одна программа, из-за которой оверлей уходил на паузу или в облегчённый режим */
 typedef struct {
     char exe[FF_EXE_LEN];
-    /* как определена: fullscreen, 3d или listed */
+    /* как определена: fullscreen, 3d, listed или addon (в процессе работает ReShade-аддон) */
     char how[12];
     /* что сделал оверлей: pause или light */
     char action[8];

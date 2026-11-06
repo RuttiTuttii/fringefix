@@ -11,4 +11,8 @@
 /* номера комплектных профилей, тип RCDATA */
 #define IDR_PROFILE_QD34 201
 
+/* ReShade-аддон и его эффект, тип RCDATA; аддон собирается в build/fringefix.addon64 до exe */
+#define IDR_ADDON 202
+#define IDR_ADDON_FX 203
+
 #endif

@@ -135,7 +135,7 @@ static const wchar_t *const RU[S_COUNT] = {
                   L"Букву или цифру нужно сочетать с Ctrl, Alt, Shift или Win."),
     [S_HK_BUSY] = L"Это сочетание занято другой программой.",
     [S_BTN_DIAG] = L"Диагностика и замеры...",
-    [S_CARD_ENGINE] = L"Диагностика (бета)",
+    [S_CARD_ENGINE] = L"Диагностика и ReShade (бета)",
     [S_ENGINE] = L"Движок",
     [S_ENG_0] = L"0: классический",
     [S_ENG_1] = L"1: compute-сравнение кадров",
@@ -157,6 +157,17 @@ static const wchar_t *const RU[S_COUNT] = {
     [S_DIAG_FALLBACK] = L"Движок %d не поднялся на этой видеокарте, работает классический: %hs",
     [S_DIAG_NOW] = L"Заказан движок %d, действует %d",
     [S_DIAG_NODATA] = L"нет кадров: экран не меняется или фильтр на паузе",
+    [S_BTN_RS_INSTALL] = L"Установить в игру...",
+    [S_BTN_RS_REMOVE] = L"Удалить из игры...",
+    [S_RS_PICK] = L"Выбери exe игры, в чьей папке стоит ReShade",
+    [S_RS_NO_RESHADE] = L"В этой папке не нашёл ReShade. Аддон работает только вместе с ним. Всё равно поставить файлы?",
+    [S_RS_DONE] = L"Готово.\n\nАддон: %ls\nЭффект: %ls\n\nПерезапусти игру. Нужен ReShade 6.8.0 или новее с поддержкой аддонов, иначе аддон не загрузится без сообщений. В оверлее ReShade появится вкладка fringefix; эффект fringefix лучше поставить последним в списке. Пока в игре работает аддон, оверлей на паузе, а настройки берутся из приложения.",
+    [S_RS_FAILED] = L"Не удалось записать файл %ls%ls. Если игра запущена, закрой её и повтори.",
+    [S_RS_NO_RES] = L"В этой сборке нет аддона: он вшивается при сборке с поддержкой C++.",
+    [S_RS_BAD_PATH] = L"Не удалось определить папку игры.",
+    [S_RS_REMOVED] = L"Удалено файлов: %ls%ls",
+    [S_RS_NOTHING] = L"В папке этой игры файлов fringefix не найдено.",
+    [S_TIP_ADDON] = L"пауза, в игре работает ReShade-аддон",
 };
 
 static const wchar_t *const EN[S_COUNT] = {
@@ -292,7 +303,7 @@ static const wchar_t *const EN[S_COUNT] = {
                   L"A letter or digit needs Ctrl, Alt, Shift or Win."),
     [S_HK_BUSY] = L"Another program already uses this hotkey.",
     [S_BTN_DIAG] = L"Diagnostics and measurements...",
-    [S_CARD_ENGINE] = L"Diagnostics (beta)",
+    [S_CARD_ENGINE] = L"Diagnostics and ReShade (beta)",
     [S_ENGINE] = L"Engine",
     [S_ENG_0] = L"0: classic",
     [S_ENG_1] = L"1: compute frame comparison",
@@ -314,6 +325,17 @@ static const wchar_t *const EN[S_COUNT] = {
     [S_DIAG_FALLBACK] = L"Engine %d did not start on this GPU, the classic one runs: %hs",
     [S_DIAG_NOW] = L"Engine %d requested, %d active",
     [S_DIAG_NODATA] = L"no frames: the screen is not changing or the filter is paused",
+    [S_BTN_RS_INSTALL] = L"Install into a game...",
+    [S_BTN_RS_REMOVE] = L"Remove from a game...",
+    [S_RS_PICK] = L"Pick the game exe whose folder has ReShade",
+    [S_RS_NO_RESHADE] = L"No ReShade found in this folder. The add-on only works together with it. Copy the files anyway?",
+    [S_RS_DONE] = L"Done.\n\nAdd-on: %ls\nEffect: %ls\n\nRestart the game. ReShade 6.8.0 or newer with add-on support is required, otherwise the add-on silently does not load. The ReShade overlay gets a fringefix tab; put the fringefix effect last in the list. While the add-on runs in a game the overlay stays paused and the settings come from the app.",
+    [S_RS_FAILED] = L"Could not write %ls%ls. If the game is running, close it and try again.",
+    [S_RS_NO_RES] = L"This build has no add-on: it is embedded when the build has C++ support.",
+    [S_RS_BAD_PATH] = L"Could not work out the game folder.",
+    [S_RS_REMOVED] = L"Files removed: %ls%ls",
+    [S_RS_NOTHING] = L"No fringefix files found in this game's folder.",
+    [S_TIP_ADDON] = L"paused, the ReShade add-on is running in the game",
 };
 
 /* PRIMARYLANGID русского в Windows, значение из winnt.h: модуль не зависит от платформы */

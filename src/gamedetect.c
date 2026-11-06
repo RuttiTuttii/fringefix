@@ -4,6 +4,7 @@
 
 #include "applist.h"
 #include "gamedetect.h"
+#include "live.h"
 
 #define COVER_SLACK 2
 #define MAX_MODULES 1024
@@ -159,11 +160,22 @@ int game_detect(const ff_config *cfg, const RECT *monitor, char exe[64])
     RECT overlap;
 
     exe[0] = '\0';
-    if (cfg->auto_pause <= 0 || !fg) {
+    if (!fg) {
         return GAME_NONE;
     }
     GetWindowThreadProcessId(fg, &pid);
     if (pid == GetCurrentProcessId() || is_shell_window(fg)) {
+        return GAME_NONE;
+    }
+    /* аддон ReShade в этом процессе сам рисует фильтр: пауза безусловна, списки и режим автопаузы не спрашиваются.
+     * окно игры на другом мониторе оверлей этого монитора не касается. проверка идёт до чтения пути процесса:
+     * при выключенной автопаузе это единственное, что делается каждые полсекунды */
+    if (live_addon_present(pid) && (!GetWindowRect(fg, &wr) || IntersectRect(&overlap, &wr, monitor))) {
+        exe_path(pid, path);
+        base_name_utf8(path, exe);
+        return GAME_ADDON;
+    }
+    if (cfg->auto_pause <= 0) {
         return GAME_NONE;
     }
     exe_path(pid, path);

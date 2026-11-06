@@ -76,6 +76,10 @@ void ui_versions_on_list(ff_app *a, ff_release_list *list);
 int ui_profile_load_dialog(HWND owner, ff_app *a, wchar_t name[PROFILE_NAME_LEN]);
 int ui_profile_save_dialog(HWND owner, ff_app *a, wchar_t name[PROFILE_NAME_LEN]);
 
+/* установка и удаление ReShade-аддона в папке игры, которую выбирает пользователь (reshade_inst.h) */
+void ui_reshade_install(HWND owner);
+void ui_reshade_remove(HWND owner);
+
 /* ответы фоновых потоков обновления */
 void ui_update_on_info(ff_app *a, ff_update_info *info);
 void ui_update_on_done(ff_app *a, ff_install_result *res);
