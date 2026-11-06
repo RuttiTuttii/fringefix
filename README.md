@@ -286,3 +286,5 @@ the application runs on Windows only: capture through DXGI Desktop Duplication a
 - a Linux version: planned (a GNOME Shell extension, a KWin effect or a Hyprland shader), capture through DXGI does not port to Linux
 - languages other than Russian and English
 - the overlay adds one frame of latency over the desktop
+
+[GPL-3.0](LICENSE)
