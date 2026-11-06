@@ -6,7 +6,7 @@
 
 A Windows overlay that shifts the colour channels of the finished frame by fractions of a pixel to cancel colour fringing on QD-OLED panels with the triangular subpixel layout (4th generation and earlier). Lives in the tray, tuned with sliders, updates from GitHub Releases.
 
-> limitations: the project builds with mingw-w64 without warnings, the portable-module tests (12 suites) pass under ASan and UBSan, the report receiver was checked from outside on both addresses. Version 0.1.0 ran on one machine with a 4K QD-OLED in SDR: the tray, settings window and overlay worked. Everything added later has not run on Windows: the HDR path, the updater and version picker, the wizard, auto-pause and light mode, the dark theme, language and theme choice, statistics and report sending, the filter switch, the new test pattern, four auto-pause modes, the app lists window with the process picker, the beta channel, reopening windows after an update, start with Windows and the bundled profile. The frame comparison fix and the HDR surface format were checked on one machine by the tester. Requires Windows 10 2004 or newer.
+> limitations: checked by hand on one configuration: RTX 4070 Ti and Gigabyte MO32U24 (31.5", 4K, 240 Hz, QD-OLED gen 3), Windows. Everything in the feature list that can be checked on it works. Not checked: AMD and Intel GPUs, other panels, several monitors on different GPUs, DRM video, update authenticity (the hash lives in the same release as the exe). Rotated monitors are not supported, the program stops with an error. The Linux part of CI only checks the portable modules and builds the exe; the overlay itself does not run on Linux. Requires Windows 10 2004 or newer. More in the "limitations and not done" section.
 
 ## what the problem looks like
 
@@ -17,10 +17,9 @@ on first-to-fourth generation QD-OLED the subpixels form a triangle: green above
 ## features
 
 <table>
-<tr><td width="50%" valign="top"><img src="assets/icons/shift.svg" width="44" height="44" alt=""><br><b>Channel shift</b><br>The shader moves red, green and blue by fractions of a pixel: 18 texture reads per pixel, redrawn only when the screen changes.</td><td width="50%" valign="top"><img src="assets/icons/wizard.svg" width="44" height="44" alt=""><br><b>Setup wizard</b><br>Three steps by panel type. Removed from the window until statistics from different panels arrive, the code stays in the build.</td></tr>
+<tr><td width="50%" valign="top"><img src="assets/icons/shift.svg" width="44" height="44" alt=""><br><b>Channel shift</b><br>The shader moves red, green and blue by fractions of a pixel: 18 texture reads per pixel, redrawn only when the screen changes.</td><td width="50%" valign="top"><img src="assets/icons/versions.svg" width="44" height="44" alt=""><br><b>Versions and rollback</b><br>A release list, install of any version, SHA-256 check.</td></tr>
 <tr><td width="50%" valign="top"><img src="assets/icons/games.svg" width="44" height="44" alt=""><br><b>Auto-pause in games</b><br>Four modes: fullscreen apps, 3D apps, both, off. A list of programs the filter is always applied to.</td><td width="50%" valign="top"><img src="assets/icons/profiles.svg" width="44" height="44" alt=""><br><b>JSON profiles</b><br>Shifts and sharpness are saved to a file and switched from the tray menu. A profile for QD-OLED gen 3 and 4 is built into the exe.</td></tr>
-<tr><td width="50%" valign="top"><img src="assets/icons/versions.svg" width="44" height="44" alt=""><br><b>Versions and rollback</b><br>A release list, install of any version, SHA-256 check.</td><td width="50%" valign="top"><img src="assets/icons/privacy.svg" width="44" height="44" alt=""><br><b>Privacy</b><br>Statistics are local and off until you turn them on. The report is shown in full before sending.</td></tr>
-<tr><td width="50%" valign="top"><img src="assets/icons/theme.svg" width="44" height="44" alt=""><br><b>Language and theme</b><br>Russian and English, light and dark theme, auto from the system or by hand.</td><td width="50%" valign="top"><img src="assets/icons/report.svg" width="44" height="44" alt=""><br><b>Reports</b><br>To the project server, through a GitHub issue or to a file.</td></tr>
+<tr><td width="50%" valign="top"><img src="assets/icons/privacy.svg" width="44" height="44" alt=""><br><b>Privacy and reports</b><br>Statistics are local and off until you turn them on. The report is shown in full before sending and goes to the project server, through a GitHub issue or to a file.</td><td width="50%" valign="top"><img src="assets/icons/theme.svg" width="44" height="44" alt=""><br><b>Language and theme</b><br>Russian and English, light and dark theme, auto from the system or by hand.</td></tr>
 </table>
 
 ## screenshots
@@ -86,23 +85,6 @@ The test pattern is as tall as the settings window and half as wide. The top hal
 - sharpness is from -1 to 1: plus strengthens contours, minus softens them
 
 A sub-pixel shift goes through bilinear interpolation, which blurs. The shader restores sharpness up front with a laplacian of strength `min(1.72 * f^2, 0.35)`, where `f` is the fractional part of the shift. So with non-zero shifts a small contour boost exists even at sharpness 0, and with zero shifts there is none. Sharpness -1 cancels the maximum of that boost completely.
-
-## setup wizard
-
-
-> there is no wizard button in the window now: it was removed until statistics from different panels arrive. The `ui_wizard.c` file builds but is not called from the interface.
-
-three steps:
-
-1. panel type: QD-OLED with triangular subpixels (gen 1-4) or RGB stripes where no correction is needed
-2. vertical strength with the test pattern open: look at the horizontal lines
-3. horizontal strength: look at the vertical lines in the left half
-
-for the triangular layout the shifts are computed from the geometry: red and blue sit side by side at the bottom, green above them in the middle, offsets from the pixel centre are 0.25 each. A channel must show the picture where it physically sits, so the shift is minus the offset: green vertical +0.25, red and blue vertical -0.25, red horizontal +0.25, blue -0.25. The vertical signs match the values the original's author found by hand (green plus, red and blue minus).
-
-both strengths go from -3 to 3 and scale the offsets along their axis, a minus mirrors the layout: useful if the panel has green at the bottom or red and blue the other way round. Finish keeps the values and saves the settings, Cancel restores the previous shifts. The horizontal strength often has to be reduced: ClearType already shifts text horizontally for RGB stripes.
-
-the calculation follows a panel model, not a measurement: there is no automatic fringing measurement, for example from a phone photo.
 
 ## auto-pause
 
@@ -199,6 +181,35 @@ what the report does not hold: user name, computer name, file paths, window titl
 
 the receiver on the server checks the report against a whitelist of fields, limits the size and the rate (5 per hour per address), stores each report as its own file with mode 0600 and records the client address nowhere: the rate limit keeps only a salt and a hash in memory. The receiver code and instructions are in `server/`. The receiving address goes into the exe at build time from the `REPORT_URL` variable and is not in the sources; if it is not set, the Send button is disabled and the other ways keep working. The server still sees the network address at the moment of the request, which is a property of any network connection.
 
+## diagnostics and engines (beta)
+
+> beta: engines 1 and 2 and the diagnostics window were written without running on a real GPU. The shaders compile with the real `d3dcompiler_47`, the 3x3 kernel math is checked against the classic shader formulas by a test over 400 shift sets, and on D3D11 under wine (software GL) the kernel shader differs from the classic one by at most 0.003 while the compute comparison flags match the pixel one block for block. The first run shows time and power on real hardware.
+
+The "Diagnostics and measurements..." button in the program settings window opens a window with a summary, graphs and a run. The `engine` ini key stores the chosen engine (0, 1 or 2), 0 by default.
+
+| engine | frame comparison | filter |
+| --- | --- | --- |
+| 0, classic | pixel shader, 32,400 threads of 256 pixels each in sequence | 18 texture reads per pixel |
+| 1, compute comparison | compute shader, a 16 by 16 thread group per block, 8.3 million threads | same as 0 |
+| 2, compute and 3x3 kernel | same as 1 | one 3x3 window per channel, weights computed on the CPU; 9 reads per pixel when the shift spread between channels is under one pixel on each axis, otherwise 27 |
+
+The picture is the same for all three. Engine 2 differs from the classic one only in that bilinear weights are exact rather than the 8-bit hardware ones, so values can differ by a fraction of the lowest bit. If the compute shader or the kernel shader fails to create on the GPU, the diagnostics window states the reason and the overlay runs on the engine below. Light mode in games always uses the classic shader.
+
+What is measured while the window is open:
+
+- GPU stage times with D3D11 timers: frame copy, comparison, shader. The timers sit at command boundaries, so they include gaps between commands
+- CPU time of a cycle from receiving the frame to the `Present` call, the duration of `Present` itself (it waits for vertical sync), the frame's age at DWM when received, and the gap between consecutive draws
+- GPU power, load and clock through `nvml.dll` from the NVIDIA driver, refreshed about four times a second; on AMD and Intel these fields are empty. The program's CPU load is always counted
+- key-to-pixel latency is not measured: it needs an external instrument
+
+"Stress mode" draws every received frame, not only a changed one. Every draw makes DWM send a new frame, and the cycle runs at the monitor refresh rate, as with a constantly changing screen.
+
+"Run all engines" goes in order: 4 seconds of warm-up and 12 seconds of measurement with the filter off (base power), then 3 seconds of warm-up and 12 seconds of measurement for engines 0, 1 and 2 in stress mode. The results table shows per engine: cycles per second, GPU time (mean and p95), CPU time, `Present`, draw interval, watts, watts over the filter-off row, GPU load and clock. Close games and video during the run: auto-pause is not disabled. If the window is closed mid-run, the engine and the filter return to what they were and nothing is written to the ini.
+
+"Save CSV..." writes the run results (or a summary of the last seconds if there was no run) and, after a `# samples` line, the raw data of the last 4096 cycles.
+
+Measurement limits: the ring keeps the last 4096 cycles, about 17 seconds at 240 Hz; GPU timers run only while the window is open; NVML power is averaged by the driver and refreshes no more than once per 100 ms.
+
 ## how it works
 
 <p align="center"><img src="assets/readme/pipeline-en.svg" alt="Diagram: desktop, frame capture, frame signature, shader, overlay window" width="100%"></p>
@@ -206,22 +217,25 @@ the receiver on the server checks the report against a whitelist of fields, limi
 
 ```
 main.c ─ ui_tray.c ─ ui_settings.c ─ ui_controls.c, ui_paint.c, slider.c, theme.c
-  │         │            └─ ui_profile.c, ui_wizard.c ─ layout.c, pattern.c
+  │         │            └─ ui_profile.c, pattern.c
+  │         │            └─ ui_bench.c ─ bench.c, power.c, benchstat.c
   │         │            └─ ui_versions.c, ui_app.c, ui_prefs.c, autostart.c
   │         │            └─ ui_report.c ─ report_actions.c, report_send.c, report.c
   │         └─ ui_update.c ─ update.c, update_install.c ─ http.c, sha256.c, release.c
   └─ app.c ─ config.c, profile.c, profile_io.c, i18n.c, stats.c, stats_store.c
        └─ capture.c (own thread) ─ gamedetect.c ─ applist.c
-            └─ gfx.c, gfx_frame.c, gfx_sig.c ─ shader.c, output.c
+            └─ gfx.c, gfx_frame.c, gfx_sig.c, gfx_prof.c ─ shader.c, kernel.c, output.c
 ```
 
 - the frame comes from `IDXGIOutput6::DuplicateOutput1`, format follows the desktop mode: 8-bit in SDR, FP16 scRGB in HDR
 - the window uses `WDA_EXCLUDEFROMCAPTURE`, so it does not appear in the desktop snapshot
 - capture and overlay run in their own thread: menus, dialogs and window dragging do not freeze the picture
 - the overlay still wakes capture: per comments in the original's source, DWM recomposes the desktop after every `Present`. Without a guard each draw would trigger the next one at full refresh rate
-- so each frame is classified first: cursor-only is skipped, scrolls and small areas (under 1/50 of the screen) are drawn at once, anything else is compared by a signature (a hash over a 32 by 24 point grid computed on the GPU, 4 bytes read on the CPU) and skipped if unchanged
+- so each frame is classified first: cursor-only is skipped, scrolls and small areas (under 1/50 of the screen) are drawn at once, anything else is compared with the previous frame on the GPU: the screen is split into 16 by 16 pixel blocks, a shader compares the red, green and blue channels of both frames bit by bit, the CPU reads one flag per block (129,600 bytes at 4K) and skips the frame if nothing differs
 - every 2 seconds the window is put back on top of the z-order
 - each channel costs one hardware bilinear read plus 5 laplacian reads, 18 reads per pixel; at 4K 240 Hz that is about 36 billion reads per second (calculated, not measured)
+- the filter is global: every pixel of the screen goes through the shader with the same shifts, there is no mask
+- the per-stage breakdown (frame copy, comparison, shader, echo), a GPU load estimate and a list of possible optimizations are in [docs/performance.ru.md](docs/performance.ru.md) (Russian only); I did not measure the stage times
 
 ## updates
 
@@ -275,16 +289,17 @@ git tag v0.1.0 && git push origin v0.1.0
 
 the application runs on Windows only: capture through DXGI Desktop Duplication and output through Direct3D 11 do not port to Linux. On Linux the CI checks the code and builds the exe but does not run it.
 
-## not done
+## limitations and not done
 
 
-- automatic fringing measurement, for example from a photo of the screen: the wizard follows a panel model
+- automatic fringing measurement, for example from a photo of the screen: the shifts are tuned by hand with the test pattern
 - layouts other than the QD-OLED triangle: WOLED, for example, arranges subpixels differently
-- text-only mask for sharpening: sharpening applies to the whole screen
+- text-only mask for sharpening: shift and sharpening apply to the whole screen, photos and video are processed like text
 - rotated monitors
 - code signing and release signing
 - a Linux version: planned (a GNOME Shell extension, a KWin effect or a Hyprland shader), capture through DXGI does not port to Linux
 - languages other than Russian and English
-- the overlay adds one frame of latency over the desktop
+- the overlay adds at least one frame of latency over the desktop, I did not measure it in milliseconds
+- the overlay turns off a game's independent flip path around DWM, which is why auto-pause exists
 
 [GPL-3.0](LICENSE)
