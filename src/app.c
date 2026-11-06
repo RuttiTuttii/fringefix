@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "app.h"
+#include "bench.h"
 #include "fileio.h"
 
 #define INI_MAX 8192
@@ -45,6 +46,7 @@ static void load_ini(ff_app *a)
 int app_init(ff_app *a, HINSTANCE inst)
 {
     memset(a, 0, sizeof *a);
+    bench_init();
     a->inst = inst;
     ff_config_defaults(&a->cfg);
     a->wake = CreateEventW(NULL, FALSE, FALSE, NULL);

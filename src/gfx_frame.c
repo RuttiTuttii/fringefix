@@ -3,30 +3,80 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "bench.h"
 #include "gfx.h"
+#include "kernel.h"
 
 /* перерисовка по метаданным нужна, если сдвинулось окно или изменилась малая область:
  * доля экрана 1/50 отделяет курсор, каретку и текст от полноэкранного эха оверлея */
 #define SMALL_AREA_DIV 50
 
+/* действующий движок: заказанный, но не выше того, что собралось на этом устройстве */
+int gfx_engine_effective(const ff_gfx *g)
+{
+    int e = g->engine;
+
+    if (e >= 2 && !g->ps_k) {
+        e = 1;
+    }
+    if (e >= 1 && !g->cs_ok) {
+        e = 0;
+    }
+    return e;
+}
+
+/* раскладка совпадает с cbuffer в shader.c: три float4 классического шейдера, затем окна ядра 3x3 */
+typedef struct {
+    float shift_rg[4];
+    float shift_bx[4];
+    float mode[4];
+    int kbase[4];
+    int kbase2[4];
+    float kw[9][4];
+} cb_data;
+
+typedef char cb_size_must_be_224[sizeof(cb_data) == 224 ? 1 : -1];
+
 void gfx_upload(ff_gfx *g, const ff_config *c)
 {
     D3D11_MAPPED_SUBRESOURCE m;
-    float v[12];
+    cb_data d;
+    ff_kernel k;
+    float flat[6];
+    int ch;
+    int row;
 
-    v[0] = c->shift[0][0];
-    v[1] = c->shift[0][1];
-    v[2] = c->shift[1][0];
-    v[3] = c->shift[1][1];
-    v[4] = c->shift[2][0];
-    v[5] = c->shift[2][1];
-    v[6] = c->sharpen;
-    v[7] = g->hdr ? 1.0f : 0.0f;
-    v[8] = g->light ? 1.0f : 0.0f;
-    v[9] = v[10] = v[11] = 0.0f;
+    memset(&d, 0, sizeof d);
+    d.shift_rg[0] = c->shift[0][0];
+    d.shift_rg[1] = c->shift[0][1];
+    d.shift_rg[2] = c->shift[1][0];
+    d.shift_rg[3] = c->shift[1][1];
+    d.shift_bx[0] = c->shift[2][0];
+    d.shift_bx[1] = c->shift[2][1];
+    d.shift_bx[2] = c->sharpen;
+    d.shift_bx[3] = g->hdr ? 1.0f : 0.0f;
+    d.mode[0] = g->light ? 1.0f : 0.0f;
+    memcpy(flat, c->shift, sizeof flat);
+    ff_kernel_build(flat, c->sharpen, &k);
+    d.kbase[0] = k.base[0][0];
+    d.kbase[1] = k.base[0][1];
+    d.kbase[2] = k.base[1][0];
+    d.kbase[3] = k.base[1][1];
+    d.kbase2[0] = k.base[2][0];
+    d.kbase2[1] = k.base[2][1];
+    d.kbase2[2] = k.shared;
+    for (ch = 0; ch < 3; ch++) {
+        for (row = 0; row < 3; row++) {
+            d.kw[ch * 3 + row][0] = k.w[ch][row * 3];
+            d.kw[ch * 3 + row][1] = k.w[ch][row * 3 + 1];
+            d.kw[ch * 3 + row][2] = k.w[ch][row * 3 + 2];
+        }
+    }
+    g->engine = c->engine;
+    bench_set_engine_info(c->engine, gfx_engine_effective(g), g->cs_ok, g->note);
     if (SUCCEEDED(ID3D11DeviceContext_Map(g->ctx, (ID3D11Resource *)g->cb, 0,
                                           D3D11_MAP_WRITE_DISCARD, 0, &m))) {
-        memcpy(m.pData, v, sizeof v);
+        memcpy(m.pData, &d, sizeof d);
         ID3D11DeviceContext_Unmap(g->ctx, (ID3D11Resource *)g->cb, 0);
     }
 }
@@ -46,12 +96,23 @@ static void draw(ff_gfx *g)
     ID3D11DeviceContext_RSSetViewports(g->ctx, 1, &vp);
     ID3D11DeviceContext_IASetPrimitiveTopology(g->ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     ID3D11DeviceContext_VSSetShader(g->ctx, g->vs, NULL, 0);
-    ID3D11DeviceContext_PSSetShader(g->ctx, g->ps, NULL, 0);
+    /* облегчённый режим всегда идёт классическим шейдером: три чтения на пиксель дешевле окна 3x3 */
+    ID3D11DeviceContext_PSSetShader(g->ctx, gfx_engine_effective(g) >= 2 && !g->light ? g->ps_k : g->ps,
+                                    NULL, 0);
     ID3D11DeviceContext_PSSetShaderResources(g->ctx, 0, 1, &g->srv[g->cur]);
     ID3D11DeviceContext_PSSetSamplers(g->ctx, 0, 1, &g->smp);
     ID3D11DeviceContext_PSSetConstantBuffers(g->ctx, 0, 1, &g->cb);
     ID3D11DeviceContext_Draw(g->ctx, 3, 0);
-    IDXGISwapChain1_Present(g->sc, 1, 0);
+    gfx_prof_mark(g, 3);
+    {
+        LARGE_INTEGER before;
+        LARGE_INTEGER after;
+
+        QueryPerformanceCounter(&before);
+        IDXGISwapChain1_Present(g->sc, 1, 0);
+        QueryPerformanceCounter(&after);
+        gfx_prof_present(g, before.QuadPart, after.QuadPart);
+    }
     g->drawn++;
 
     /* окно показываем только после первой готовой картинки, иначе экран на миг станет чёрным */
@@ -134,7 +195,12 @@ int gfx_pump(ff_gfx *g, UINT timeout_ms, int force)
 {
     DXGI_OUTDUPL_FRAME_INFO info;
     IDXGIResource *res = NULL;
-    HRESULT hr = IDXGIOutputDuplication_AcquireNextFrame(g->dup, timeout_ms, &info, &res);
+    HRESULT hr;
+    unsigned echo_before = g->echo_skipped;
+    int echo = 0;
+
+    gfx_prof_collect(g);
+    hr = IDXGIOutputDuplication_AcquireNextFrame(g->dup, timeout_ms, &info, &res);
 
     if (hr == DXGI_ERROR_WAIT_TIMEOUT) {
         /* экран не менялся, перерисовка только по force */
@@ -161,14 +227,17 @@ int gfx_pump(ff_gfx *g, UINT timeout_ms, int force)
                 first = !g->have_frame;
 
                 /* новый кадр ложится во вторую копию, прежний остаётся для сравнения */
+                gfx_prof_begin(g, info.LastPresentTime.QuadPart);
                 g->cur = !g->cur;
                 ID3D11DeviceContext_CopyResource(g->ctx, (ID3D11Resource *)g->frame[g->cur],
                                                  (ID3D11Resource *)tex);
+                gfx_prof_mark(g, 1);
                 ID3D11Texture2D_Release(tex);
                 g->have_frame = 1;
                 if (frame_changed(g, &info) || first) {
                     force = 1;
                 }
+                echo = g->echo_skipped != echo_before;
             }
         }
         IDXGIResource_Release(res);
@@ -176,6 +245,9 @@ int gfx_pump(ff_gfx *g, UINT timeout_ms, int force)
     }
     if (force && g->have_frame) {
         draw(g);
+        gfx_prof_end(g, 1, echo);
+    } else {
+        gfx_prof_end(g, 0, echo);
     }
     return 1;
 }

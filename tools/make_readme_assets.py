@@ -53,9 +53,6 @@ def icons() -> None:
     # сдвиг каналов: пучок шариков и две стрелки
     icon("shift", f'<circle cx="32" cy="38" r="10" fill="{G}"/><circle cx="19" cy="17" r="10" fill="{R}"/>'
                   f'<circle cx="45" cy="17" r="10" fill="{B}"/><path class="ink" d="M10 56h14M20 51l-5 5 5 5M54 56H40M44 51l5 5-5 5"/>')
-    # мастер: палочка с синим кончиком и три искры вокруг
-    icon("wizard", f'<path class="ink" d="M11 53L33 31"/><path d="M33 31l8-8" stroke="{B}" stroke-width="7" stroke-linecap="round"/>'
-                   f'{star(53, 14, 9, G)}{star(56, 37, 6, R)}{star(27, 12, 7, B)}')
     # игры: геймпад с крестовиной и двумя кнопками
     icon("games", f'<rect class="ink" x="6" y="17" width="52" height="30" rx="15"/><path class="ink" d="M20 26v12M14 32h12"/>'
                   f'<circle cx="43" cy="28" r="3.6" fill="{R}"/><circle cx="50" cy="35" r="3.6" fill="{B}"/>')

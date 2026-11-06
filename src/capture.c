@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "app.h"
+#include "bench.h"
 #include "gamedetect.h"
 #include "gfx.h"
 #include "output.h"
@@ -218,7 +219,7 @@ static DWORD WINAPI capture_main(LPVOID arg)
             gfx_upload(&g, &c);
             force = 1;
         }
-        if (!gfx_pump(&g, a->fast ? FRAME_WAIT_UI_MS : FRAME_WAIT_MS, force)) {
+        if (!gfx_pump(&g, a->fast ? FRAME_WAIT_UI_MS : FRAME_WAIT_MS, force || bench_force())) {
             lost = 1;
             shutdown_gfx(&g);
         }

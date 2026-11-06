@@ -44,6 +44,9 @@ void ui_app_show(ff_app *a);
 int ui_app_get_pos(POINT *p);
 void ui_app_show_at(ff_app *a, int x, int y);
 
+/* диагностика (бета): выбор движка обработки, графики времени этапов и задержек, потребление, прогон по всем движкам */
+void ui_bench_show(ff_app *a);
+
 /* положение окна настроек, если оно открыто; 1 или 0 */
 int ui_settings_get_pos(POINT *p);
 void ui_settings_show_at(ff_app *a, int x, int y);
@@ -67,9 +70,6 @@ void ui_report_on_result(ff_app *a, ff_report_result *res);
 /* выбор версии из релизов репозитория с откатом на старую */
 void ui_versions_show(ff_app *a);
 void ui_versions_on_list(ff_app *a, ff_release_list *list);
-
-/* мастер настройки по типу матрицы: шаги с тестовым паттерном */
-void ui_wizard_show(ff_app *a);
 
 /* диалоги выбора файла профиля. 0 готово, 1 пользователь отказался,
  * -1 файл не открылся или не записался, -2 это не профиль fringefix; name получает имя без папки и .json */

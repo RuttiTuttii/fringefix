@@ -13,6 +13,26 @@ static void test_defaults(void)
     CHECK(c.game_action == 0 && c.gpu_priority == 0 && c.language == 0 && c.theme == 0 && c.stats == 0 && c.pause_apps[0] == '\0' && c.ignore_apps[0] == '\0');
 }
 
+static void test_engine(void)
+{
+    ff_config c;
+    ff_config b;
+    char buf[4096];
+
+    ff_config_defaults(&c);
+    CHECK(c.engine == 0);
+    CHECK(ff_config_parse("engine = 2\n", &c) == 1 && c.engine == 2);
+    /* вне диапазона зажимается, мусор отбрасывается */
+    CHECK(ff_config_parse("engine = 9\n", &c) == 1 && c.engine == 2);
+    CHECK(ff_config_parse("engine = -4\n", &c) == 1 && c.engine == 0);
+    CHECK(ff_config_parse("engine = x\n", &c) == 0 && c.engine == 0);
+    c.engine = 1;
+    CHECK(ff_config_format(&c, buf, sizeof buf) > 0);
+    ff_config_defaults(&b);
+    ff_config_parse(buf, &b);
+    CHECK(b.engine == 1);
+}
+
 static void test_hotkeys_and_beta(void)
 {
     ff_config c;
@@ -201,7 +221,7 @@ static void test_roundtrip(void)
     n = ff_config_format(&a, buf, sizeof buf);
     CHECK(n > 0);
     ff_config_defaults(&b);
-    CHECK(ff_config_parse(buf, &b) == 20);
+    CHECK(ff_config_parse(buf, &b) == 21);
     CHECK(memcmp(&a, &b, sizeof a) == 0);
     /* маленький буфер не должен молча обрезать файл */
     CHECK(ff_config_format(&a, tiny, sizeof tiny) == -1);
@@ -212,6 +232,7 @@ int main(void)
     test_defaults();
     test_values();
     test_long_lists();
+    test_engine();
     test_hotkeys_and_beta();
     test_clamp();
     test_game_keys();
