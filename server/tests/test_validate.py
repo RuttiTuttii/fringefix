@@ -78,6 +78,17 @@ class ValidateTest(unittest.TestCase):
             report["settings"]["auto_pause"] = mode
             self.assertEqual(validate_report(report)["settings"]["auto_pause"], mode)
 
+    def test_accepts_every_game_detection_kind(self) -> None:
+        # addon: в процессе работает ReShade-аддон и оверлей на паузе
+        for how in ("fullscreen", "3d", "listed", "addon"):
+            report = load()
+            report["games"][0]["how"] = how
+            self.assertEqual(validate_report(report)["games"][0]["how"], how)
+        report = load()
+        report["games"][0]["how"] = "reshade"
+        with self.assertRaises(ReportError):
+            validate_report(report)
+
     def test_limits_on_lists_and_comment(self) -> None:
         report = load()
         report["games"] = [copy.deepcopy(report["games"][0]) for _ in range(33)]
