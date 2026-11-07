@@ -146,6 +146,13 @@ static int parse_line(char *line, ff_config *cfg)
         cfg->stats = v >= 0.5;
         return 1;
     }
+    if (strcmp(key, "engine") == 0) {
+        if (!parse_number(val, 0.0, 2.0, &v)) {
+            return 0;
+        }
+        cfg->engine = (int)v;
+        return 1;
+    }
     if (strcmp(key, "pause_apps") == 0) {
         return copy_string(val, cfg->pause_apps, sizeof cfg->pause_apps);
     }
@@ -235,12 +242,13 @@ int ff_config_format(const ff_config *cfg, char *buf, size_t n)
         "\n; имена exe через точку с запятой: всегда на паузу (pause_apps) и никогда не на паузу, то есть фильтр применяется всегда (ignore_apps)\npause_apps = %s\nignore_apps = %s\n"
         "\n; язык интерфейса: 0 как в системе, 1 русский, 2 английский\nlanguage = %d\n"
         "\n; тема окон: 0 как в системе, 1 светлая, 2 тёмная\ntheme = %d\n"
-        "\n; локальная статистика для отчёта, сама ничего не отправляет: 0 или 1\nstats = %d\n",
+        "\n; локальная статистика для отчёта, сама ничего не отправляет: 0 или 1\nstats = %d\n"
+        "\n; движок обработки (бета): 0 классический, 1 сравнение кадров на compute-шейдере, 2 то же и фильтр ядром 3x3\nengine = %d\n",
         (double)cfg->shift[0][0], (double)cfg->shift[0][1],
         (double)cfg->shift[1][0], (double)cfg->shift[1][1],
         (double)cfg->shift[2][0], (double)cfg->shift[2][1],
         (double)cfg->sharpen, cfg->monitor, cfg->check_updates, cfg->beta, hk_toggle, hk_quit, cfg->auto_pause, cfg->game_action, cfg->gpu_priority,
-        cfg->pause_apps, cfg->ignore_apps, cfg->language, cfg->theme, cfg->stats);
+        cfg->pause_apps, cfg->ignore_apps, cfg->language, cfg->theme, cfg->stats, cfg->engine);
 
     return (w < 0 || (size_t)w >= n) ? -1 : w;
 }

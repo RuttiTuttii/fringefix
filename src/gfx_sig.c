@@ -23,6 +23,25 @@ int gfx_sig_open(ff_gfx *g, char *err)
                                        ID3D10Blob_GetBufferSize(blob), NULL, &g->sig_ps),
         "CreatePixelShader sig");
 
+    /* вычислительное сравнение необязательно: без него остаётся пиксельное, а причина уходит в окно диагностики */
+    {
+        char e2[GFX_ERR_LEN];
+        ID3DBlob *cs = NULL;
+
+        if (SUCCEEDED(ff_shader_compile("csdiff", "cs_5_0", &cs, e2, GFX_ERR_LEN))) {
+            if (SUCCEEDED(ID3D11Device_CreateComputeShader(g->dev, ID3D10Blob_GetBufferPointer(cs),
+                                                           ID3D10Blob_GetBufferSize(cs), NULL, &g->cs_diff))) {
+                g->cs_ok = 1;
+            } else {
+                snprintf(e2, sizeof e2, "csdiff create failed");
+            }
+        }
+        if (!g->cs_ok) {
+            snprintf(g->note, sizeof g->note, "%s", e2);
+        }
+        FF_REL(cs);
+    }
+
     /* результат сравнения: по пикселю на блок 16x16 для рендера и такая же текстура для чтения процессором */
     g->sig_w = (g->w + 15) / 16;
     g->sig_h = (g->h + 15) / 16;
@@ -34,10 +53,16 @@ int gfx_sig_open(ff_gfx *g, char *err)
     td.Format = DXGI_FORMAT_R32_UINT;
     td.SampleDesc.Count = 1;
     td.Usage = D3D11_USAGE_DEFAULT;
-    td.BindFlags = D3D11_BIND_RENDER_TARGET;
+    td.BindFlags = D3D11_BIND_RENDER_TARGET | (g->cs_ok ? D3D11_BIND_UNORDERED_ACCESS : 0);
     TRY(ID3D11Device_CreateTexture2D(g->dev, &td, NULL, &g->sig_tex), "CreateTexture2D sig");
     TRY(ID3D11Device_CreateRenderTargetView(g->dev, (ID3D11Resource *)g->sig_tex, NULL,
                                             &g->sig_rtv), "CreateRenderTargetView sig");
+    if (g->cs_ok && FAILED(ID3D11Device_CreateUnorderedAccessView(g->dev, (ID3D11Resource *)g->sig_tex, NULL,
+                                                                  &g->sig_uav))) {
+        g->cs_ok = 0;
+        FF_REL(g->cs_diff);
+        snprintf(g->note, sizeof g->note, "uav create failed");
+    }
     td.Usage = D3D11_USAGE_STAGING;
     td.BindFlags = 0;
     td.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
@@ -58,20 +83,35 @@ int gfx_sig_diff(ff_gfx *g, int *changed)
     UINT x;
     UINT y;
 
-    vp.Width = (float)g->sig_w;
-    vp.Height = (float)g->sig_h;
     /* t0 текущий кадр, t1 предыдущий */
     srvs[0] = g->srv[g->cur];
     srvs[1] = g->srv[!g->cur];
-    ID3D11DeviceContext_OMSetRenderTargets(g->ctx, 1, &g->sig_rtv, NULL);
-    ID3D11DeviceContext_RSSetViewports(g->ctx, 1, &vp);
-    ID3D11DeviceContext_IASetPrimitiveTopology(g->ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    ID3D11DeviceContext_VSSetShader(g->ctx, g->vs, NULL, 0);
-    ID3D11DeviceContext_PSSetShader(g->ctx, g->sig_ps, NULL, 0);
-    ID3D11DeviceContext_PSSetShaderResources(g->ctx, 0, 2, srvs);
-    ID3D11DeviceContext_Draw(g->ctx, 3, 0);
-    /* копии кадра сразу отвязываются: следующий кадр ляжет в одну из них */
-    ID3D11DeviceContext_PSSetShaderResources(g->ctx, 0, 2, none);
+    if (gfx_engine_effective(g) >= 1) {
+        ID3D11UnorderedAccessView *no_uav = NULL;
+
+        /* текстура флагов не может быть целью вывода и UAV одновременно */
+        ID3D11DeviceContext_OMSetRenderTargets(g->ctx, 0, NULL, NULL);
+        ID3D11DeviceContext_CSSetShader(g->ctx, g->cs_diff, NULL, 0);
+        ID3D11DeviceContext_CSSetShaderResources(g->ctx, 0, 2, srvs);
+        ID3D11DeviceContext_CSSetUnorderedAccessViews(g->ctx, 0, 1, &g->sig_uav, NULL);
+        ID3D11DeviceContext_Dispatch(g->ctx, g->sig_w, g->sig_h, 1);
+        ID3D11DeviceContext_CSSetUnorderedAccessViews(g->ctx, 0, 1, &no_uav, NULL);
+        ID3D11DeviceContext_CSSetShaderResources(g->ctx, 0, 2, none);
+        ID3D11DeviceContext_CSSetShader(g->ctx, NULL, NULL, 0);
+    } else {
+        vp.Width = (float)g->sig_w;
+        vp.Height = (float)g->sig_h;
+        ID3D11DeviceContext_OMSetRenderTargets(g->ctx, 1, &g->sig_rtv, NULL);
+        ID3D11DeviceContext_RSSetViewports(g->ctx, 1, &vp);
+        ID3D11DeviceContext_IASetPrimitiveTopology(g->ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        ID3D11DeviceContext_VSSetShader(g->ctx, g->vs, NULL, 0);
+        ID3D11DeviceContext_PSSetShader(g->ctx, g->sig_ps, NULL, 0);
+        ID3D11DeviceContext_PSSetShaderResources(g->ctx, 0, 2, srvs);
+        ID3D11DeviceContext_Draw(g->ctx, 3, 0);
+        /* копии кадра сразу отвязываются: следующий кадр ляжет в одну из них */
+        ID3D11DeviceContext_PSSetShaderResources(g->ctx, 0, 2, none);
+    }
+    gfx_prof_mark(g, 2);
     ID3D11DeviceContext_CopyResource(g->ctx, (ID3D11Resource *)g->sig_stage,
                                      (ID3D11Resource *)g->sig_tex);
     if (FAILED(ID3D11DeviceContext_Map(g->ctx, (ID3D11Resource *)g->sig_stage, 0, D3D11_MAP_READ, 0,

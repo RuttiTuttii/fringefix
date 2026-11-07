@@ -54,30 +54,6 @@ static const wchar_t *const RU[S_COUNT] = {
     [S_AP_FULLSCREEN] = L"В полноэкранных приложениях",
     [S_AP_3D] = L"В полноэкранных и 3D-приложениях",
     [S_TIP_PAUSED] = L"пауза, идёт игра или полный экран",
-    [S_BTN_WIZARD] = L"Мастер настройки...",
-    [S_WIZ_TITLE] = L"fringefix: мастер настройки",
-    [S_WIZ_STEP] = L"Шаг %d из 3",
-    [S_WIZ_T0] = L"Тип матрицы",
-    [S_WIZ_T1] = L"Вертикальная каёмка",
-    [S_WIZ_T2] = L"Горизонтальная каёмка",
-    [S_WIZ_B0] = L"Выбери тип матрицы монитора. Для QD-OLED с треугольными субпикселями мастер сам "
-                 L"посчитает сдвиги по геометрии: красный и синий стоят рядом снизу, зелёный над ними. "
-                 L"Дальше останется подогнать две силы, по вертикали и по горизонтали. "
-                 L"Для обычных RGB-полосок коррекция не нужна.",
-    [S_WIZ_B1] = L"Нажми «Тестовый паттерн» и смотри на горизонтальные линии в правой половине. "
-                 L"Двигай силу по вертикали, пока верхний и нижний края линий не станут серыми. "
-                 L"Если каёмка стала сильнее, двигай в другую сторону: минус зеркалит раскладку.",
-    [S_WIZ_B2] = L"Теперь смотри на вертикальные линии в левой половине и двигай силу по горизонтали, "
-                 L"пока их края не станут серыми. Потом нажми «Готово»: значения попадут в окно настроек, "
-                 L"там их можно уточнить вручную.",
-    [S_WIZ_TYPE_QD] = L"QD-OLED, треугольные субпиксели (поколения 1-4)",
-    [S_WIZ_TYPE_NONE] = L"RGB-полоски (LCD, QD-OLED 5 поколения): коррекция не нужна",
-    [S_WIZ_STRENGTH_V] = L"Сила по вертикали",
-    [S_WIZ_STRENGTH_H] = L"Сила по горизонтали",
-    [S_WIZ_BACK] = L"Назад",
-    [S_WIZ_NEXT] = L"Далее",
-    [S_WIZ_FINISH] = L"Готово",
-    [S_WIZ_CANCEL] = L"Отмена",
     [S_GAMEACTION] = L"Действие в играх",
     [S_GA_PAUSE] = L"Пауза",
     [S_GA_LIGHT] = L"Облегчённый режим",
@@ -158,6 +134,40 @@ static const wchar_t *const RU[S_COUNT] = {
     [S_HK_BAD] = (L"Сочетание не разобрано. Примеры: F10, Ctrl+Shift+F, none (выключено). "
                   L"Букву или цифру нужно сочетать с Ctrl, Alt, Shift или Win."),
     [S_HK_BUSY] = L"Это сочетание занято другой программой.",
+    [S_BTN_DIAG] = L"Диагностика и замеры...",
+    [S_CARD_ENGINE] = L"Диагностика и ReShade (бета)",
+    [S_ENGINE] = L"Движок",
+    [S_ENG_0] = L"0: классический",
+    [S_ENG_1] = L"1: compute-сравнение кадров",
+    [S_ENG_2] = L"2: compute и ядро 3x3",
+    [S_DIAG_TITLE] = L"fringefix: диагностика",
+    [S_DIAG_FORCE] = L"Нагрузочный режим: рисовать каждый кадр",
+    [S_DIAG_RUN] = L"Прогон по всем движкам",
+    [S_DIAG_STOP] = L"Остановить",
+    [S_DIAG_SAVE] = L"Сохранить CSV...",
+    [S_DIAG_HINT] = L"Закрой игры и видео. Прогон выключает фильтр на 16 секунд, затем гонит каждый движок по 15 секунд "
+                    L"в нагрузочном режиме и записывает время этапов, задержки и потребление.",
+    [S_DIAG_G_GPU] = L"Видеокарта, мс на кадр: копия, сравнение, шейдер",
+    [S_DIAG_G_LAT] = L"Задержки, мс: процессор, Present, возраст кадра, интервал отрисовок",
+    [S_DIAG_G_PWR] = L"Потребление: мощность, Вт, загрузка GPU и процессора, %",
+    [S_DIAG_TABLE] = L"Итоги прогона",
+    [S_DIAG_PHASE] = L"Прогон: %ls, осталось %d с",
+    [S_DIAG_DONE] = L"Прогон завершён, результаты ниже",
+    [S_DIAG_NO_NVML] = L"Потребление недоступно: нужна видеокарта NVIDIA и драйвер с nvml.dll",
+    [S_DIAG_FALLBACK] = L"Движок %d не поднялся на этой видеокарте, работает классический: %hs",
+    [S_DIAG_NOW] = L"Заказан движок %d, действует %d",
+    [S_DIAG_NODATA] = L"нет кадров: экран не меняется или фильтр на паузе",
+    [S_BTN_RS_INSTALL] = L"Установить в игру...",
+    [S_BTN_RS_REMOVE] = L"Удалить из игры...",
+    [S_RS_PICK] = L"Выбери exe игры, в чьей папке стоит ReShade",
+    [S_RS_NO_RESHADE] = L"В этой папке не нашёл ReShade. Аддон работает только вместе с ним. Всё равно поставить файлы?",
+    [S_RS_DONE] = L"Готово.\n\nАддон: %ls\nЭффект: %ls\n\nПерезапусти игру. Нужен ReShade 6.8.0 или новее с поддержкой аддонов, иначе аддон не загрузится без сообщений. В оверлее ReShade появится вкладка fringefix; эффект fringefix лучше поставить последним в списке. Пока в игре работает аддон, оверлей на паузе, а настройки берутся из приложения.",
+    [S_RS_FAILED] = L"Не удалось записать файл %ls%ls. Если игра запущена, закрой её и повтори.",
+    [S_RS_NO_RES] = L"В этой сборке нет аддона: он вшивается при сборке с поддержкой C++.",
+    [S_RS_BAD_PATH] = L"Не удалось определить папку игры.",
+    [S_RS_REMOVED] = L"Удалено файлов: %ls%ls",
+    [S_RS_NOTHING] = L"В папке этой игры файлов fringefix не найдено.",
+    [S_TIP_ADDON] = L"пауза, в игре работает ReShade-аддон",
 };
 
 static const wchar_t *const EN[S_COUNT] = {
@@ -212,30 +222,6 @@ static const wchar_t *const EN[S_COUNT] = {
     [S_AP_FULLSCREEN] = L"In fullscreen apps",
     [S_AP_3D] = L"In fullscreen and 3D apps",
     [S_TIP_PAUSED] = L"paused, a game or fullscreen app is running",
-    [S_BTN_WIZARD] = L"Setup wizard...",
-    [S_WIZ_TITLE] = L"fringefix setup wizard",
-    [S_WIZ_STEP] = L"Step %d of 3",
-    [S_WIZ_T0] = L"Panel type",
-    [S_WIZ_T1] = L"Vertical fringing",
-    [S_WIZ_T2] = L"Horizontal fringing",
-    [S_WIZ_B0] = L"Choose the panel type. For QD-OLED with triangular subpixels the wizard computes the "
-                 L"shifts from the geometry: red and blue sit side by side at the bottom, green above them. "
-                 L"What is left is to fit two strengths, vertical and horizontal. "
-                 L"Plain RGB stripes need no correction.",
-    [S_WIZ_B1] = L"Press the test pattern button and look at the horizontal lines in the right half. "
-                 L"Move the vertical strength until the top and bottom edges of the lines turn grey. "
-                 L"If the fringing got stronger, move the other way: a minus mirrors the layout.",
-    [S_WIZ_B2] = L"Now look at the vertical lines in the left half and move the horizontal strength "
-                 L"until their edges turn grey. Then press Finish: the values land in the settings "
-                 L"window where they can be refined by hand.",
-    [S_WIZ_TYPE_QD] = L"QD-OLED, triangular subpixels (gen 1-4)",
-    [S_WIZ_TYPE_NONE] = L"RGB stripes (LCD, 5th-gen QD-OLED): no correction needed",
-    [S_WIZ_STRENGTH_V] = L"Vertical strength",
-    [S_WIZ_STRENGTH_H] = L"Horizontal strength",
-    [S_WIZ_BACK] = L"Back",
-    [S_WIZ_NEXT] = L"Next",
-    [S_WIZ_FINISH] = L"Finish",
-    [S_WIZ_CANCEL] = L"Cancel",
     [S_GAMEACTION] = L"Action in games",
     [S_GA_PAUSE] = L"Pause",
     [S_GA_LIGHT] = L"Light mode",
@@ -316,6 +302,40 @@ static const wchar_t *const EN[S_COUNT] = {
     [S_HK_BAD] = (L"Could not read the hotkey. Examples: F10, Ctrl+Shift+F, none (off). "
                   L"A letter or digit needs Ctrl, Alt, Shift or Win."),
     [S_HK_BUSY] = L"Another program already uses this hotkey.",
+    [S_BTN_DIAG] = L"Diagnostics and measurements...",
+    [S_CARD_ENGINE] = L"Diagnostics and ReShade (beta)",
+    [S_ENGINE] = L"Engine",
+    [S_ENG_0] = L"0: classic",
+    [S_ENG_1] = L"1: compute frame comparison",
+    [S_ENG_2] = L"2: compute and 3x3 kernel",
+    [S_DIAG_TITLE] = L"fringefix diagnostics",
+    [S_DIAG_FORCE] = L"Stress mode: draw every frame",
+    [S_DIAG_RUN] = L"Run all engines",
+    [S_DIAG_STOP] = L"Stop",
+    [S_DIAG_SAVE] = L"Save CSV...",
+    [S_DIAG_HINT] = L"Close games and video. The run switches the filter off for 16 seconds, then runs each engine for "
+                    L"15 seconds in stress mode and records stage times, latencies and power.",
+    [S_DIAG_G_GPU] = L"GPU, ms per frame: copy, comparison, shader",
+    [S_DIAG_G_LAT] = L"Latency, ms: CPU, Present, frame age, draw interval",
+    [S_DIAG_G_PWR] = L"Power: watts, GPU and CPU load, %",
+    [S_DIAG_TABLE] = L"Run results",
+    [S_DIAG_PHASE] = L"Run: %ls, %d s left",
+    [S_DIAG_DONE] = L"Run finished, results below",
+    [S_DIAG_NO_NVML] = L"Power is unavailable: needs an NVIDIA GPU and a driver with nvml.dll",
+    [S_DIAG_FALLBACK] = L"Engine %d did not start on this GPU, the classic one runs: %hs",
+    [S_DIAG_NOW] = L"Engine %d requested, %d active",
+    [S_DIAG_NODATA] = L"no frames: the screen is not changing or the filter is paused",
+    [S_BTN_RS_INSTALL] = L"Install into a game...",
+    [S_BTN_RS_REMOVE] = L"Remove from a game...",
+    [S_RS_PICK] = L"Pick the game exe whose folder has ReShade",
+    [S_RS_NO_RESHADE] = L"No ReShade found in this folder. The add-on only works together with it. Copy the files anyway?",
+    [S_RS_DONE] = L"Done.\n\nAdd-on: %ls\nEffect: %ls\n\nRestart the game. ReShade 6.8.0 or newer with add-on support is required, otherwise the add-on silently does not load. The ReShade overlay gets a fringefix tab; put the fringefix effect last in the list. While the add-on runs in a game the overlay stays paused and the settings come from the app.",
+    [S_RS_FAILED] = L"Could not write %ls%ls. If the game is running, close it and try again.",
+    [S_RS_NO_RES] = L"This build has no add-on: it is embedded when the build has C++ support.",
+    [S_RS_BAD_PATH] = L"Could not work out the game folder.",
+    [S_RS_REMOVED] = L"Files removed: %ls%ls",
+    [S_RS_NOTHING] = L"No fringefix files found in this game's folder.",
+    [S_TIP_ADDON] = L"paused, the ReShade add-on is running in the game",
 };
 
 /* PRIMARYLANGID русского в Windows, значение из winnt.h: модуль не зависит от платформы */

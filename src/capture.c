@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "app.h"
+#include "bench.h"
 #include "gamedetect.h"
 #include "gfx.h"
 #include "output.h"
@@ -111,11 +112,11 @@ static void refresh_monitor(game_state *s, int index)
     }
 }
 
-/* раз в DETECT_MS спрашивает, не игра ли на переднем плане, и выбирает действие по game_action;
- * при auto_pause = 0 и паузе проверка выключена */
+/* раз в DETECT_MS спрашивает, не игра ли на переднем плане, и выбирает действие по game_action.
+ * процесс с ReShade-аддоном ставит паузу при любых настройках: фильтр в нём рисует аддон */
 static void update_game_state(ff_app *a, game_state *s)
 {
-    static const char *const HOW[] = { "none", "fullscreen", "3d", "listed" };
+    static const char *const HOW[] = { "none", "fullscreen", "3d", "listed", "addon" };
     ULONGLONG now = GetTickCount64();
     ff_config c = a->cfg;
     char exe[64];
@@ -124,27 +125,27 @@ static void update_game_state(ff_app *a, game_state *s)
     /* при включённой автопаузе всегда пауза; при выключенной облегчённый режим ищет игры сам */
     ff_config_resolve_game(&c);
 
-    if (c.auto_pause == 0) {
+    if (now < s->next) {
+        return;
+    }
+    s->next = now + DETECT_MS;
+    refresh_monitor(s, c.monitor);
+    how = game_detect(&c, &s->mon, exe);
+    if (how != GAME_NONE) {
+        int pause = how == GAME_ADDON || c.game_action == 0;
+
+        s->clear = 0;
+        InterlockedExchange(&a->pause_addon, how == GAME_ADDON);
+        set_state(a, s, pause, !pause);
+        /* новый сеанс, если сменилась программа; имя без пути, пустое заменяется на unknown */
+        if (!s->in_game || strcmp(exe, s->exe) != 0) {
+            snprintf(s->exe, sizeof s->exe, "%s", exe[0] ? exe : "unknown");
+            stats_store_game_begin(s->exe, HOW[how], pause ? "pause" : "light");
+            s->in_game = 1;
+        }
+    } else if ((s->paused || s->light) && ++s->clear >= RESUME_CHECKS) {
         set_state(a, s, 0, 0);
         end_session(s);
-        s->clear = 0;
-    } else if (now >= s->next) {
-        s->next = now + DETECT_MS;
-        refresh_monitor(s, c.monitor);
-        how = game_detect(&c, &s->mon, exe);
-        if (how != GAME_NONE) {
-            s->clear = 0;
-            set_state(a, s, c.game_action == 0, c.game_action == 1);
-            /* новый сеанс, если сменилась программа; имя без пути, пустое заменяется на unknown */
-            if (!s->in_game || strcmp(exe, s->exe) != 0) {
-                snprintf(s->exe, sizeof s->exe, "%s", exe[0] ? exe : "unknown");
-                stats_store_game_begin(s->exe, HOW[how], c.game_action == 0 ? "pause" : "light");
-                s->in_game = 1;
-            }
-        } else if ((s->paused || s->light) && ++s->clear >= RESUME_CHECKS) {
-            set_state(a, s, 0, 0);
-            end_session(s);
-        }
     }
 }
 
@@ -218,7 +219,7 @@ static DWORD WINAPI capture_main(LPVOID arg)
             gfx_upload(&g, &c);
             force = 1;
         }
-        if (!gfx_pump(&g, a->fast ? FRAME_WAIT_UI_MS : FRAME_WAIT_MS, force)) {
+        if (!gfx_pump(&g, a->fast ? FRAME_WAIT_UI_MS : FRAME_WAIT_MS, force || bench_force())) {
             lost = 1;
             shutdown_gfx(&g);
         }

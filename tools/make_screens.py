@@ -251,22 +251,6 @@ def program(pal: Palette, t: dict[str, str]) -> str:
     return svg(window(c, t["APP_TITLE"], 520, height), 520, height, t["APP_TITLE"])
 
 
-def wizard(pal: Palette, t: dict[str, str]) -> str:
-    c = Canvas(pal)
-    c.add(f'<rect width="520" height="360" fill="{pal.bg}"/>')
-    c.text(24, 30, t["WIZ_STEP"].replace("%d", "2"), pal.muted)
-    c.text(24, 52, t["WIZ_T1"], ACCENT, 600, 13)
-    c.paragraph(24, 90, t["WIZ_B1"], 74, lead=18)
-    c.text(24, 213, t["WIZ_STRENGTH_V"])
-    c.slider(190, 196, 220, 1.0, -3, 3)
-    c.edit(420, 198, 70, 24, "1.00")
-    c.button(24, 246, 160, t["BTN_PATTERN"])
-    c.button(112, 310, 120, t["WIZ_BACK"])
-    c.button(244, 310, 120, t["WIZ_NEXT"])
-    c.button(376, 310, 120, t["WIZ_CANCEL"])
-    return svg(window(c, t["WIZ_TITLE"], 520, 360), 520, 360, t["WIZ_TITLE"])
-
-
 def report(pal: Palette, t: dict[str, str]) -> str:
     c = Canvas(pal)
     c.add(f'<rect width="640" height="702" fill="{pal.bg}"/>')
@@ -292,7 +276,7 @@ def report(pal: Palette, t: dict[str, str]) -> str:
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    builders = {"settings": settings, "program": program, "wizard": wizard, "report": report}
+    builders = {"settings": settings, "program": program, "report": report}
     for lang in ("ru", "en"):
         strings = load_strings(lang)
         for theme, pal in (("dark", DARK), ("light", LIGHT)):

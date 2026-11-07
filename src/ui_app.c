@@ -15,7 +15,7 @@
 #include "version.h"
 
 #define APP_W 520
-#define APP_H 630
+#define APP_H 722
 #define CARD_ROW 30
 #define CARD_INNER_W 488
 #define WM_REOPEN (WM_APP + 40)
@@ -36,6 +36,9 @@ enum {
     ID_A_REPORT,
     ID_A_HK_TOGGLE,
     ID_A_HK_QUIT,
+    ID_A_DIAG,
+    ID_A_RS_INSTALL,
+    ID_A_RS_REMOVE,
     ID_A_CLOSE
 };
 
@@ -62,6 +65,8 @@ static const card_t CARDS_A[] = {
     { S_CARD_DATA, 254, CARD_HEAD + 3 * CARD_ROW + CARD_PAD },
     { S_CARD_AUTOSTART, 388, CARD_HEAD + 1 * CARD_ROW + CARD_PAD },
     { S_CARD_HOTKEYS, 462, CARD_HEAD + 2 * CARD_ROW + CARD_PAD },
+    /* диагностика и две кнопки ReShade-аддона */
+    { S_CARD_ENGINE, 566, CARD_HEAD + 2 * CARD_ROW + CARD_PAD },
 };
 #define NCARDS_A ((int)(sizeof CARDS_A / sizeof CARDS_A[0]))
 
@@ -223,6 +228,13 @@ static void build(void)
                         (HMENU)(INT_PTR)(ID_A_HK_TOGGLE + i), ui.app->inst, NULL);
         show_hotkey(ID_A_HK_TOGGLE + i, i == 0 ? &c->hotkey_toggle : &c->hotkey_quit);
     }
+    child(L"BUTTON", ff_tr(S_BTN_DIAG), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + 16, row_top(5, 0) + 1,
+          CARD_INNER_W - 32, BTN_H, ID_A_DIAG);
+    child(L"BUTTON", ff_tr(S_BTN_RS_INSTALL), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + 16, row_top(5, 1) + 1,
+          (CARD_INNER_W - 2 * 16 - 8) / 2, BTN_H, ID_A_RS_INSTALL);
+    child(L"BUTTON", ff_tr(S_BTN_RS_REMOVE), BS_PUSHBUTTON | WS_TABSTOP,
+          MARGIN + 16 + (CARD_INNER_W - 2 * 16 - 8) / 2 + 8, row_top(5, 1) + 1,
+          (CARD_INNER_W - 2 * 16 - 8) / 2, BTN_H, ID_A_RS_REMOVE);
     child(L"BUTTON", ff_tr(S_VER_CLOSE), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + CARD_INNER_W - 120,
           CARDS_A[NCARDS_A - 1].y + CARDS_A[NCARDS_A - 1].h + 16, 120, BTN_H, ID_A_CLOSE);
     ctl_restyle_window(g_win);
@@ -348,6 +360,12 @@ static void on_command(int id, int code)
         ui_versions_show(ui.app);
     } else if (id == ID_A_REPORT) {
         ui_report_show(ui.app);
+    } else if (id == ID_A_DIAG) {
+        ui_bench_show(ui.app);
+    } else if (id == ID_A_RS_INSTALL) {
+        ui_reshade_install(g_win);
+    } else if (id == ID_A_RS_REMOVE) {
+        ui_reshade_remove(g_win);
     } else if (id == ID_A_CLOSE) {
         DestroyWindow(g_win);
     }

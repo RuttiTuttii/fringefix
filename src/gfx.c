@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "bench.h"
 #include "gfx.h"
 #include "com.h"
 #include "output.h"
@@ -21,6 +22,10 @@ void gfx_shutdown(ff_gfx *g)
     if (g->ctx) {
         ID3D11DeviceContext_ClearState(g->ctx);
     }
+    gfx_prof_close(g);
+    FF_REL(g->sig_uav);
+    FF_REL(g->cs_diff);
+    FF_REL(g->ps_k);
     free(g->meta);
     FF_REL(g->sig_stage);
     FF_REL(g->sig_rtv);
@@ -85,6 +90,15 @@ static int open_capture(ff_gfx *g, int monitor, RECT *rect, char *err)
 
     if (ff_output_pick(monitor, &ad, &out) != 0) {
         FAILMSG("monitor not found");
+    }
+    {
+        DXGI_ADAPTER_DESC1 desc;
+
+        if (SUCCEEDED(IDXGIAdapter1_GetDesc1(ad, &desc))
+            && WideCharToMultiByte(CP_UTF8, 0, desc.Description, -1, g->adapter, sizeof g->adapter, NULL,
+                                   NULL) > 0) {
+            bench_set_gpu_name(g->adapter);
+        }
     }
     TRY(IDXGIOutput6_GetDesc1(out, &od), "GetDesc1");
     g->hdr = od.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
@@ -247,9 +261,24 @@ static int open_pipeline(ff_gfx *g, char *err)
     TRY(ID3D11Device_CreatePixelShader(g->dev, ID3D10Blob_GetBufferPointer(blob),
                                        ID3D10Blob_GetBufferSize(blob), NULL, &g->ps),
         "CreatePixelShader");
+    FF_REL(blob);
+    /* шейдер ядра 3x3 нужен только движку 2: если он не собрался, оверлей работает классическим путём */
+    {
+        char e2[GFX_ERR_LEN];
+
+        if (SUCCEEDED(ff_shader_compile("psk", "ps_5_0", &blob, e2, GFX_ERR_LEN))
+            && FAILED(ID3D11Device_CreatePixelShader(g->dev, ID3D10Blob_GetBufferPointer(blob),
+                                                     ID3D10Blob_GetBufferSize(blob), NULL, &g->ps_k))) {
+            snprintf(e2, sizeof e2, "psk create failed");
+        }
+        if (!g->ps_k) {
+            snprintf(g->note, sizeof g->note, "%s", e2);
+        }
+        FF_REL(blob);
+    }
 
     memset(&bd, 0, sizeof bd);
-    bd.ByteWidth = 48;
+    bd.ByteWidth = 224;
     bd.Usage = D3D11_USAGE_DYNAMIC;
     bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
     bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
@@ -316,6 +345,7 @@ int gfx_init(ff_gfx *g, const ff_config *cfg, char *err)
         gfx_shutdown(g);
         return -1;
     }
+    gfx_prof_open(g);
     g->alive = 1;
     return 0;
 }

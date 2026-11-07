@@ -6,3 +6,7 @@
 12 ICON "src/res/flag_en.ico"
 /* комплектные профили, файлы лежат в profiles/; новый профиль это новая строка здесь, в resource.h и в BUNDLED (profile_io.c); имя файла в репозитории без пробелов, имя в BUNDLED то, что увидит пользователь */
 201 RCDATA "profiles/qd-oled-gen-3-4.json"
+
+/* ReShade-аддон ставится из окна "Программа": dll собирается раньше exe, эффект лежит в addon/ */
+202 RCDATA "build/fringefix.addon64"
+203 RCDATA "addon/fringefix.fx"

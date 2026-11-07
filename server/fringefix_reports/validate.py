@@ -13,7 +13,7 @@ UINT_MAX = 2**32 - 1
 _VERSION_RE = re.compile(r"^[A-Za-z0-9._+-]{1,32}$")
 _EXE_RE = re.compile(r"^[a-z0-9._+ -]{1,63}$")
 _PRINTABLE_RE = re.compile(r"^[\x20-\x7e]{1,96}$")
-_HOWS = {"fullscreen", "3d", "listed"}
+_HOWS = {"fullscreen", "3d", "listed", "addon"}
 _ACTIONS = {"pause", "light"}
 _LANGUAGES = {"ru", "en"}
 
