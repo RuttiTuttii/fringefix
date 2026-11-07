@@ -296,7 +296,7 @@ Protection of the update itself is limited to TLS to github.com and a hash match
 Signing of releases:
 
 - CI signs `fringefix.exe` and the embedded `fringefix.addon64` with Authenticode (`tools/sign.ps1`, signtool from the Windows SDK, SHA-256, RFC 3161 timestamp). The certificate is a repository secret: `SIGN_PFX_BASE64` (a base64 pfx) and `SIGN_PFX_PASSWORD`. The hash file is computed after signing
-- a tag build fails if the secret is missing, so an unsigned release cannot go out; other runs only print a warning
+- a stable tag build fails if the secret is missing, so an unsigned stable release cannot go out; `-beta.N` tags and other runs only print a warning, so betas go out unsigned for now
 - a tag build also publishes a signed build provenance attestation (sigstore). Check a downloaded file with `gh attestation verify fringefix.exe --repo OWNER/fringefix`
 - a signature from a new certificate does not remove SmartScreen warnings at once: reputation builds up with downloads, unless the certificate is EV
 
@@ -347,7 +347,7 @@ the application runs on Windows only: capture through DXGI Desktop Duplication a
 - layouts other than the QD-OLED triangle: WOLED, for example, arranges subpixels differently
 - text-only mask for sharpening: shift and sharpening apply to the whole screen, photos and video are processed like text
 - rotated monitors
-- Authenticode signing of releases works only once the certificate is in the repository secrets (see the updates section); until then a tag build fails
+- Authenticode signing of releases works only once the certificate is in the repository secrets (see the updates section); until then betas go out unsigned and a stable tag build fails
 - a Linux version: planned (a GNOME Shell extension, a KWin effect or a Hyprland shader), capture through DXGI does not port to Linux
 - languages other than Russian and English
 - the overlay adds at least one frame of latency over the desktop, I did not measure it in milliseconds

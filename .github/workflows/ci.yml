@@ -70,8 +70,8 @@ jobs:
     env:
       SIGN_PFX_BASE64: ${{ secrets.SIGN_PFX_BASE64 }}
       SIGN_PFX_PASSWORD: ${{ secrets.SIGN_PFX_PASSWORD }}
-      # у тега неподписанная сборка недопустима, у остальных запусков допустима с предупреждением
-      REQUIRE_SIGNED: ${{ startsWith(github.ref, 'refs/tags/') && '1' || '0' }}
+      # у стабильного тега неподписанная сборка недопустима, у беты и остальных запусков допустима с предупреждением
+      REQUIRE_SIGNED: ${{ startsWith(github.ref, 'refs/tags/') && !contains(github.ref, '-beta.') && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
         with:
