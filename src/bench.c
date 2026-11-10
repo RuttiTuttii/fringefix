@@ -8,6 +8,14 @@ static LARGE_INTEGER g_freq;
 static LARGE_INTEGER g_base;
 static volatile LONG g_wanted;
 static volatile LONG g_force;
+static volatile LONG g_hud;
+static volatile LONG g_trial_left = -1;
+static volatile LONG g_gfx_fail;
+static int g_preq;
+static int g_peff;
+static int g_qreq;
+static int g_qeff;
+static char g_vnote[160];
 static ff_ring g_ring;
 static ff_pring g_pring;
 static int g_req;
@@ -45,6 +53,36 @@ void bench_set_force(int on)
 int bench_force(void)
 {
     return g_force != 0;
+}
+
+void bench_set_hud(int on)
+{
+    InterlockedExchange(&g_hud, on ? 1 : 0);
+}
+
+int bench_hud(void)
+{
+    return g_hud != 0;
+}
+
+void bench_set_trial_left(int seconds)
+{
+    InterlockedExchange(&g_trial_left, seconds);
+}
+
+int bench_trial_left(void)
+{
+    return (int)g_trial_left;
+}
+
+void bench_note_gfx_failure(void)
+{
+    InterlockedIncrement(&g_gfx_fail);
+}
+
+unsigned bench_gfx_failures(void)
+{
+    return (unsigned)g_gfx_fail;
 }
 
 double bench_ticks_to_ms(LONGLONG qpc_delta)
@@ -121,6 +159,32 @@ void bench_get_engine_info(int *requested, int *effective, int *cs_ok, char *not
     *cs_ok = g_cs_ok;
     if (n > 0) {
         strncpy(note, g_note, n - 1);
+        note[n - 1] = '\0';
+    }
+    LeaveCriticalSection(&g_lock);
+}
+
+void bench_set_variant_info(int present_req, int present_eff, int prio_req, int prio_eff, const char *note)
+{
+    EnterCriticalSection(&g_lock);
+    g_preq = present_req;
+    g_peff = present_eff;
+    g_qreq = prio_req;
+    g_qeff = prio_eff;
+    strncpy(g_vnote, note ? note : "", sizeof g_vnote - 1);
+    g_vnote[sizeof g_vnote - 1] = '\0';
+    LeaveCriticalSection(&g_lock);
+}
+
+void bench_get_variant_info(int *present_req, int *present_eff, int *prio_req, int *prio_eff, char *note, size_t n)
+{
+    EnterCriticalSection(&g_lock);
+    *present_req = g_preq;
+    *present_eff = g_peff;
+    *prio_req = g_qreq;
+    *prio_eff = g_qeff;
+    if (n > 0) {
+        strncpy(note, g_vnote, n - 1);
         note[n - 1] = '\0';
     }
     LeaveCriticalSection(&g_lock);

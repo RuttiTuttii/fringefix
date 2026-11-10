@@ -115,11 +115,55 @@ static void test_summarize(void)
     CHECK(ff_samples_csv(s, 6, buf, 80) == -1);
 }
 
+static void test_win_stats(void)
+{
+    ff_sample s[5];
+    ff_win_stats w;
+    ff_run_row row;
+    char buf[2048];
+
+    s[0] = make(100.0, 0.2f, 0.3f, 0.5f, 1, 1);
+    s[0].accum = 1;
+    s[1] = make(200.0, 0.2f, 0.3f, 0.5f, 1, 1);
+    s[1].accum = 4;
+    s[2] = make(300.0, 0.2f, 0.3f, -1.0f, 1, 0);
+    s[2].accum = 2;
+    s[2].echo = 1;
+    /* неизвестное число (0) считается как один кадр; облегчённый режим и чужой движок тоже входят */
+    s[3] = make(400.0, 0.2f, 0.3f, 0.5f, 0, 1);
+    s[3].light = 1;
+    /* вне окна */
+    s[4] = make(5000.0, 0.2f, 0.3f, 0.5f, 1, 1);
+    s[4].accum = 9;
+
+    ff_win_stats_compute(s, 5, 0.0, 1000.0, &w);
+    CHECK(w.acquired == 4 && w.source == 8 && w.merged == 4);
+    CHECK(w.draws == 3 && w.echo == 1);
+    CHECK(fabsf(w.merged_pct - 50.0f) < 1e-4f && fabsf(w.source_per_s - 8.0f) < 1e-4f);
+    CHECK(fabsf(w.acquired_per_s - 4.0f) < 1e-4f && fabsf(w.draws_per_s - 3.0f) < 1e-4f);
+
+    /* пустое окно и нулевая длина без деления на ноль */
+    ff_win_stats_compute(s, 0, 0.0, 1000.0, &w);
+    CHECK(w.acquired == 0 && w.source == 0 && w.merged_pct == 0.0f && w.source_per_s == 0.0f);
+    ff_win_stats_compute(s, 5, 10.0, 10.0, &w);
+    CHECK(w.acquired == 0 && w.acquired_per_s == 0.0f);
+
+    /* в итоге прогона источник считается только по кадрам нужного движка */
+    ff_run_summarize(s, 5, NULL, 0, 0.0, 1000.0, 1, &row);
+    CHECK(row.cycles == 3 && row.source == 7);
+    CHECK(ff_run_csv(&row, 1, buf, sizeof buf) > 0 && strstr(buf, ",source_per_s,merged_pct\n") != NULL);
+    /* 7 источников на 3 цикла за секунду: 7.00 и 57.14 процента склеено */
+    CHECK(strstr(buf, ",7.00,57.14\n") != NULL);
+    CHECK(ff_samples_csv(s, 2, buf, sizeof buf) > 0 && strstr(buf, ",age_ms,accum\n") != NULL
+          && strstr(buf, "\n200.000,compute,0,1,0,0.2000,0.3000,0.5000,1.0000,0.5000,-1.0000,4\n") != NULL);
+}
+
 int main(void)
 {
     test_stat();
     test_ring();
     test_summarize();
+    test_win_stats();
     (void)pring;
     TEST_DONE("benchstat");
 }

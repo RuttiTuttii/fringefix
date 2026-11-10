@@ -31,6 +31,8 @@ typedef struct {
     unsigned char drew;
     /* сравнение признало кадр эхом собственного окна */
     unsigned char echo;
+    /* сколько обновлений рабочего стола DWM склеил в этот кадр (AccumulatedFrames); 0 значит неизвестно, считается как 1 */
+    unsigned short accum;
 } ff_sample;
 
 /* потребление и загрузка видеокарты и процесса; опрашивается примерно 4 раза в секунду */
@@ -92,6 +94,8 @@ typedef struct {
     ff_stat age;
     /* промежутки между соседними отрисовками */
     ff_stat interval;
+    /* обновлений рабочего стола, принесённых DWM за окно: сумма accum, не меньше cycles */
+    unsigned source;
     /* средние за окно по замерам потребления; отрицательное значит нет данных */
     float watts;
     float util_gpu;
@@ -104,6 +108,25 @@ typedef struct {
  * для FF_ENGINE_OFF кадров нет и считается одно потребление */
 void ff_run_summarize(const ff_sample *s, unsigned ns, const ff_power_sample *p, unsigned np,
                       double t0, double t1, int engine, ff_run_row *row);
+
+/* счётчики кадров за окно времени [t0, t1) без отбора по движку и облегчённому режиму: их показывает панель в оверлее.
+ * acquired это кадры, которые программа получила и скопировала; source это обновления рабочего стола, которые принёс DWM,
+ * включая обновления от собственного окна оверлея; разница склеена в один кадр, потому что цикл не успел их взять */
+typedef struct {
+    double seconds;
+    unsigned acquired;
+    unsigned source;
+    unsigned merged;
+    unsigned draws;
+    unsigned echo;
+    /* доля склеенных от принесённых, 0..100 */
+    float merged_pct;
+    float acquired_per_s;
+    float source_per_s;
+    float draws_per_s;
+} ff_win_stats;
+
+void ff_win_stats_compute(const ff_sample *s, unsigned n, double t0, double t1, ff_win_stats *out);
 
 /* таблица итогов и сырые кадры в CSV с точкой в числах; длина или -1, если буфер мал */
 int ff_run_csv(const ff_run_row *rows, int n, char *buf, size_t cap);

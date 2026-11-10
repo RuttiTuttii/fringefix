@@ -143,6 +143,7 @@ void ff_run_summarize(const ff_sample *s, unsigned ns, const ff_power_sample *p,
                 continue;
             }
             row->cycles++;
+            row->source += c->accum > 0 ? c->accum : 1u;
             if (c->copy_ms >= 0.0f) {
                 copy[ncopy++] = c->copy_ms;
                 total += c->copy_ms;
@@ -202,6 +203,33 @@ void ff_run_summarize(const ff_sample *s, unsigned ns, const ff_power_sample *p,
     row->cpu_pct = mean_valid(p, np, t0, t1, offsetof(ff_power_sample, cpu_pct));
 }
 
+void ff_win_stats_compute(const ff_sample *s, unsigned n, double t0, double t1, ff_win_stats *out)
+{
+    unsigned i;
+    double sec = (t1 - t0) / 1000.0;
+
+    memset(out, 0, sizeof *out);
+    out->seconds = sec;
+    for (i = 0; i < n; i++) {
+        if (s[i].t_ms < t0 || s[i].t_ms >= t1) {
+            continue;
+        }
+        out->acquired++;
+        out->source += s[i].accum > 0 ? s[i].accum : 1u;
+        out->draws += s[i].drew != 0;
+        out->echo += s[i].echo != 0;
+    }
+    out->merged = out->source - out->acquired;
+    if (out->source > 0) {
+        out->merged_pct = (float)(100.0 * (double)out->merged / (double)out->source);
+    }
+    if (sec > 0.0) {
+        out->acquired_per_s = (float)((double)out->acquired / sec);
+        out->source_per_s = (float)((double)out->source / sec);
+        out->draws_per_s = (float)((double)out->draws / sec);
+    }
+}
+
 const char *ff_engine_name(int engine)
 {
     static const char *const NAMES[] = { "classic", "compute", "kernel", "off" };
@@ -237,7 +265,7 @@ int ff_run_csv(const ff_run_row *rows, int n, char *buf, size_t cap)
     if (put(buf, cap, &pos, "engine,seconds,cycles_per_s,draws_per_s,copy_avg,copy_p95,diff_avg,diff_p95,"
                             "draw_avg,draw_p95,gpu_avg,gpu_p95,gpu_p99,gpu_max,cpu_avg,cpu_p95,"
                             "present_avg,present_p95,age_avg,age_p95,interval_avg,interval_p95,interval_p99,"
-                            "watts,util_gpu,clock_mhz,temp_c,cpu_pct\n")) {
+                            "watts,util_gpu,clock_mhz,temp_c,cpu_pct,source_per_s,merged_pct\n")) {
         return -1;
     }
     for (i = 0; i < n; i++) {
@@ -246,7 +274,7 @@ int ff_run_csv(const ff_run_row *rows, int n, char *buf, size_t cap)
 
         if (put(buf, cap, &pos,
                 "%s,%.2f,%.2f,%.2f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,"
-                "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.2f,%.1f,%.0f,%.1f,%.1f\n",
+                "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.2f,%.1f,%.0f,%.1f,%.1f,%.2f,%.2f\n",
                 ff_engine_name(r->engine), r->seconds, (double)r->cycles / sec, (double)r->draws / sec,
                 (double)r->copy.mean, (double)r->copy.p95, (double)r->diff.mean, (double)r->diff.p95,
                 (double)r->draw.mean, (double)r->draw.p95, (double)r->gpu.mean, (double)r->gpu.p95,
@@ -254,7 +282,8 @@ int ff_run_csv(const ff_run_row *rows, int n, char *buf, size_t cap)
                 (double)r->present.mean, (double)r->present.p95, (double)r->age.mean, (double)r->age.p95,
                 (double)r->interval.mean, (double)r->interval.p95, (double)r->interval.p99,
                 (double)r->watts, (double)r->util_gpu, (double)r->clock_mhz, (double)r->temp_c,
-                (double)r->cpu_pct)) {
+                (double)r->cpu_pct, (double)r->source / sec,
+                r->source > 0 ? 100.0 * (double)(r->source - r->cycles) / (double)r->source : 0.0)) {
             return -1;
         }
     }
@@ -270,14 +299,14 @@ int ff_samples_csv(const ff_sample *s, unsigned n, char *buf, size_t cap)
         return -1;
     }
     buf[0] = '\0';
-    if (put(buf, cap, &pos, "t_ms,engine,light,drew,echo,copy_ms,diff_ms,draw_ms,cpu_ms,present_ms,age_ms\n")) {
+    if (put(buf, cap, &pos, "t_ms,engine,light,drew,echo,copy_ms,diff_ms,draw_ms,cpu_ms,present_ms,age_ms,accum\n")) {
         return -1;
     }
     for (i = 0; i < n; i++) {
-        if (put(buf, cap, &pos, "%.3f,%s,%u,%u,%u,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n", s[i].t_ms,
+        if (put(buf, cap, &pos, "%.3f,%s,%u,%u,%u,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%u\n", s[i].t_ms,
                 ff_engine_name(s[i].engine), s[i].light, s[i].drew, s[i].echo, (double)s[i].copy_ms,
                 (double)s[i].diff_ms, (double)s[i].draw_ms, (double)s[i].cpu_ms, (double)s[i].present_ms,
-                (double)s[i].age_ms)) {
+                (double)s[i].age_ms, s[i].accum)) {
             return -1;
         }
     }
