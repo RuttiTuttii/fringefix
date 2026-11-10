@@ -14,7 +14,7 @@ static void fill(ff_report *r)
     strcpy(r->gpu, "NVIDIA GeForce RTX 4070");
     r->width = 3840;
     r->height = 2160;
-    r->cfg.shift[1][1] = 0.25f;
+    r->cfg.view[0].shift[1][1] = 0.25f;
     ff_stats_game_add(&r->stats, "game.exe", "fullscreen", "pause", 3600);
     r->include_system = r->include_settings = r->include_stats = 1;
 }

@@ -67,6 +67,8 @@ static void put_system(out_t *o, const ff_report *r)
 static void put_settings(out_t *o, const ff_report *r)
 {
     const ff_config *c = &r->cfg;
+    /* картинка выбранного в окне монитора; сервер принимает один набор сдвигов */
+    const ff_view *v = ff_config_view_const(c, c->monitor);
 
     put(o,
         "  \"settings\": {\n"
@@ -78,9 +80,10 @@ static void put_settings(out_t *o, const ff_report *r)
         "    \"game_action\": %d,\n"
         "    \"gpu_priority\": %d\n"
         "  },\n",
-        (double)c->shift[0][0], (double)c->shift[0][1], (double)c->shift[1][0],
-        (double)c->shift[1][1], (double)c->shift[2][0], (double)c->shift[2][1], (double)c->sharpen,
-        c->auto_pause, c->game_action, c->gpu_priority);
+        (double)v->shift[0][0], (double)v->shift[0][1], (double)v->shift[1][0],
+        (double)v->shift[1][1], (double)v->shift[2][0], (double)v->shift[2][1], (double)v->sharpen,
+        /* облегчённого режима больше нет; поле остаётся нулём, потому что сервер его требует */
+        c->auto_pause, 0, c->gpu_priority);
 }
 
 static void put_stats(out_t *o, const ff_report *r)

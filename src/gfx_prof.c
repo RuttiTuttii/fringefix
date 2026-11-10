@@ -60,14 +60,14 @@ void gfx_prof_open(ff_gfx *g)
     g->prof.open = 1;
 }
 
-void gfx_prof_begin(ff_gfx *g, LONGLONG last_present_qpc)
+void gfx_prof_begin(ff_gfx *g, LONGLONG last_present_qpc, UINT accumulated)
 {
     ff_prof *p = &g->prof;
     ff_prof_slot *s;
     LARGE_INTEGER now;
 
     p->cur = -1;
-    if (!p->open || !bench_wanted()) {
+    if (!p->open || !g->diag || !bench_wanted()) {
         return;
     }
     s = &p->slot[p->next];
@@ -86,6 +86,7 @@ void gfx_prof_begin(ff_gfx *g, LONGLONG last_present_qpc)
     s->cpu_ms = -1.0f;
     s->marks = 1;
     s->state = 1;
+    s->accum = (unsigned short)(accumulated > 65535u ? 65535u : accumulated);
     s->engine = (unsigned char)gfx_engine_effective(g);
     s->light = (unsigned char)(g->light != 0);
     ID3D11DeviceContext_Begin(g->ctx, (ID3D11Asynchronous *)s->disjoint);
@@ -199,6 +200,7 @@ void gfx_prof_collect(ff_gfx *g)
         out.cpu_ms = s->cpu_ms;
         out.present_ms = s->present_ms;
         out.age_ms = s->age_ms;
+        out.accum = s->accum;
         out.engine = s->engine;
         out.light = s->light;
         out.drew = s->drew;

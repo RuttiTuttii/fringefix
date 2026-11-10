@@ -166,7 +166,40 @@ static int open_window(ff_gfx *g, const RECT *rect, char *err)
     return 0;
 }
 
-static int open_swapchain(ff_gfx *g, int gpu_priority, char *err)
+/* вывод без ожидания синхронизации поддерживает не каждая система и драйвер */
+static int tearing_supported(IDXGIFactory2 *fac)
+{
+    IDXGIFactory5 *f5 = NULL;
+    BOOL ok = FALSE;
+
+    if (SUCCEEDED(IDXGIFactory2_QueryInterface(fac, &IID_IDXGIFactory5, (void **)&f5))) {
+        if (FAILED(IDXGIFactory5_CheckFeatureSupport(f5, DXGI_FEATURE_PRESENT_ALLOW_TEARING, &ok, sizeof ok))) {
+            ok = FALSE;
+        }
+        IDXGIFactory5_Release(f5);
+    }
+    return ok != FALSE;
+}
+
+void gfx_set_priority(ff_gfx *g, int priority)
+{
+    IDXGIDevice *dxdev = NULL;
+    INT got = 0;
+
+    g->prio_req = priority;
+    g->prio_eff = 0;
+    if (FAILED(ID3D11Device_QueryInterface(g->dev, &IID_IDXGIDevice, (void **)&dxdev))) {
+        return;
+    }
+    /* сбой тут не страшен: остаётся приоритет по умолчанию, а в окне диагностики видно, что принято на самом деле */
+    IDXGIDevice_SetGPUThreadPriority(dxdev, priority);
+    if (SUCCEEDED(IDXGIDevice_GetGPUThreadPriority(dxdev, &got))) {
+        g->prio_eff = got;
+    }
+    IDXGIDevice_Release(dxdev);
+}
+
+static int open_swapchain(ff_gfx *g, const ff_config *cfg, char *err)
 {
     HRESULT hr;
     int rc = -1;
@@ -182,8 +215,8 @@ static int open_swapchain(ff_gfx *g, int gpu_priority, char *err)
     if (SUCCEEDED(IDXGIDevice_QueryInterface(dxdev, &IID_IDXGIDevice1, (void **)&dev1))) {
         IDXGIDevice1_SetMaximumFrameLatency(dev1, 1);
     }
-    /* ниже ноля оверлей уступает видеокарту игре; сбой тут не страшен, остаётся приоритет по умолчанию */
-    IDXGIDevice_SetGPUThreadPriority(dxdev, gpu_priority);
+    /* ниже ноля оверлей уступает видеокарту игре */
+    gfx_set_priority(g, cfg->gpu_priority);
     TRY(IDXGIDevice_GetAdapter(dxdev, &ad), "GetAdapter");
     TRY(IDXGIAdapter_GetParent(ad, &IID_IDXGIFactory2, (void **)&fac), "GetParent");
 
@@ -197,8 +230,23 @@ static int open_swapchain(ff_gfx *g, int gpu_priority, char *err)
     sd.Scaling = DXGI_SCALING_STRETCH;
     sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     sd.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
+    g->present_req = cfg->present_mode;
+    g->tearing = 0;
+    g->pnote[0] = '\0';
+    if (cfg->present_mode == 1) {
+        if (tearing_supported(fac)) {
+            sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+            g->tearing = 1;
+        } else {
+            snprintf(g->pnote, sizeof g->pnote, "tearing is not supported, vsync is used");
+        }
+    }
     TRY(IDXGIFactory2_CreateSwapChainForHwnd(fac, (IUnknown *)g->dev, g->hwnd, &sd, NULL, NULL,
                                              &g->sc), "CreateSwapChainForHwnd");
+    if (g->tearing) {
+        /* без этого Alt+Enter переведёт цепочку в полноэкранный режим, а с флагом tearing это запрещено */
+        IDXGIFactory2_MakeWindowAssociation(fac, g->hwnd, DXGI_MWA_NO_ALT_ENTER);
+    }
     if (g->hdr) {
         TRY(IDXGISwapChain1_QueryInterface(g->sc, &IID_IDXGISwapChain3, (void **)&sc3),
             "IDXGISwapChain3");
@@ -313,7 +361,8 @@ int gfx_reformat(ff_gfx *g, DXGI_FORMAT fmt)
     FF_REL(g->frame[0]);
     FF_REL(g->frame[1]);
     g->fmt = fmt;
-    TRY(IDXGISwapChain1_ResizeBuffers(g->sc, 0, 0, 0, fmt, 0), "ResizeBuffers");
+    TRY(IDXGISwapChain1_ResizeBuffers(g->sc, 0, 0, 0, fmt,
+                                      g->tearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0), "ResizeBuffers");
     if (g->hdr) {
         TRY(IDXGISwapChain1_QueryInterface(g->sc, &IID_IDXGISwapChain3, (void **)&sc3),
             "IDXGISwapChain3");
@@ -340,7 +389,7 @@ int gfx_init(ff_gfx *g, const ff_config *cfg, char *err)
     memset(g, 0, sizeof *g);
     err[0] = '\0';
     if (open_capture(g, cfg->monitor, &rect, err) != 0 || open_window(g, &rect, err) != 0
-        || open_swapchain(g, cfg->gpu_priority, err) != 0 || open_pipeline(g, err) != 0
+        || open_swapchain(g, cfg, err) != 0 || open_pipeline(g, err) != 0
         || gfx_sig_open(g, err) != 0) {
         gfx_shutdown(g);
         return -1;

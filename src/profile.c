@@ -7,7 +7,7 @@
 
 static const char *const CHANNELS[3] = { "red", "green", "blue" };
 
-int ff_profile_format(const ff_config *cfg, char *buf, size_t n)
+int ff_profile_format(const ff_view *v, char *buf, size_t n)
 {
     int w = snprintf(buf, n,
         "{\n"
@@ -18,10 +18,10 @@ int ff_profile_format(const ff_config *cfg, char *buf, size_t n)
         "  \"blue\": { \"x\": %.3f, \"y\": %.3f },\n"
         "  \"sharpen\": %.3f\n"
         "}\n",
-        (double)cfg->shift[0][0], (double)cfg->shift[0][1],
-        (double)cfg->shift[1][0], (double)cfg->shift[1][1],
-        (double)cfg->shift[2][0], (double)cfg->shift[2][1],
-        (double)cfg->sharpen);
+        (double)v->shift[0][0], (double)v->shift[0][1],
+        (double)v->shift[1][0], (double)v->shift[1][1],
+        (double)v->shift[2][0], (double)v->shift[2][1],
+        (double)v->sharpen);
 
     return (w < 0 || (size_t)w >= n) ? -1 : w;
 }
@@ -92,7 +92,7 @@ static int read_channel(const char *json, const char *name, float xy[2])
     return n;
 }
 
-int ff_profile_parse(const char *json, ff_config *cfg)
+int ff_profile_parse(const char *json, ff_view *v)
 {
     int n = 0;
     int i;
@@ -101,9 +101,9 @@ int ff_profile_parse(const char *json, ff_config *cfg)
         return -1;
     }
     for (i = 0; i < 3; i++) {
-        n += read_channel(json, CHANNELS[i], cfg->shift[i]);
+        n += read_channel(json, CHANNELS[i], v->shift[i]);
     }
     n += read_number(find_value(json, json + strlen(json), "sharpen"), FF_SHARPEN_LIMIT,
-                     &cfg->sharpen);
+                     &v->sharpen);
     return n;
 }

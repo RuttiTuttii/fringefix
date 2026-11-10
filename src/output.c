@@ -96,6 +96,34 @@ int ff_output_list(wchar_t names[][OUTPUT_NAME_LEN], int max)
     return l.count;
 }
 
+typedef struct {
+    wchar_t (*names)[32];
+    int max;
+    int count;
+} dev_ctx;
+
+static int dev_cb(int n, IDXGIAdapter1 *ad, IDXGIOutput *out, void *ctx)
+{
+    dev_ctx *l = ctx;
+    DXGI_OUTPUT_DESC d;
+
+    (void)ad;
+    if (SUCCEEDED(IDXGIOutput_GetDesc(out, &d))) {
+        wcsncpy(l->names[n], d.DeviceName, 31);
+        l->names[n][31] = L'\0';
+        l->count = n + 1;
+    }
+    return n + 1 >= l->max;
+}
+
+int ff_output_devices(wchar_t names[][32], int max)
+{
+    dev_ctx l = { names, max, 0 };
+
+    each_output(dev_cb, &l);
+    return l.count;
+}
+
 int ff_output_info_get(int index, ff_output_info *info)
 {
     IDXGIAdapter1 *ad = NULL;

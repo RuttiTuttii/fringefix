@@ -13,6 +13,9 @@ int ff_output_pick(int index, IDXGIAdapter1 **adapter, IDXGIOutput6 **output);
 /* заполняет names строками вида "0: \\.\DISPLAY1 (3840x2160)", возвращает их число */
 int ff_output_list(wchar_t names[][OUTPUT_NAME_LEN], int max);
 
+/* имена выходов в виде "\\.\\DISPLAY1" по порядку номеров, как у GetMonitorInfo; возвращает их число */
+int ff_output_devices(wchar_t names[][32], int max);
+
 /* что известно о мониторе и видеокарте для отчёта; серийных номеров и EDID среди этого нет */
 typedef struct {
     unsigned width;

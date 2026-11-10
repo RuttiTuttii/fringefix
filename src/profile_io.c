@@ -136,7 +136,9 @@ int app_profile_load(ff_app *a, const wchar_t *path)
 {
     char buf[PROFILE_MAX];
     DWORD got = 0;
-    ff_config next = a->cfg;
+    /* профиль относится к монитору, выбранному в окне */
+    ff_view *cur = ff_config_view(&a->cfg, a->cfg.monitor);
+    ff_view next = *cur;
     HANDLE f = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
                            FILE_ATTRIBUTE_NORMAL, NULL);
 
@@ -152,8 +154,8 @@ int app_profile_load(ff_app *a, const wchar_t *path)
     if (ff_profile_parse(buf, &next) < 0) {
         return -2;
     }
-    memcpy(a->cfg.shift, next.shift, sizeof a->cfg.shift);
-    a->cfg.sharpen = next.sharpen;
+    memcpy(cur->shift, next.shift, sizeof cur->shift);
+    cur->sharpen = next.sharpen;
     app_apply(a);
     return 0;
 }
@@ -161,7 +163,7 @@ int app_profile_load(ff_app *a, const wchar_t *path)
 int app_profile_save(ff_app *a, const wchar_t *path)
 {
     char buf[PROFILE_MAX];
-    int n = ff_profile_format(&a->cfg, buf, sizeof buf);
+    int n = ff_profile_format(ff_config_view_const(&a->cfg, a->cfg.monitor), buf, sizeof buf);
 
     return n < 0 ? -1 : ff_write_file(path, buf, (size_t)n);
 }

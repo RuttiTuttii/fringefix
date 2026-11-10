@@ -1,5 +1,6 @@
 #define COBJMACROS
 #include <windows.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -37,27 +38,28 @@ typedef struct {
 
 typedef char cb_size_must_be_224[sizeof(cb_data) == 224 ? 1 : -1];
 
-void gfx_upload(ff_gfx *g, const ff_config *c)
+void gfx_upload(ff_gfx *g, const ff_config *c, const ff_view *v)
 {
     D3D11_MAPPED_SUBRESOURCE m;
     cb_data d;
     ff_kernel k;
     float flat[6];
+    char note[GFX_ERR_LEN];
     int ch;
     int row;
 
     memset(&d, 0, sizeof d);
-    d.shift_rg[0] = c->shift[0][0];
-    d.shift_rg[1] = c->shift[0][1];
-    d.shift_rg[2] = c->shift[1][0];
-    d.shift_rg[3] = c->shift[1][1];
-    d.shift_bx[0] = c->shift[2][0];
-    d.shift_bx[1] = c->shift[2][1];
-    d.shift_bx[2] = c->sharpen;
+    d.shift_rg[0] = v->shift[0][0];
+    d.shift_rg[1] = v->shift[0][1];
+    d.shift_rg[2] = v->shift[1][0];
+    d.shift_rg[3] = v->shift[1][1];
+    d.shift_bx[0] = v->shift[2][0];
+    d.shift_bx[1] = v->shift[2][1];
+    d.shift_bx[2] = v->sharpen;
     d.shift_bx[3] = g->hdr ? 1.0f : 0.0f;
     d.mode[0] = g->light ? 1.0f : 0.0f;
-    memcpy(flat, c->shift, sizeof flat);
-    ff_kernel_build(flat, c->sharpen, &k);
+    memcpy(flat, v->shift, sizeof flat);
+    ff_kernel_build(flat, v->sharpen, &k);
     d.kbase[0] = k.base[0][0];
     d.kbase[1] = k.base[0][1];
     d.kbase[2] = k.base[1][0];
@@ -73,7 +75,21 @@ void gfx_upload(ff_gfx *g, const ff_config *c)
         }
     }
     g->engine = c->engine;
-    bench_set_engine_info(c->engine, gfx_engine_effective(g), g->cs_ok, g->note);
+    snprintf(note, sizeof note, "%s", g->note);
+    /* окна ядра трёх каналов в разных клетках: чтений в шейдере втрое больше, дешевле классический фильтр с сравнением
+     * кадров. граница это разброс сдвигов в один пиксель по любой оси */
+    if (g->engine >= 2 && !k.shared) {
+        g->engine = 1;
+        snprintf(note, sizeof note, "channel shifts differ by more than 1 px: engine 1 is used");
+    }
+    /* приоритет меняется на живом устройстве, способ вывода только пересозданием цепочки (app_reinit) */
+    if (c->gpu_priority != g->prio_req) {
+        gfx_set_priority(g, c->gpu_priority);
+    }
+    if (g->diag) {
+        bench_set_engine_info(c->engine, gfx_engine_effective(g), g->cs_ok, note);
+        bench_set_variant_info(g->present_req, g->tearing, g->prio_req, g->prio_eff, g->pnote);
+    }
     if (SUCCEEDED(ID3D11DeviceContext_Map(g->ctx, (ID3D11Resource *)g->cb, 0,
                                           D3D11_MAP_WRITE_DISCARD, 0, &m))) {
         memcpy(m.pData, &d, sizeof d);
@@ -109,7 +125,7 @@ static void draw(ff_gfx *g)
         LARGE_INTEGER after;
 
         QueryPerformanceCounter(&before);
-        IDXGISwapChain1_Present(g->sc, 1, 0);
+        IDXGISwapChain1_Present(g->sc, g->tearing ? 0 : 1, g->tearing ? DXGI_PRESENT_ALLOW_TEARING : 0);
         QueryPerformanceCounter(&after);
         gfx_prof_present(g, before.QuadPart, after.QuadPart);
     }
@@ -227,7 +243,7 @@ int gfx_pump(ff_gfx *g, UINT timeout_ms, int force)
                 first = !g->have_frame;
 
                 /* новый кадр ложится во вторую копию, прежний остаётся для сравнения */
-                gfx_prof_begin(g, info.LastPresentTime.QuadPart);
+                gfx_prof_begin(g, info.LastPresentTime.QuadPart, info.AccumulatedFrames);
                 g->cur = !g->cur;
                 ID3D11DeviceContext_CopyResource(g->ctx, (ID3D11Resource *)g->frame[g->cur],
                                                  (ID3D11Resource *)tex);

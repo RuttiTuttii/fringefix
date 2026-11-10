@@ -7,6 +7,7 @@
 #include "bench.h"
 #include "gamedetect.h"
 #include "gfx.h"
+#include "hud.h"
 #include "output.h"
 #include "stats_store.h"
 
@@ -21,10 +22,9 @@
 #define FLUSH_MS 1000
 #define SAVE_MS (5 * 60 * 1000)
 
-/* состояние автопаузы: либо оверлей молчит, либо работает в облегчённом режиме */
+/* состояние автопаузы монитора: оверлей либо работает, либо молчит */
 typedef struct {
     int paused;
-    int light;
     int clear;
     ULONGLONG next;
     RECT mon;
@@ -35,6 +35,16 @@ typedef struct {
     char exe[64];
     int in_game;
 } game_state;
+
+/* поток одного монитора: свой захват, оверлей и автопауза; число потоков равно числу выходов на запуске */
+typedef struct {
+    ff_app *app;
+    int index;
+    /* панель замеров открыта этим потоком: закрыть её может только он, окно принадлежит его очереди сообщений */
+    int hud_open;
+} worker;
+
+static worker g_workers[FF_MAX_MONITORS];
 
 static void pump_messages(void)
 {
@@ -56,18 +66,22 @@ static void report_error(ff_app *a, const char *err)
     }
 }
 
-/* смена паузы сообщается интерфейсу: значок в трее серый, пока идёт игра */
-static void set_state(ff_app *a, game_state *s, int paused, int light)
+/* смена паузы сообщается интерфейсу: значок в трее серый, пока идёт игра хотя бы на одном мониторе */
+static void set_state(ff_app *a, game_state *s, int index, int paused)
 {
     if (paused != s->paused) {
+        LONG mask;
+
         if (paused) {
             stats_store_pause();
+            mask = InterlockedOr(&a->susp_mask, 1L << index) | (1L << index);
+        } else {
+            mask = InterlockedAnd(&a->susp_mask, ~(1L << index)) & ~(1L << index);
         }
-        InterlockedExchange(&a->suspended, paused);
+        InterlockedExchange(&a->suspended, mask != 0);
         PostMessageW(a->hwnd, WM_APP_STATE, 0, 0);
     }
     s->paused = paused;
-    s->light = light;
 }
 
 static void end_session(game_state *s)
@@ -87,8 +101,13 @@ static void flush_counters(ff_gfx *g)
     g->echo_skipped = 0;
 }
 
-static void shutdown_gfx(ff_gfx *g)
+static void shutdown_gfx(worker *w, ff_gfx *g)
 {
+    /* панель замеров принадлежит оверлею: без него её нет */
+    if (w->hud_open) {
+        hud_sync(NULL, 0);
+        w->hud_open = 0;
+    }
     flush_counters(g);
     gfx_shutdown(g);
 }
@@ -112,46 +131,45 @@ static void refresh_monitor(game_state *s, int index)
     }
 }
 
-/* раз в DETECT_MS спрашивает, не игра ли на переднем плане, и выбирает действие по game_action.
+/* раз в DETECT_MS спрашивает, не игра ли на переднем плане этого монитора, и ставит паузу.
  * процесс с ReShade-аддоном ставит паузу при любых настройках: фильтр в нём рисует аддон */
-static void update_game_state(ff_app *a, game_state *s)
+static void update_game_state(worker *w, game_state *s)
 {
     static const char *const HOW[] = { "none", "fullscreen", "3d", "listed", "addon" };
+    ff_app *a = w->app;
     ULONGLONG now = GetTickCount64();
     ff_config c = a->cfg;
     char exe[64];
     int how;
 
-    /* при включённой автопаузе всегда пауза; при выключенной облегчённый режим ищет игры сам */
-    ff_config_resolve_game(&c);
-
     if (now < s->next) {
         return;
     }
     s->next = now + DETECT_MS;
-    refresh_monitor(s, c.monitor);
+    refresh_monitor(s, w->index);
     how = game_detect(&c, &s->mon, exe);
     if (how != GAME_NONE) {
-        int pause = how == GAME_ADDON || c.game_action == 0;
-
         s->clear = 0;
         InterlockedExchange(&a->pause_addon, how == GAME_ADDON);
-        set_state(a, s, pause, !pause);
+        set_state(a, s, w->index, 1);
         /* новый сеанс, если сменилась программа; имя без пути, пустое заменяется на unknown */
         if (!s->in_game || strcmp(exe, s->exe) != 0) {
             snprintf(s->exe, sizeof s->exe, "%s", exe[0] ? exe : "unknown");
-            stats_store_game_begin(s->exe, HOW[how], pause ? "pause" : "light");
+            stats_store_game_begin(s->exe, HOW[how], "pause");
             s->in_game = 1;
         }
-    } else if ((s->paused || s->light) && ++s->clear >= RESUME_CHECKS) {
-        set_state(a, s, 0, 0);
+    } else if (s->paused && ++s->clear >= RESUME_CHECKS) {
+        set_state(a, s, w->index, 0);
         end_session(s);
     }
 }
 
 static DWORD WINAPI capture_main(LPVOID arg)
 {
-    ff_app *a = arg;
+    worker *w = arg;
+    ff_app *a = w->app;
+    const int idx = w->index;
+    const LONG bit = 1L << idx;
     ff_gfx g;
     game_state gs;
     char err[GFX_ERR_LEN];
@@ -165,37 +183,50 @@ static DWORD WINAPI capture_main(LPVOID arg)
     memset(&g, 0, sizeof g);
     memset(&gs, 0, sizeof gs);
     while (!a->quit) {
+        const int active = app_monitor_active(a, idx);
+
         /* окно оверлея принадлежит этому потоку, его сообщения разбираем здесь */
         pump_messages();
 
-        if (!a->enabled || InterlockedExchange(&a->reinit, 0)) {
-            shutdown_gfx(&g);
+        if (!active || (InterlockedAnd(&a->reinit_mask, ~bit) & bit)) {
+            shutdown_gfx(w, &g);
             started_ok = 0;
         }
-        if (!a->enabled) {
-            WaitForSingleObject(a->wake, INFINITE);
+        if (!active) {
+            /* выключенный монитор не держит ни устройство, ни паузу: сбрасываем и состояние игры */
+            if (gs.paused) {
+                set_state(a, &gs, idx, 0);
+                end_session(&gs);
+            }
+            WaitForSingleObject(a->wake[idx], INFINITE);
             continue;
         }
 
         /* на паузе устройство и окно не держим: полноэкранная игра снова получает прямой вывод без композиции */
-        update_game_state(a, &gs);
+        update_game_state(w, &gs);
         if (gs.paused) {
-            shutdown_gfx(&g);
-            WaitForSingleObject(a->wake, DETECT_MS);
+            shutdown_gfx(w, &g);
+            WaitForSingleObject(a->wake[idx], DETECT_MS);
             continue;
         }
 
         if (!g.alive) {
             ff_config snap = a->cfg;
 
+            /* свой монитор потока, а не выбранный в окне */
+            snap.monitor = idx;
             if (gfx_init(&g, &snap, err) != 0) {
                 stats_store_error(err);
+                /* окно диагностики по росту этого счётчика откатывает пробную настройку, не дожидаясь таймера */
+                bench_note_gfx_failure();
                 /* ошибку при первом запуске показываем, потеря захвата на UAC или смене режима тихо лечится повтором */
                 if (!started_ok) {
                     report_error(a, err);
-                    InterlockedExchange(&a->enabled, 0);
+                    /* молчит только этот монитор, остальные работают; выключатель в настройках остаётся как был */
+                    InterlockedOr(&a->fail_mask, bit);
+                    PostMessageW(a->hwnd, WM_APP_STATE, 0, 0);
                 } else {
-                    WaitForSingleObject(a->wake, RETRY_MS);
+                    WaitForSingleObject(a->wake[idx], RETRY_MS);
                 }
                 continue;
             }
@@ -204,31 +235,36 @@ static DWORD WINAPI capture_main(LPVOID arg)
                 lost = 0;
             }
             started_ok = 1;
-            ff_output_rect(snap.monitor, &gs.mon);
-            InterlockedExchange(&a->dirty, 1);
+            ff_output_rect(idx, &gs.mon);
+            InterlockedOr(&a->dirty_mask, bit);
         }
 
-        /* облегчённый режим включается и выключается без пересоздания устройства */
-        if (g.light != gs.light) {
-            g.light = gs.light;
-            InterlockedExchange(&a->dirty, 1);
-        }
-        if (InterlockedExchange(&a->dirty, 0)) {
+        g.diag = idx == a->cfg.monitor;
+        if (InterlockedAnd(&a->dirty_mask, ~bit) & bit) {
             ff_config c = a->cfg;
 
-            gfx_upload(&g, &c);
+            gfx_upload(&g, &c, &c.view[idx]);
             force = 1;
         }
-        if (!gfx_pump(&g, a->fast ? FRAME_WAIT_UI_MS : FRAME_WAIT_MS, force || bench_force())) {
+        /* панель замеров поверх оверлея выбранного монитора: есть, пока открыто окно диагностики и включена галка */
+        if (g.diag && bench_wanted() && bench_hud()) {
+            hud_sync(&gs.mon, 1);
+            w->hud_open = 1;
+        } else if (w->hud_open) {
+            hud_sync(NULL, 0);
+            w->hud_open = 0;
+        }
+        if (!gfx_pump(&g, a->fast ? FRAME_WAIT_UI_MS : FRAME_WAIT_MS, force || (g.diag && bench_force()))) {
             lost = 1;
-            shutdown_gfx(&g);
+            shutdown_gfx(w, &g);
         }
         force = 0;
         if (GetTickCount64() >= next_flush) {
             next_flush = GetTickCount64() + FLUSH_MS;
             flush_counters(&g);
         }
-        if (GetTickCount64() >= next_save) {
+        /* файл статистики один на программу: пишет первый поток */
+        if (idx == 0 && GetTickCount64() >= next_save) {
             next_save = GetTickCount64() + SAVE_MS;
             stats_store_save();
         }
@@ -236,26 +272,48 @@ static DWORD WINAPI capture_main(LPVOID arg)
         if (g.alive && GetTickCount64() - last_assert >= REASSERT_MS) {
             last_assert = GetTickCount64();
             gfx_reassert(&g);
+            if (w->hud_open) {
+                hud_reassert();
+            }
         }
     }
-    shutdown_gfx(&g);
+    shutdown_gfx(w, &g);
     return 0;
 }
 
 int capture_start(ff_app *a)
 {
-    a->thread = CreateThread(NULL, 0, capture_main, a, 0, NULL);
-    return a->thread ? 0 : -1;
+    wchar_t names[FF_MAX_MONITORS][OUTPUT_NAME_LEN];
+    int n = ff_output_list(names, FF_MAX_MONITORS);
+    int i;
+
+    /* без единого выхода (сеанс без видеокарты) поток нулевого монитора всё равно запускается и сообщит ошибку */
+    a->nmon = n > 0 ? n : 1;
+    for (i = 0; i < a->nmon; i++) {
+        g_workers[i].app = a;
+        g_workers[i].index = i;
+        a->thread[i] = CreateThread(NULL, 0, capture_main, &g_workers[i], 0, NULL);
+        if (!a->thread[i]) {
+            capture_stop(a);
+            return -1;
+        }
+    }
+    return 0;
 }
 
 void capture_stop(ff_app *a)
 {
-    if (!a->thread) {
-        return;
-    }
+    int i;
+
     InterlockedExchange(&a->quit, 1);
-    SetEvent(a->wake);
-    WaitForSingleObject(a->thread, STOP_WAIT_MS);
-    CloseHandle(a->thread);
-    a->thread = NULL;
+    for (i = 0; i < FF_MAX_MONITORS; i++) {
+        SetEvent(a->wake[i]);
+    }
+    for (i = 0; i < FF_MAX_MONITORS; i++) {
+        if (a->thread[i]) {
+            WaitForSingleObject(a->thread[i], STOP_WAIT_MS);
+            CloseHandle(a->thread[i]);
+            a->thread[i] = NULL;
+        }
+    }
 }

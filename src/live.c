@@ -11,6 +11,8 @@
 #define SDDL_READ_ALL_FMT L"D:(A;;GR;;;WD)(A;;GA;;;%ls)"
 #define SDDL_SYNC_ALL L"D:(A;;0x100000;;;WD)"
 #define READ_RETRIES 64
+/* команды от аддона: писать и читать может любой процесс пользователя, данные это одно значение выключателя */
+#define SDDL_CMD_ALL L"D:(A;;GRGW;;;WD)"
 
 static HANDLE g_map_w;
 static ff_live *g_live_w;
@@ -19,6 +21,15 @@ static const ff_live *g_live_r;
 static HANDLE g_app_proc;
 static unsigned g_app_pid;
 static HANDLE g_mark;
+
+typedef struct {
+    volatile LONG seq;
+    volatile LONG enabled;
+} ff_cmd;
+
+static HANDLE g_cmd_map;
+static ff_cmd *g_cmd;
+static LONG g_cmd_seen;
 
 /* атрибуты с заданным списком доступа; sd освобождает вызывающий через LocalFree */
 static int make_attrs(const wchar_t *sddl, SECURITY_ATTRIBUTES *sa, PSECURITY_DESCRIPTOR *sd)
@@ -79,12 +90,21 @@ int live_publish_open(void)
     }
     g_live_w->pid = GetCurrentProcessId();
     g_live_w->magic = FF_LIVE_MAGIC;
+    /* память команд необязательна: без неё ползунок аддона просто не достаёт до приложения */
+    if (!g_cmd && make_attrs(SDDL_CMD_ALL, &sa, &sd) == 0) {
+        g_cmd_map = CreateFileMappingW(INVALID_HANDLE_VALUE, &sa, PAGE_READWRITE, 0, sizeof(ff_cmd), FF_CMD_NAME);
+        LocalFree(sd);
+        g_cmd = g_cmd_map ? MapViewOfFile(g_cmd_map, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(ff_cmd)) : NULL;
+        if (g_cmd) {
+            g_cmd_seen = g_cmd->seq;
+        }
+    }
     return 0;
 }
 
-void live_publish(const ff_config *cfg, int enabled)
+void live_publish(const ff_config *cfg, int master, const wchar_t (*devices)[FF_LIVE_DEV_LEN], int n)
 {
-    int i;
+    int m;
 
     /* память не открылась при запуске (старый объект ещё держит аддон или её закрыли): пробуем снова на каждой правке */
     if (!g_live_w && live_publish_open() != 0) {
@@ -93,17 +113,38 @@ void live_publish(const ff_config *cfg, int enabled)
     /* нечётное значение на время записи, чётное после: читатель повторяет чтение, если увидел нечётное
      * или разное значение до и после */
     InterlockedIncrement(&g_live_w->seq);
-    for (i = 0; i < 6; i++) {
-        g_live_w->shift[i] = cfg->shift[i / 2][i % 2];
+    g_live_w->master = master ? 1 : 0;
+    g_live_w->selected = cfg->monitor;
+    g_live_w->count = n < 0 ? 0 : (n > FF_MAX_MONITORS ? FF_MAX_MONITORS : n);
+    for (m = 0; m < FF_MAX_MONITORS; m++) {
+        ff_live_view *v = &g_live_w->view[m];
+        int i;
+
+        for (i = 0; i < 6; i++) {
+            v->shift[i] = cfg->view[m].shift[i / 2][i % 2];
+        }
+        v->sharpen = cfg->view[m].sharpen;
+        v->enabled = cfg->view[m].enabled ? 1 : 0;
+        v->device[0] = L'\0';
+        if (devices && m < g_live_w->count) {
+            wcsncpy(v->device, devices[m], FF_LIVE_DEV_LEN - 1);
+            v->device[FF_LIVE_DEV_LEN - 1] = L'\0';
+        }
     }
-    g_live_w->sharpen = cfg->sharpen;
-    g_live_w->enabled = enabled ? 1 : 0;
     g_live_w->pid = GetCurrentProcessId();
     InterlockedIncrement(&g_live_w->seq);
 }
 
 void live_publish_close(void)
 {
+    if (g_cmd) {
+        UnmapViewOfFile(g_cmd);
+        g_cmd = NULL;
+    }
+    if (g_cmd_map) {
+        CloseHandle(g_cmd_map);
+        g_cmd_map = NULL;
+    }
     if (g_live_w) {
         UnmapViewOfFile(g_live_w);
         g_live_w = NULL;
@@ -144,7 +185,7 @@ static int app_alive(unsigned pid)
     return g_app_proc && WaitForSingleObject(g_app_proc, 0) == WAIT_TIMEOUT;
 }
 
-int live_read(float shift[6], float *sharpen, int *enabled)
+int live_read(ff_live *out)
 {
     int attempt;
 
@@ -179,12 +220,64 @@ int live_read(float shift[6], float *sharpen, int *enabled)
             live_read_close();
             return 0;
         }
-        memcpy(shift, snap.shift, sizeof snap.shift);
-        *sharpen = snap.sharpen;
-        *enabled = snap.enabled != 0;
+        *out = snap;
         return 1;
     }
     return 0;
+}
+
+int live_cmd_poll(int *enabled)
+{
+    LONG seq;
+
+    if (!g_cmd) {
+        return 0;
+    }
+    seq = g_cmd->seq;
+    if (seq == g_cmd_seen) {
+        return 0;
+    }
+    g_cmd_seen = seq;
+    *enabled = g_cmd->enabled != 0;
+    return 1;
+}
+
+int live_cmd_send(int enabled)
+{
+    static HANDLE map;
+    static ff_cmd *cmd;
+
+    if (!cmd) {
+        map = OpenFileMappingW(FILE_MAP_READ | FILE_MAP_WRITE, FALSE, FF_CMD_NAME);
+        cmd = map ? MapViewOfFile(map, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, sizeof(ff_cmd)) : NULL;
+        if (!cmd) {
+            if (map) {
+                CloseHandle(map);
+                map = NULL;
+            }
+            return 0;
+        }
+    }
+    /* значение раньше счётчика: опрос по новому счётчику уже видит новое значение */
+    cmd->enabled = enabled ? 1 : 0;
+    MemoryBarrier();
+    InterlockedIncrement(&cmd->seq);
+    return 1;
+}
+
+const ff_live_view *live_pick_view(const ff_live *snap, const wchar_t *device)
+{
+    LONG i;
+    LONG sel = snap->selected < 0 ? 0 : (snap->selected >= FF_MAX_MONITORS ? FF_MAX_MONITORS - 1 : snap->selected);
+
+    if (device && device[0]) {
+        for (i = 0; i < snap->count && i < FF_MAX_MONITORS; i++) {
+            if (_wcsicmp(snap->view[i].device, device) == 0) {
+                return &snap->view[i];
+            }
+        }
+    }
+    return &snap->view[sel];
 }
 
 static void mark_name(DWORD pid, wchar_t out[48])

@@ -24,6 +24,7 @@ typedef struct {
     float present_ms;
     float age_ms;
     float cpu_ms;
+    unsigned short accum;
     unsigned char engine;
     unsigned char light;
     unsigned char drew;
@@ -45,8 +46,11 @@ typedef struct {
     int hdr;
     int shown;
     int have_frame;
-    /* облегчённый режим: один сдвиг без лапласиана и резкости, чтобы шейдер почти ничего не стоил */
+    /* облегчённого режима в программе больше нет: поле всегда ноль, оно осталось в шейдере и в таблицах замеров */
     int light;
+    /* монитор показан в окне настроек: только его кадры идут в замеры и панель диагностики, иначе мониторы
+     * перемешали бы в них свои циклы */
+    int diag;
     /* счётчики для статистики; поток захвата забирает их и обнуляет */
     unsigned drawn;
     unsigned echo_skipped;
@@ -84,6 +88,13 @@ typedef struct {
     char note[GFX_ERR_LEN];
     char adapter[96];
     ff_prof prof;
+    /* способ вывода: заказанный в настройках и действующий (tearing вывод без ожидания синхронизации; 0, если система
+     * не умеет или не просили), приоритет GPU заказанный и тот, что вернула система после установки */
+    int present_req;
+    int tearing;
+    int prio_req;
+    int prio_eff;
+    char pnote[GFX_ERR_LEN];
     /* буфер метаданных dirty и move прямоугольников */
     unsigned char *meta;
     size_t meta_cap;
@@ -103,8 +114,12 @@ int gfx_engine_effective(const ff_gfx *g);
 /* безопасен для нулевой структуры и для повторного вызова */
 void gfx_shutdown(ff_gfx *g);
 
-/* заливает сдвиги и резкость в константный буфер шейдера */
-void gfx_upload(ff_gfx *g, const ff_config *c);
+/* ставит приоритет GPU-потока устройства и читает обратно, что принято: приоритет выше нуля система может не дать */
+void gfx_set_priority(ff_gfx *g, int priority);
+
+/* заливает сдвиги и резкость монитора v в константный буфер шейдера; движок и вывод берутся из c.
+ * движок 2 уступает движку 1 там, где окна ядра трёх каналов не сходятся в одну клетку */
+void gfx_upload(ff_gfx *g, const ff_config *c, const ff_view *v);
 
 /* ждёт кадр до timeout_ms и рисует, если экран изменился или force; 0 при потере захвата */
 int gfx_pump(ff_gfx *g, UINT timeout_ms, int force);
@@ -121,7 +136,7 @@ int gfx_sig_diff(ff_gfx *g, int *changed);
  * до копии кадра, mark 1..3 после копии, сравнения и отрисовки, end закрывает цикл; collect забирает готовые */
 void gfx_prof_open(ff_gfx *g);
 void gfx_prof_close(ff_gfx *g);
-void gfx_prof_begin(ff_gfx *g, LONGLONG last_present_qpc);
+void gfx_prof_begin(ff_gfx *g, LONGLONG last_present_qpc, UINT accumulated);
 void gfx_prof_mark(ff_gfx *g, int index);
 void gfx_prof_present(ff_gfx *g, LONGLONG before, LONGLONG after);
 void gfx_prof_end(ff_gfx *g, int drew, int echo);
