@@ -5,6 +5,7 @@
 #include "app.h"
 #include "bench.h"
 #include "fileio.h"
+#include "hud.h"
 #include "live.h"
 #include "output.h"
 
@@ -63,6 +64,7 @@ int app_init(ff_app *a, HINSTANCE inst)
     load_ini(a);
     app_profile_install_bundled(a);
     a->enabled = 1;
+    hud_set_corner(a->cfg.hud_corner);
     /* имена выходов один раз: аддон находит по ним монитор окна игры */
     a->ndev = ff_output_devices(a->dev, FF_MAX_MONITORS);
     /* аддон ReShade читает отсюда живые значения; без памяти он берёт ini, поэтому сбой не фатален */

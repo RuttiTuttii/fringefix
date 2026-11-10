@@ -1,4 +1,8 @@
 #include <windows.h>
+
+#ifndef WM_DPICHANGED
+#define WM_DPICHANGED 0x02E0
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -434,6 +438,17 @@ static LRESULT CALLBACK apps_proc(HWND h, UINT m, WPARAM w, LPARAM l)
             ui_theme_apply();
         }
         return 0;
+    case WM_DPICHANGED: {
+        /* окно пересоздаётся в новом масштабе на месте, которое предложила система */
+        const RECT *r = (const RECT *)l;
+        int x = r->left;
+        int y = r->top;
+
+        ui_dpi_apply((int)HIWORD(w));
+        DestroyWindow(h);
+        ui_apps_show_at(ui.app, x, y);
+        return 0;
+    }
     case WM_CLOSE:
         DestroyWindow(h);
         return 0;

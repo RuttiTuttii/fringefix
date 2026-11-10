@@ -2,6 +2,16 @@
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow the `vX.Y.Z` tags. Betas carry `-beta.N`.
 
+## v0.8.0-beta.2 (upcoming)
+
+### Added
+
+- a "Panel position" list in the diagnostics window: the measurement panel goes to any of the four corners of the monitor (the `hud_corner` key) so that it does not collide with, for example, the MSI Afterburner counter
+
+### Fixed
+
+- when the program, app filter, About and What's new windows are moved to a monitor with another Windows scale they are recreated in the new scale
+
 ## v0.8.0-beta.1 (2026-11-11)
 
 ### Added

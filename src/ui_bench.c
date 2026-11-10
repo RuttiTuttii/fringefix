@@ -8,6 +8,7 @@
 #include "bench.h"
 #include "benchstat.h"
 #include "fileio.h"
+#include "hud.h"
 #include "i18n.h"
 #include "power.h"
 #include "resource.h"
@@ -32,7 +33,7 @@
 #define LIVE_MS 4000.0
 
 enum { ID_D_ENGINE = 800, ID_D_FORCE, ID_D_RUN, ID_D_SAVE, ID_D_CLOSE, ID_D_PRESENT, ID_D_PRIO, ID_D_HUD,
-       ID_D_KEEP, ID_D_REVERT, ID_D_TRIALTXT };
+       ID_D_KEEP, ID_D_REVERT, ID_D_TRIALTXT, ID_D_CORNER };
 
 /* приоритет GPU в списке: значения из ini ближе всего к одному из пунктов */
 static const int PRIO_VALUES[5] = { -7, -3, 0, 3, 7 };
@@ -157,6 +158,7 @@ static void paint(HWND h)
     text(dc, S(30), S(49), ff_tr(S_ENGINE), pal->fg);
     text(dc, S(30), S(85), ff_tr(S_DIAG_PRESENT), pal->fg);
     text(dc, S(410), S(85), ff_tr(S_DIAG_PRIO), pal->fg);
+    text(dc, S(410), S(121), ff_tr(S_DIAG_CORNER), pal->fg);
 
     /* пока идёт проба, под подсказкой плашка с кнопками, а состояние и итоги уезжают вниз */
     off = ff_trial_active(&g_trial) ? S(72) : 0;
@@ -540,6 +542,20 @@ static void on_command(int id, int code)
     } else if (id == ID_D_FORCE && !T.running) {
         bench_set_force(SendMessageW(GetDlgItem(g_win, ID_D_FORCE), BM_GETCHECK, 0, 0) == BST_CHECKED);
         app_wake(ui.app);
+    } else if (id == ID_D_CORNER && code == CBN_SELCHANGE) {
+        /* угол панели не пробная настройка: действует сразу и пишется в ini, откатывать нечего */
+        int sel = (int)SendMessageW(GetDlgItem(g_win, ID_D_CORNER), CB_GETCURSEL, 0, 0);
+
+        if (sel >= 0 && sel <= 3) {
+            ui.app->cfg.hud_corner = sel;
+            hud_set_corner(sel);
+            /* во время пробы в cfg лежат ещё не подтверждённые движок и вывод: писать ini сейчас значило бы оставить их;
+             * угол запишется вместе с «Оставить» или следующим сохранением */
+            if (!ff_trial_active(&g_trial)) {
+                app_save(ui.app);
+            }
+            app_wake(ui.app);
+        }
     } else if (id == ID_D_HUD) {
         bench_set_hud(SendMessageW(GetDlgItem(g_win, ID_D_HUD), BM_GETCHECK, 0, 0) == BST_CHECKED);
         app_wake(ui.app);
@@ -675,7 +691,16 @@ void ui_bench_show(ff_app *a)
         select_variant(&v);
     }
     /* панель в оверлее по умолчанию включена: окно диагностики открыто, значит замеры нужны */
-    hud = child(L"BUTTON", ff_tr(S_DIAG_HUD), BS_AUTOCHECKBOX | WS_TABSTOP, 30, 116, 500, 24, ID_D_HUD);
+    hud = child(L"BUTTON", ff_tr(S_DIAG_HUD), BS_AUTOCHECKBOX | WS_TABSTOP, 30, 116, 360, 24, ID_D_HUD);
+    {
+        static const str_id CORNERS[] = { S_CORNER_0, S_CORNER_1, S_CORNER_2, S_CORNER_3 };
+        HWND corner = child(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 550, 116, 230, 200, ID_D_CORNER);
+
+        for (i = 0; i < 4; i++) {
+            SendMessageW(corner, CB_ADDSTRING, 0, (LPARAM)ff_tr(CORNERS[i]));
+        }
+        SendMessageW(corner, CB_SETCURSEL, (WPARAM)ui.app->cfg.hud_corner, 0);
+    }
     SendMessageW(hud, BM_SETCHECK, BST_CHECKED, 0);
     bench_set_hud(1);
     child(L"BUTTON", ff_tr(S_DIAG_RUN), BS_PUSHBUTTON | WS_TABSTOP, 16, by, bw, 30, ID_D_RUN);

@@ -70,6 +70,10 @@ void ui_windows_restore(ff_app *a, const char *cmdline);
 void ui_language_apply(int mode);
 void ui_theme_apply(void);
 
+/* окно переехало на монитор с другим масштабом: шрифты и размеры общие для всех окон, поэтому новый dpi
+ * запоминается и шрифты пересоздаются; вторичное окно после этого пересоздаёт себя само, уже в новом масштабе */
+void ui_dpi_apply(int dpi);
+
 /* закрывает окно настроек: пересоздаётся на следующем показе уже с новым языком */
 void ui_settings_destroy(void);
 

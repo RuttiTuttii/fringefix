@@ -15,6 +15,10 @@
 #include "ui_state.h"
 #include "version.h"
 
+#ifndef WM_DPICHANGED
+#define WM_DPICHANGED 0x02E0
+#endif
+
 #define ABOUT_W 480
 #define ABOUT_H 366
 #define CHANGES_W 600
@@ -168,6 +172,12 @@ static LRESULT CALLBACK about_proc(HWND h, UINT m, WPARAM w, LPARAM l)
     case WM_CTLCOLORBTN:
     case WM_CTLCOLORSTATIC:
         return paint_ctlcolor(m, (HDC)w, (HWND)l, NULL);
+    case WM_DPICHANGED:
+        /* масштаб общий для окон: новый запоминается, окно открывается заново */
+        ui_dpi_apply((int)HIWORD(w));
+        DestroyWindow(h);
+        ui_about_show(ui.app);
+        return 0;
     case WM_CLOSE:
         DestroyWindow(h);
         return 0;
@@ -423,6 +433,11 @@ static LRESULT CALLBACK changes_proc(HWND h, UINT m, WPARAM w, LPARAM l)
     case WM_CTLCOLORBTN:
         /* только чтение у поля даёт WM_CTLCOLORSTATIC: красим его как поле */
         return paint_ctlcolor(m, (HDC)w, (HWND)l, (HWND)l == GetDlgItem(h, ID_CH_TEXT) ? (HWND)l : NULL);
+    case WM_DPICHANGED:
+        ui_dpi_apply((int)HIWORD(w));
+        DestroyWindow(h);
+        ui_changes_show(ui.app);
+        return 0;
     case WM_CLOSE:
         DestroyWindow(h);
         return 0;

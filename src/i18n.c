@@ -223,6 +223,11 @@ static const wchar_t *const RU[S_COUNT] = {
     [S_RS_EXPORT_FAILED] = L"Не удалось записать файл %ls%ls. Выбери другую папку.",
     [S_DIAG_PARAMS] = L"Параметры замеров",
     [S_ABOUT_AUTHOR] = L"Автор: RuttiTuttii",
+    [S_DIAG_CORNER] = L"Положение панели",
+    [S_CORNER_0] = L"Слева сверху",
+    [S_CORNER_1] = L"Справа сверху",
+    [S_CORNER_2] = L"Слева снизу",
+    [S_CORNER_3] = L"Справа снизу",
     [S_ABOUT_CREDITS] = L"Заголовки ReShade и Dear ImGui лежат в addon/third_party под своими лицензиями.",
 };
 
@@ -447,6 +452,11 @@ static const wchar_t *const EN[S_COUNT] = {
     [S_RS_EXPORT_FAILED] = L"Could not write %ls%ls. Pick another folder.",
     [S_DIAG_PARAMS] = L"Measurement settings",
     [S_ABOUT_AUTHOR] = L"Author: RuttiTuttii",
+    [S_DIAG_CORNER] = L"Panel position",
+    [S_CORNER_0] = L"Top left",
+    [S_CORNER_1] = L"Top right",
+    [S_CORNER_2] = L"Bottom left",
+    [S_CORNER_3] = L"Bottom right",
     [S_ABOUT_CREDITS] = L"The ReShade and Dear ImGui headers live in addon/third_party under their own licenses.",
 };
 

@@ -49,6 +49,19 @@ static void test_engine(void)
     CHECK(b.present_mode == 1);
 }
 
+static void test_hud_corner(void)
+{
+    ff_config c;
+
+    ff_config_defaults(&c);
+    CHECK(c.hud_corner == 0);
+    CHECK(ff_config_parse("hud_corner = 2\n", &c) == 1 && c.hud_corner == 2);
+    /* вне диапазона зажимается, мусор отбрасывается */
+    CHECK(ff_config_parse("hud_corner = 9\n", &c) == 1 && c.hud_corner == 3);
+    CHECK(ff_config_parse("hud_corner = -1\n", &c) == 1 && c.hud_corner == 0);
+    CHECK(ff_config_parse("hud_corner = x\n", &c) == 0 && c.hud_corner == 0);
+}
+
 static void test_hotkeys_and_beta(void)
 {
     ff_config c;
@@ -266,6 +279,7 @@ static void test_roundtrip(void)
     a.gpu_priority = -4;
     a.engine = 1;
     a.present_mode = 1;
+    a.hud_corner = 3;
     a.language = 1;
     a.theme = 2;
     a.stats = 1;
@@ -276,7 +290,7 @@ static void test_roundtrip(void)
     n = ff_config_format(&a, buf, sizeof buf);
     CHECK(n > 0);
     ff_config_defaults(&b);
-    CHECK(ff_config_parse(buf, &b) == 23);
+    CHECK(ff_config_parse(buf, &b) == 24);
     CHECK(memcmp(&a, &b, sizeof a) == 0);
     /* маленький буфер не должен молча обрезать файл */
     CHECK(ff_config_format(&a, tiny, sizeof tiny) == -1);
@@ -288,6 +302,7 @@ int main(void)
     test_values();
     test_long_lists();
     test_engine();
+    test_hud_corner();
     test_hotkeys_and_beta();
     test_clamp();
     test_game_keys();

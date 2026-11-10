@@ -32,3 +32,11 @@ void ui_theme_apply(void)
     paint_init(ui.dpi);
     EnumThreadWindows(GetCurrentThreadId(), restyle_top, 0);
 }
+
+void ui_dpi_apply(int dpi)
+{
+    if (dpi > 0 && dpi != ui.dpi) {
+        ui.dpi = dpi;
+        ui_theme_apply();
+    }
+}

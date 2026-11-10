@@ -14,6 +14,10 @@
 #include "ui_state.h"
 #include "version.h"
 
+#ifndef WM_DPICHANGED
+#define WM_DPICHANGED 0x02E0
+#endif
+
 #define APP_W 520
 #define APP_H 766
 #define CARD_ROW 30
@@ -439,6 +443,10 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
         if (w == TIMER_LANG) {
             apply_language_choice();
         }
+        return 0;
+    case WM_DPICHANGED:
+        ui_dpi_apply((int)HIWORD(w));
+        PostMessageW(h, WM_REOPEN, 0, 0);
         return 0;
     case WM_REOPEN: {
         RECT r;

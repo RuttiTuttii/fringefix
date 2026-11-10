@@ -444,6 +444,25 @@ void hud_paint(HDC dc, int w, int h, int dpi, const ff_sample *s, unsigned ns, c
 static HWND g_hud;
 static ULONGLONG g_retry_at;
 static RECT g_mon;
+/* угол из настроек и угол, в котором панель стоит сейчас */
+static volatile LONG g_corner;
+static int g_placed_corner;
+
+void hud_set_corner(int corner)
+{
+    InterlockedExchange(&g_corner, corner < 0 ? 0 : (corner > 3 ? 3 : corner));
+}
+
+/* левый верхний угол окна панели w на h в выбранном углу монитора с отступом HUD_MARGIN */
+static void place(const RECT *mon, int w, int h, int *x, int *y)
+{
+    int corner = (int)g_corner;
+    int m = sc(HUD_MARGIN);
+
+    *x = corner & 1 ? mon->right - w - m : mon->left + m;
+    *y = corner & 2 ? mon->bottom - h - m : mon->top + m;
+    g_placed_corner = corner;
+}
 static ff_sample g_ss[FF_RING_CAP];
 static ff_power_sample g_pp[FF_PRING_CAP];
 static unsigned g_ns;
@@ -553,6 +572,8 @@ static void open_window(const RECT *mon)
     static int registered;
     int w;
     int hh;
+    int x;
+    int y;
     int dpi = screen_dpi();
 
     if (!registered) {
@@ -566,9 +587,9 @@ static void open_window(const RECT *mon)
         registered = 1;
     }
     hud_size(dpi, &w, &hh);
+    place(mon, w, hh, &x, &y);
     g_hud = CreateWindowExW(WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
-                            CLASS_NAME, L"fringefix hud", WS_POPUP, mon->left + sc(HUD_MARGIN),
-                            mon->top + sc(HUD_MARGIN), w, hh, NULL, NULL, GetModuleHandleW(NULL), NULL);
+                            CLASS_NAME, L"fringefix hud", WS_POPUP, x, y, w, hh, NULL, NULL, GetModuleHandleW(NULL), NULL);
     if (!g_hud) {
         g_retry_at = GetTickCount64() + RETRY_MS;
         return;
@@ -594,14 +615,16 @@ void hud_sync(const RECT *monitor, int want)
         return;
     }
     if (g_hud) {
-        /* монитор сдвинулся или сменил режим: панель переезжает вслед за ним */
-        if (memcmp(&g_mon, monitor, sizeof g_mon) != 0) {
+        /* монитор сдвинулся или сменил режим, либо выбран другой угол: панель переезжает */
+        if (memcmp(&g_mon, monitor, sizeof g_mon) != 0 || g_placed_corner != (int)g_corner) {
             int w;
             int hh;
+            int x;
+            int y;
 
             hud_size(screen_dpi(), &w, &hh);
-            SetWindowPos(g_hud, HWND_TOPMOST, monitor->left + sc(HUD_MARGIN), monitor->top + sc(HUD_MARGIN), w, hh,
-                         SWP_NOACTIVATE);
+            place(monitor, w, hh, &x, &y);
+            SetWindowPos(g_hud, HWND_TOPMOST, x, y, w, hh, SWP_NOACTIVATE);
             g_mon = *monitor;
         }
         return;

@@ -239,6 +239,13 @@ static int parse_line(char *line, ff_config *cfg)
     if (strcmp(key, "ignore_apps") == 0) {
         return copy_string(val, cfg->ignore_apps, sizeof cfg->ignore_apps);
     }
+    if (strcmp(key, "hud_corner") == 0) {
+        if (!parse_number(val, 0.0, 3.0, &v)) {
+            return 0;
+        }
+        cfg->hud_corner = (int)v;
+        return 1;
+    }
     if (strcmp(key, "reshade_dir") == 0) {
         return copy_string(val, cfg->reshade_dir, sizeof cfg->reshade_dir);
     }
@@ -368,9 +375,10 @@ int ff_config_format(const ff_config *cfg, char *buf, size_t n)
         "\n; локальная статистика для отчёта, сама ничего не отправляет: 0 или 1\nstats = %d\n"
         "\n; движок обработки: 0 классический, 1 сравнение кадров на compute-шейдере, 2 то же и фильтр ядром 3x3 (по умолчанию)\nengine = %d\n"
         "\n; способ вывода кадра (бета): 0 с ожиданием вертикальной синхронизации, 1 без ожидания (tearing)\npresent_mode = %d\n"
+        "\n; угол монитора для панели замеров: 0 слева сверху, 1 справа сверху, 2 слева снизу, 3 справа снизу\nhud_corner = %d\n"
         "\n; последняя папка кнопок ReShade-аддона\nreshade_dir = %s\n",
         cfg->check_updates, cfg->beta, hk_toggle, hk_quit, cfg->auto_pause, cfg->gpu_priority,
-        cfg->pause_apps, cfg->ignore_apps, cfg->language, cfg->theme, cfg->stats, cfg->engine, cfg->present_mode, cfg->reshade_dir);
+        cfg->pause_apps, cfg->ignore_apps, cfg->language, cfg->theme, cfg->stats, cfg->engine, cfg->present_mode, cfg->hud_corner, cfg->reshade_dir);
 
     return (w < 0 || pos + (size_t)w >= n) ? -1 : (int)(pos + (size_t)w);
 }
