@@ -2,7 +2,7 @@
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow the `vX.Y.Z` tags. Betas carry `-beta.N`.
 
-## v0.8.0-beta.2 (upcoming)
+## v0.8.0-beta.2 (2026-11-11)
 
 ### Added
 
