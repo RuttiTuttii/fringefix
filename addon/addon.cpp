@@ -22,6 +22,7 @@
 extern "C" {
 #include "benchstat.h"
 #include "config.h"
+#include "hotkey.h"
 #include "kernel.h"
 #include "live.h"
 #include "power.h"
@@ -44,6 +45,8 @@ constexpr int QPF = 16;
 constexpr int QFRAMES = 4;
 constexpr ULONGLONG POLL_MS = 500;
 constexpr ULONGLONG POWER_MS = 250;
+/* после команды приложению ползунок показывает заказанное состояние, пока приложение не успело обновить живые значения */
+constexpr ULONGLONG CMD_HOLD_MS = 1500;
 /* замеры идут, только пока вкладка открыта: так аддон ничего не стоит в обычной игре */
 constexpr unsigned OVERLAY_GRACE = 3;
 constexpr const char *EFFECT_FILE = "fringefix.fx";
@@ -121,6 +124,21 @@ struct globals {
     bool power_tried = false;
     bool power_ok = false;
     ULONGLONG next_power = 0;
+    /* локальный выключатель фильтра: действует, когда живых значений приложения нет (ini или свои значения) */
+    bool local_on = true;
+    /* замеры вкладки: выключенные не собирают метки времени видеокарты и не опрашивают NVML */
+    bool monitoring = true;
+    /* общий выключатель и флаг монитора окна игры из последних живых значений: нужны ползунку и подсказке */
+    bool app_master = true;
+    bool app_view = true;
+    /* заказанное ползунком состояние и до какого момента его показывать вместо живого */
+    bool cmd_value = false;
+    ULONGLONG cmd_until = 0;
+    /* хоткей включения из ini приложения, по умолчанию F10; опрашивается, только пока приложение не отвечает */
+    ff_hotkey hotkey = {};
+    bool key_prev = false;
+    /* имя выхода, на котором окно игры */
+    wchar_t device[FF_LIVE_DEV_LEN] = {};
     ring watts, util;
     float clock_mhz = -1.0f;
     CRITICAL_SECTION lock;
@@ -191,6 +209,12 @@ void ensure_init()
         return;
     }
     G.inited = true;
+    {
+        ff_config def;
+
+        ff_config_defaults(&def);
+        G.hotkey = def.hotkey_toggle;
+    }
     load_own();
     G.eff = G.own;
     if (GetEnvironmentVariableW(L"APPDATA", dir, MAX_PATH) > 0 && dir[0]) {
@@ -226,11 +250,15 @@ bool read_ini(settings &out)
         buf[got] = '\0';
         ff_config_defaults(&c);
         ff_config_parse(buf, &c);
+        /* в ini нет имён выходов, поэтому берётся монитор, выбранный в окне приложения */
+        const ff_view &v = *ff_config_view_const(&c, c.monitor);
+
         for (int i = 0; i < 6; i++) {
-            G.ini.shift[i] = c.shift[i / 2][i % 2];
+            G.ini.shift[i] = v.shift[i / 2][i % 2];
         }
-        G.ini.sharpen = c.sharpen;
-        G.ini.enabled = 1;
+        G.ini.sharpen = v.sharpen;
+        G.ini.enabled = v.enabled;
+        G.hotkey = c.hotkey_toggle;
         G.ini_time = fa.ftLastWriteTime;
         G.ini_valid = true;
     }
@@ -238,8 +266,23 @@ bool read_ini(settings &out)
     return true;
 }
 
-/* выбор источника раз в полсекунды: приложение, потом его ini, потом собственные значения */
-void poll_config()
+/* имя выхода, на котором окно игры: по нему приложение отдаёт настройки именно этого монитора */
+void update_device(effect_runtime *rt)
+{
+    HWND w = static_cast<HWND>(rt->get_hwnd());
+    HMONITOR m = w ? MonitorFromWindow(w, MONITOR_DEFAULTTONEAREST) : nullptr;
+    MONITORINFOEXW mi;
+
+    mi.cbSize = sizeof mi;
+    G.device[0] = L'\0';
+    if (m && GetMonitorInfoW(m, &mi)) {
+        wcsncpy(G.device, mi.szDevice, FF_LIVE_DEV_LEN - 1);
+        G.device[FF_LIVE_DEV_LEN - 1] = L'\0';
+    }
+}
+
+/* выбор источника раз в полсекунды: приложение, потом его ини, потом собственные значения */
+void poll_config(effect_runtime *rt)
 {
     ULONGLONG now = GetTickCount64();
     settings n = G.own;
@@ -250,20 +293,26 @@ void poll_config()
     }
     G.next_poll = now + POLL_MS;
     if (G.follow_app) {
-        float sh[6];
-        float sp;
-        int en;
+        ff_live snap;
 
-        if (live_read(sh, &sp, &en)) {
-            memcpy(n.shift, sh, sizeof sh);
-            n.sharpen = sp;
-            n.enabled = en;
+        update_device(rt);
+        if (live_read(&snap)) {
+            const ff_live_view *v = live_pick_view(&snap, G.device);
+
+            memcpy(n.shift, v->shift, sizeof n.shift);
+            n.sharpen = v->sharpen;
+            G.app_master = snap.master != 0;
+            G.app_view = v->enabled != 0;
+            n.enabled = G.app_master && G.app_view;
             src = SRC_APP;
         } else if (read_ini(n)) {
             src = SRC_INI;
         }
     }
     G.source = src;
+    if (src != SRC_APP) {
+        n.enabled = n.enabled && G.local_on;
+    }
     if (!n.same(G.eff)) {
         G.eff = n;
         G.version++;
@@ -359,7 +408,7 @@ void update_marker()
 
 bool overlay_recent(const rt_state &s)
 {
-    return s.overlay_seen && s.frame - s.overlay_frame <= OVERLAY_GRACE;
+    return G.monitoring && s.overlay_seen && s.frame - s.overlay_frame <= OVERLAY_GRACE;
 }
 
 void create_timing(effect_runtime *rt, rt_state &s)
@@ -403,7 +452,7 @@ void on_reloaded(effect_runtime *rt)
     ensure_init();
     bind_effect(rt, *s);
     s->pushed_version = 0;
-    poll_config();
+    poll_config(rt);
     push_uniforms(rt, *s);
 }
 
@@ -503,6 +552,31 @@ void collect_timing(effect_runtime *rt, rt_state &s)
     }
 }
 
+/* хоткей включения, пока приложение не запущено: оно ловит его само и обновляет общий выключатель.
+ * срабатывает по фронту нажатия и только когда игра на переднем плане */
+void poll_hotkey()
+{
+    const ff_hotkey &h = G.hotkey;
+    DWORD pid = 0;
+    bool down;
+
+    if (G.source == SRC_APP || h.vk == 0) {
+        G.key_prev = false;
+        return;
+    }
+    GetWindowThreadProcessId(GetForegroundWindow(), &pid);
+    down = pid == GetCurrentProcessId() && (GetAsyncKeyState((int)h.vk) & 0x8000) != 0
+           && (!(h.mods & FF_MOD_CTRL) || (GetAsyncKeyState(VK_CONTROL) & 0x8000))
+           && (!(h.mods & FF_MOD_ALT) || (GetAsyncKeyState(VK_MENU) & 0x8000))
+           && (!(h.mods & FF_MOD_SHIFT) || (GetAsyncKeyState(VK_SHIFT) & 0x8000))
+           && (!(h.mods & FF_MOD_WIN) || (GetAsyncKeyState(VK_LWIN) & 0x8000) || (GetAsyncKeyState(VK_RWIN) & 0x8000));
+    if (down && !G.key_prev) {
+        G.local_on = !G.local_on;
+        G.next_poll = 0;
+    }
+    G.key_prev = down;
+}
+
 void on_present(effect_runtime *rt)
 {
     guard g;
@@ -512,7 +586,8 @@ void on_present(effect_runtime *rt)
         return;
     }
     ensure_init();
-    poll_config();
+    poll_config(rt);
+    poll_hotkey();
     /* дескрипторы живут до перезагрузки эффектов, а события о начале перезагрузки в API нет, и перезагрузка одного
      * эффекта могла не дать reloaded_effects: перепривязываем раз в полсекунды, чтобы не держать устаревшие.
      * заодно подхватывается эффект, установленный позже аддона */
@@ -595,6 +670,54 @@ void slider(const char *label, float *v, float lim, bool *changed, bool *commit)
     }
 }
 
+/* выключатель-ползунок: true в момент щелчка, *on уже перевёрнут */
+bool toggle(const char *id, bool *on, const char *tip)
+{
+    const float h = ImGui::GetFrameHeight();
+    const float w = h * 1.8f;
+    const ImVec2 p = ImGui::GetCursorScreenPos();
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    bool clicked = ImGui::InvisibleButton(id, ImVec2(w, h));
+    const float r = h * 0.5f;
+
+    if (clicked) {
+        *on = !*on;
+    }
+    dl->AddRectFilled(p, ImVec2(p.x + w, p.y + h),
+                      ImGui::GetColorU32(*on ? ImGuiCol_ButtonActive : ImGuiCol_FrameBg), r);
+    dl->AddCircleFilled(ImVec2(*on ? p.x + w - r : p.x + r, p.y + r), r - 2.0f, ImGui::GetColorU32(ImGuiCol_Text));
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", tip);
+    }
+    return clicked;
+}
+
+/* ползунок «Filter»: с приложением шлёт ему команду, без него переключает локальный флаг */
+void draw_filter_toggle()
+{
+    ULONGLONG now = GetTickCount64();
+    bool on = G.eff.enabled != 0;
+
+    if (G.source == SRC_APP && now < G.cmd_until) {
+        on = G.cmd_value;
+    }
+    if (toggle("##filter", &on, "Same as the hotkey of the fringefix app (F10 by default).")) {
+        if (G.source == SRC_APP) {
+            G.cmd_value = on;
+            G.cmd_until = now + CMD_HOLD_MS;
+            live_cmd_send(on ? 1 : 0);
+        } else {
+            G.local_on = on;
+            G.next_poll = 0;
+        }
+    }
+    ImGui::SameLine();
+    ImGui::TextUnformatted("Filter");
+    if (G.source == SRC_APP && G.app_master && !G.app_view) {
+        ImGui::TextDisabled("Off for this monitor in the fringefix app.");
+    }
+}
+
 void draw_overlay(effect_runtime *rt)
 {
     static const char *const NAMES[6] = { "Red horizontal", "Red vertical", "Green horizontal",
@@ -613,10 +736,16 @@ void draw_overlay(effect_runtime *rt)
     ensure_init();
     s->overlay_seen = true;
     s->overlay_frame = s->frame;
-    create_timing(rt, *s);
-    poll_power(rt);
+    if (G.monitoring) {
+        create_timing(rt, *s);
+        poll_power(rt);
+    }
 
     ImGui::Text("fringefix %s", FF_VERSION);
+    draw_filter_toggle();
+    toggle("##monitoring", &G.monitoring, "Timings, frame rate and GPU power below. Off: no GPU queries and no polling.");
+    ImGui::SameLine();
+    ImGui::TextUnformatted("Monitoring");
     if (!s->tech_ok || s->uniforms_found != 11) {
         ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.3f, 1.0f),
                            "fringefix.fx is not loaded. Reinstall from the fringefix app or copy it into the "
@@ -660,6 +789,10 @@ void draw_overlay(effect_runtime *rt)
     }
 
     ImGui::SeparatorText("Timings while this tab is open");
+    if (!G.monitoring) {
+        ImGui::TextDisabled("Monitoring is off.");
+        return;
+    }
     if (s->timing_ok) {
         stat_line("GPU, fringefix pass", s->gpu, &st);
     } else {
