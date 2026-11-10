@@ -10,6 +10,12 @@
 /* скрытое окно сообщений, значок в трее и глобальные хоткеи; 0 или -1 */
 int ui_tray_create(ff_app *a);
 
+/* проверка обновлений по кнопке: итог показывается в строке состояния окна настроек */
+void ui_check_updates(ff_app *a);
+
+/* закрывает программу так же, как пункт «Выход» в трее */
+void ui_quit(ff_app *a);
+
 /* регистрирует глобальные сочетания из a->cfg заново; бит 0 в ответе значит, что сочетание включения занято,
  * бит 1 то же про выход, ноль значит всё встало */
 int ui_tray_bind_hotkeys(ff_app *a);
@@ -43,6 +49,10 @@ void ui_apps_show_at(ff_app *a, int x, int y);
 void ui_app_show(ff_app *a);
 int ui_app_get_pos(POINT *p);
 void ui_app_show_at(ff_app *a, int x, int y);
+
+/* «О программе» и «Что нового» (список изменений вшит в exe) */
+void ui_about_show(ff_app *a);
+void ui_changes_show(ff_app *a);
 
 /* диагностика (бета): выбор движка обработки, графики времени этапов и задержек, потребление, прогон по всем движкам */
 void ui_bench_show(ff_app *a);
@@ -79,6 +89,9 @@ int ui_profile_save_dialog(HWND owner, ff_app *a, wchar_t name[PROFILE_NAME_LEN]
 /* установка и удаление ReShade-аддона в папке игры, которую выбирает пользователь (reshade_inst.h) */
 void ui_reshade_install(HWND owner);
 void ui_reshade_remove(HWND owner);
+
+/* сохраняет аддон и папку reshade-shaders с эффектом в папку, которую выбирает пользователь, без игры и ReShade */
+void ui_reshade_export(HWND owner);
 
 /* ответы фоновых потоков обновления */
 void ui_update_on_info(ff_app *a, ff_update_info *info);

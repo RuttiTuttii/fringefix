@@ -15,6 +15,9 @@
 #define HK_TOGGLE 1
 #define HK_QUIT 2
 #define MAX_PROFILES 24
+/* опрос команд аддона ReShade: ползунок в игре просит включить или выключить общий выключатель */
+#define TIMER_CMD 1
+#define CMD_POLL_MS 250
 
 enum { IDM_SETTINGS = 1, IDM_TOGGLE, IDM_PATTERN, IDM_UPDATE, IDM_QUIT, IDM_PROFILE = 100 };
 
@@ -146,7 +149,7 @@ static void toggle(ff_app *a)
     ui_settings_refresh_power();
 }
 
-static void check_updates(ff_app *a)
+void ui_check_updates(ff_app *a)
 {
     if (!FF_REPO[0]) {
         MessageBoxW(NULL, ff_tr(S_NO_REPO), L"fringefix", MB_ICONINFORMATION | MB_TOPMOST);
@@ -191,10 +194,10 @@ static void on_command(ff_app *a, int id)
         ui_pattern_show(a);
         break;
     case IDM_UPDATE:
-        check_updates(a);
+        ui_check_updates(a);
         break;
     case IDM_QUIT:
-        DestroyWindow(a->hwnd);
+        ui_quit(a);
         break;
     }
 }
@@ -218,6 +221,17 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
     switch (m) {
     case WM_CREATE:
         SetWindowLongPtrW(h, GWLP_USERDATA, (LONG_PTR)((CREATESTRUCTW *)l)->lpCreateParams);
+        return 0;
+    case WM_TIMER:
+        if (w == TIMER_CMD) {
+            int on;
+
+            if (live_cmd_poll(&on) && on != (a->enabled != 0)) {
+                app_set_enabled(a, on);
+                tray_notify(a, NIM_MODIFY);
+                ui_settings_refresh_power();
+            }
+        }
         return 0;
     case WM_HOTKEY:
         if (w == HK_TOGGLE) {
@@ -268,6 +282,7 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
         nid.hWnd = h;
         nid.uID = 1;
         Shell_NotifyIconW(NIM_DELETE, &nid);
+        KillTimer(h, TIMER_CMD);
         UnregisterHotKey(h, HK_TOGGLE);
         UnregisterHotKey(h, HK_QUIT);
         PostQuitMessage(0);
@@ -317,5 +332,11 @@ int ui_tray_create(ff_app *a)
     }
     ui_tray_bind_hotkeys(a);
     tray_notify(a, NIM_ADD);
+    SetTimer(a->hwnd, TIMER_CMD, CMD_POLL_MS, NULL);
     return 0;
+}
+
+void ui_quit(ff_app *a)
+{
+    DestroyWindow(a->hwnd);
 }

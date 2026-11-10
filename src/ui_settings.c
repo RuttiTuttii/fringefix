@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>
+#include <shellapi.h>
 #include <wchar.h>
 
 #include "i18n.h"
@@ -9,6 +10,7 @@
 #include "slider.h"
 #include "theme.h"
 #include "ui.h"
+#include "ui_menubar.h"
 #include "ui_paint.h"
 #include "ui_state.h"
 #include "version.h"
@@ -27,6 +29,9 @@ ui_state ui = { .dpi = 96 };
 /* место окна, из которого его пересоздали (смена языка): новое встаёт туда же */
 static POINT g_saved;
 static int g_have_saved;
+/* сочетания окна: Ctrl+O и Ctrl+S для профилей, F1 для окна о программе */
+static HACCEL g_accel;
+static int g_tracking;
 
 static void set_status(const wchar_t *text)
 {
@@ -92,10 +97,17 @@ static void on_enter(void)
     }
 }
 
+/* пункт меню открывает папку профилей в проводнике; открывает сам пользователь, из его действия */
+static void open_profile_dir(void)
+{
+    wchar_t dir[MAX_PATH];
+
+    app_profile_dir(ui.app, dir);
+    ShellExecuteW(NULL, L"open", dir, NULL, NULL, SW_SHOWNORMAL);
+}
+
 static void on_command(int id, int code)
 {
-    ff_config *c = &ui.app->cfg;
-
     if (id >= ID_SLIDER && id <= ID_SLIDER + IDX_SHARPEN && code == FFN_CHANGED) {
         ctl_slider_changed(id - ID_SLIDER);
     } else if (id >= ID_EDIT && id <= ID_EDIT + IDX_SHARPEN) {
@@ -103,14 +115,12 @@ static void on_command(int id, int code)
     } else if (id == IDOK) {
         on_enter();
     } else if (id == ID_MONITOR && code == CBN_SELCHANGE) {
-        c->monitor = (int)SendMessageW(ui.monitor, CB_GETCURSEL, 0, 0);
-        app_reinit(ui.app);
+        ctl_monitor_changed();
     } else if (id == ID_POWER && code == FFN_CHANGED) {
-        /* выключатель управляет тем же флагом, что хоткей и трей; значку в трее сообщаем сообщением */
-        app_set_enabled(ui.app, (int)SendMessageW(ui.power, FFS_GETPOS, 0, 0));
-        ctl_sync_power();
+        /* выключатель монитора; значку в трее сообщаем сообщением, потому что общий выключатель мог поменять подпись */
+        ctl_power_changed();
         PostMessageW(ui.app->hwnd, WM_APP_STATE, 0, 0);
-    } else if (id == ID_PROGRAM) {
+    } else if (id == ID_PROGRAM || id == ID_M_RESHADE) {
         ui_app_show(ui.app);
     } else if (id == ID_PROF_LOAD || id == ID_PROF_SAVE) {
         on_profile(id == ID_PROF_SAVE);
@@ -124,6 +134,34 @@ static void on_command(int id, int code)
         ctl_reset();
     } else if (id == ID_SAVE) {
         set_status(ff_tr(app_save(ui.app) == 0 ? S_SAVED : S_SAVE_FAILED));
+    } else if (id == ID_M_FILTER) {
+        SendMessageW(ui.power, FFS_SETPOS, !SendMessageW(ui.power, FFS_GETPOS, 0, 0), 0);
+        ctl_power_changed();
+        PostMessageW(ui.app->hwnd, WM_APP_STATE, 0, 0);
+    } else if (id == ID_M_MASTER) {
+        app_set_enabled(ui.app, !ui.app->enabled);
+        ctl_sync_power();
+        PostMessageW(ui.app->hwnd, WM_APP_STATE, 0, 0);
+    } else if (id == ID_M_OPENDIR) {
+        open_profile_dir();
+    } else if (id == ID_M_HIDE) {
+        SendMessageW(ui.win, WM_CLOSE, 0, 0);
+    } else if (id == ID_M_QUIT) {
+        ui_quit(ui.app);
+    } else if (id == ID_M_APPS) {
+        ui_apps_show(ui.app);
+    } else if (id == ID_M_DIAG) {
+        ui_bench_show(ui.app);
+    } else if (id == ID_M_CHANGES) {
+        ui_changes_show(ui.app);
+    } else if (id == ID_M_UPDATE) {
+        ui_check_updates(ui.app);
+    } else if (id == ID_M_VERSIONS) {
+        ui_versions_show(ui.app);
+    } else if (id == ID_M_REPORT) {
+        ui_report_show(ui.app);
+    } else if (id == ID_M_ABOUT) {
+        ui_about_show(ui.app);
     }
 }
 
@@ -155,7 +193,34 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
     case WM_CTLCOLORLISTBOX:
     case WM_CTLCOLORBTN:
     case WM_CTLCOLORSTATIC:
+        /* подпись состояния фильтра лежит на карточке */
+        if ((HWND)l == ui.power_label) {
+            return paint_ctlcolor_card((HDC)w);
+        }
         return paint_ctlcolor(m, (HDC)w, (HWND)l, (HWND)l == ui.monitor ? (HWND)l : NULL);
+    case WM_MOUSEMOVE: {
+        int item = menubar_hit((short)LOWORD(l), (short)HIWORD(l));
+
+        menubar_hover(h, item);
+        if (item >= 0 && !g_tracking) {
+            TRACKMOUSEEVENT t = { sizeof t, TME_LEAVE, h, 0 };
+
+            g_tracking = TrackMouseEvent(&t) != 0;
+        }
+        return 0;
+    }
+    case WM_MOUSELEAVE:
+        g_tracking = 0;
+        menubar_hover(h, -1);
+        return 0;
+    case WM_LBUTTONDOWN: {
+        int item = menubar_hit((short)LOWORD(l), (short)HIWORD(l));
+
+        if (item >= 0) {
+            menubar_open(h, item);
+        }
+        return 0;
+    }
     case WM_SETTINGCHANGE:
         /* сменилась тема приложений Windows: перекрасить окно на лету */
         if (l && wcscmp((const wchar_t *)l, L"ImmersiveColorSet") == 0) {
@@ -224,6 +289,15 @@ static void create_window(void)
     g_have_saved = 0;
     paint_init(ui.dpi);
     set_icons();
+    if (!g_accel) {
+        ACCEL keys[] = {
+            { FVIRTKEY | FCONTROL, 'O', ID_PROF_LOAD },
+            { FVIRTKEY | FCONTROL, 'S', ID_PROF_SAVE },
+            { FVIRTKEY, VK_F1, ID_M_ABOUT },
+        };
+
+        g_accel = CreateAcceleratorTableW(keys, (int)(sizeof keys / sizeof keys[0]));
+    }
     ctl_build();
     ctl_restyle();
     set_status_fmt(S_VERSION, L"" FF_VERSION);
@@ -308,6 +382,9 @@ int ui_settings_translate(MSG *m)
     wchar_t cls[32];
     HWND top = m->hwnd ? GetAncestor(m->hwnd, GA_ROOT) : NULL;
 
+    if (g_accel && top == ui.win && TranslateAcceleratorW(top, g_accel, m)) {
+        return 1;
+    }
     /* любое окно fringefix с элементами, кроме скрытого окна трея и паттерна */
     if (!top || GetClassNameW(top, cls, 32) == 0 || wcsncmp(cls, L"fringefix_", 10) != 0
         || wcscmp(cls, L"fringefix_main") == 0 || wcscmp(cls, L"fringefix_pattern") == 0) {

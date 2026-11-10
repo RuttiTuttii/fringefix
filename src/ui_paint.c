@@ -3,6 +3,7 @@
 #include "i18n.h"
 #include "theme.h"
 #include "ui_layout.h"
+#include "ui_menubar.h"
 #include "ui_paint.h"
 
 #define S(v) MulDiv((v), dpi, 96)
@@ -11,6 +12,7 @@ static HFONT g_font;
 static HFONT g_bold;
 static HBRUSH g_bg;
 static HBRUSH g_field;
+static HBRUSH g_card;
 
 void paint_free(void)
 {
@@ -26,8 +28,11 @@ void paint_free(void)
     if (g_field) {
         DeleteObject(g_field);
     }
+    if (g_card) {
+        DeleteObject(g_card);
+    }
     g_font = g_bold = NULL;
-    g_bg = g_field = NULL;
+    g_bg = g_field = g_card = NULL;
 }
 
 void paint_init(int dpi)
@@ -41,6 +46,7 @@ void paint_init(int dpi)
                          0, CLEARTYPE_QUALITY, 0, L"Segoe UI");
     g_bg = CreateSolidBrush(p->bg);
     g_field = CreateSolidBrush(p->field);
+    g_card = CreateSolidBrush(p->card);
 }
 
 HFONT paint_font(void)
@@ -61,6 +67,15 @@ LRESULT paint_ctlcolor(UINT msg, HDC dc, HWND ctl, HWND field_ctl)
     SetTextColor(dc, p->fg);
     SetBkColor(dc, field ? p->field : p->bg);
     return (LRESULT)(field ? g_field : g_bg);
+}
+
+LRESULT paint_ctlcolor_card(HDC dc)
+{
+    const ff_palette *p = theme_get();
+
+    SetTextColor(dc, p->fg);
+    SetBkColor(dc, p->card);
+    return (LRESULT)g_card;
 }
 
 HBRUSH paint_bg(void)
@@ -100,6 +115,67 @@ void paint_card(HDC dc, int dpi, int x96, int y96, int w96, int h96, const wchar
     SelectObject(dc, g_font);
 }
 
+/* смесь двух цветов: t из 256 даёт долю b */
+static COLORREF mix(COLORREF a, COLORREF b, int t)
+{
+    return RGB((GetRValue(a) * (256 - t) + GetRValue(b) * t) / 256, (GetGValue(a) * (256 - t) + GetGValue(b) * t) / 256,
+               (GetBValue(a) * (256 - t) + GetBValue(b) * t) / 256);
+}
+
+void paint_card_accent(HDC dc, int dpi, int x96, int y96, int w96, int h96, const wchar_t *title, const wchar_t *badge)
+{
+    const ff_palette *p = theme_get();
+    HBRUSH fill = CreateSolidBrush(mix(p->card, p->accent, p->dark ? 34 : 22));
+    HBRUSH bar = CreateSolidBrush(p->accent);
+    HPEN edge = CreatePen(PS_SOLID, 1, mix(p->border, p->accent, 140));
+    HGDIOBJ ob = SelectObject(dc, fill);
+    HGDIOBJ op = SelectObject(dc, edge);
+    int x = S(x96);
+    int y = S(y96);
+    RECT stripe;
+    RECT pill;
+    SIZE sz;
+
+    RoundRect(dc, x, y, x + S(w96), y + S(h96), S(10), S(10));
+    SelectObject(dc, op);
+    SelectObject(dc, ob);
+    /* полоса слева внутри рамки */
+    SetRect(&stripe, x + S(1), y + S(10), x + S(5), y + S(h96) - S(10));
+    FillRect(dc, &stripe, bar);
+
+    SelectObject(dc, g_bold);
+    SetBkMode(dc, TRANSPARENT);
+    text(dc, x + S(COL_LABEL), y + S(7), title, p->accent);
+    GetTextExtentPoint32W(dc, title, (int)wcslen(title), &sz);
+    SelectObject(dc, g_font);
+    /* плашка после заголовка */
+    GetTextExtentPoint32W(dc, badge, (int)wcslen(badge), &sz);
+    {
+        SIZE head;
+
+        SelectObject(dc, g_bold);
+        GetTextExtentPoint32W(dc, title, (int)wcslen(title), &head);
+        SelectObject(dc, g_font);
+        SetRect(&pill, x + S(COL_LABEL) + head.cx + S(10), y + S(8), x + S(COL_LABEL) + head.cx + S(10) + sz.cx + S(14),
+                y + S(8) + sz.cy + S(2));
+    }
+    {
+        HBRUSH pb = CreateSolidBrush(p->accent);
+        HGDIOBJ obr = SelectObject(dc, pb);
+        HGDIOBJ opn = SelectObject(dc, GetStockObject(NULL_PEN));
+
+        RoundRect(dc, pill.left, pill.top, pill.right, pill.bottom, S(10), S(10));
+        SelectObject(dc, opn);
+        SelectObject(dc, obr);
+        DeleteObject(pb);
+    }
+    SetTextColor(dc, RGB(255, 255, 255));
+    DrawTextW(dc, badge, -1, &pill, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    DeleteObject(edge);
+    DeleteObject(fill);
+    DeleteObject(bar);
+}
+
 void paint_draw_item(const DRAWITEMSTRUCT *d, HICON icon, const wchar_t *label, int dpi)
 {
     const ff_palette *p = theme_get();
@@ -136,7 +212,9 @@ void paint_window(HWND h, int dpi, const wchar_t *status)
     SetBkMode(dc, TRANSPARENT);
     SelectObject(dc, g_font);
 
-    text(dc, S(MARGIN), S(10), ff_tr(S_HINT), p->muted);
+    menubar_paint(dc, dpi, r.right);
+    SelectObject(dc, g_font);
+    text(dc, S(MARGIN), S(MENU_H + 8), ff_tr(S_HINT), p->muted);
     for (i = 0; i < NCARDS; i++) {
         paint_card(dc, dpi, MARGIN, card_y(i), CARD_W, card_h(i), ff_tr(CARDS[i].title));
     }

@@ -13,7 +13,7 @@ typedef struct {
     HWND slider[IDX_SHARPEN + 1];
     HWND edit[IDX_SHARPEN + 1];
     HWND monitor;
-    /* выключатель фильтра внизу слева: ползунок из двух положений и подпись */
+    /* выключатель фильтра выбранного монитора: ползунок из двух положений и подпись */
     HWND power;
     HWND power_label;
     int dpi;
@@ -36,7 +36,21 @@ enum {
     ID_RESET,
     ID_SAVE,
     ID_POWER,
-    ID_POWER_LABEL
+    ID_POWER_LABEL,
+    /* пункты меню окна: остальные команды меню повторяют кнопки */
+    ID_M_HIDE = 160,
+    ID_M_QUIT,
+    ID_M_FILTER,
+    ID_M_MASTER,
+    ID_M_OPENDIR,
+    ID_M_APPS,
+    ID_M_DIAG,
+    ID_M_RESHADE,
+    ID_M_CHANGES,
+    ID_M_UPDATE,
+    ID_M_VERSIONS,
+    ID_M_REPORT,
+    ID_M_ABOUT
 };
 
 /* создаёт все элементы по таблицам ui_layout.h */
@@ -64,7 +78,11 @@ void ctl_edit_changed(int idx);
 /* привести текст поля к виду значения */
 void ctl_edit_show(int idx);
 
-/* все сдвиги и резкость в ноль */
+/* все сдвиги и резкость выбранного монитора в ноль */
 void ctl_reset(void);
+
+/* пользователь двинул выключатель фильтра выбранного монитора или выбрал другой монитор в списке */
+void ctl_power_changed(void);
+void ctl_monitor_changed(void);
 
 #endif

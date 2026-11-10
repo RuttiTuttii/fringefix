@@ -119,8 +119,8 @@ static void paint(HWND h, const slider_t *s)
     bmp = CreateCompatibleBitmap(dc, r.right, r.bottom);
     old = SelectObject(mem, bmp);
 
-    /* выключатель стоит на фоне окна, а не на карточке */
-    back = is_switch(s) ? p->bg : p->card;
+    /* выключатель, как и ползунки, стоит на карточке */
+    back = p->card;
     bg = CreateSolidBrush(back);
     FillRect(mem, &r, bg);
     DeleteObject(bg);

@@ -12,7 +12,9 @@ enum {
     ROW_H = 30,
     CARD_PAD = 10,
     CARD_GAP = 8,
-    TOP = 34,
+    /* полоса меню сверху и подсказка под ней */
+    MENU_H = 26,
+    TOP = MENU_H + 32,
     /* колонки внутри карточки */
     COL_LABEL = 14,
     COL_SLIDER = 150,
@@ -28,9 +30,10 @@ typedef struct {
     int rows;
 } card_def;
 
-/* idx 0..5 это shift[idx / 2][idx % 2], дальше резкость и монитор */
+/* idx 0..5 это shift[idx / 2][idx % 2], дальше резкость, монитор и выключатель фильтра выбранного монитора */
 #define IDX_SHARPEN 6
 #define IDX_MONITOR 7
+#define IDX_POWER 8
 
 typedef struct {
     str_id label;
@@ -39,16 +42,18 @@ typedef struct {
     int row;
 } row_def;
 
+/* первой идёт карточка выбранного монитора: монитор, выключатель его фильтра и резкость; под ней три цвета,
+ * всё ниже относится к монитору из верхнего списка */
 static const card_def CARDS[] = {
-    { S_RED, 2 }, { S_GREEN, 2 }, { S_BLUE, 2 }, { S_IMAGE, 2 },
+    { S_IMAGE, 3 }, { S_RED, 2 }, { S_GREEN, 2 }, { S_BLUE, 2 },
 };
 #define NCARDS ((int)(sizeof CARDS / sizeof CARDS[0]))
 
 static const row_def ROWS[] = {
-    { S_HORIZONTAL, 0, 0, 0 }, { S_VERTICAL, 1, 0, 1 },
-    { S_HORIZONTAL, 2, 1, 0 }, { S_VERTICAL, 3, 1, 1 },
-    { S_HORIZONTAL, 4, 2, 0 }, { S_VERTICAL, 5, 2, 1 },
-    { S_SHARPEN, IDX_SHARPEN, 3, 0 }, { S_MONITOR, IDX_MONITOR, 3, 1 },
+    { S_MONITOR, IDX_MONITOR, 0, 0 }, { S_FILTER, IDX_POWER, 0, 1 }, { S_SHARPEN, IDX_SHARPEN, 0, 2 },
+    { S_HORIZONTAL, 0, 1, 0 }, { S_VERTICAL, 1, 1, 1 },
+    { S_HORIZONTAL, 2, 2, 0 }, { S_VERTICAL, 3, 2, 1 },
+    { S_HORIZONTAL, 4, 3, 0 }, { S_VERTICAL, 5, 3, 1 },
 };
 #define NROWS ((int)(sizeof ROWS / sizeof ROWS[0]))
 
@@ -73,14 +78,13 @@ static inline int row_y(const row_def *r)
     return card_y(r->card) + CARD_HEAD + r->row * ROW_H;
 }
 
-/* всё, что ниже карточек: строка состояния и три строки кнопок */
+/* всё, что ниже карточек: строка состояния и две строки кнопок */
 #define CARDS_BOTTOM (card_y(NCARDS - 1) + card_h(NCARDS - 1))
 #define STATUS_Y (CARDS_BOTTOM + 12)
 #define BTN1_Y (CARDS_BOTTOM + 40)
 #define BTN2_Y (BTN1_Y + 34)
-#define BTN3_Y (BTN2_Y + 34)
 #define BTN_H 30
 #define CLIENT_W (MARGIN * 2 + CARD_W)
-#define CLIENT_H (BTN3_Y + BTN_H + 12)
+#define CLIENT_H (BTN2_Y + BTN_H + 14)
 
 #endif

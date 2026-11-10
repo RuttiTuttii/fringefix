@@ -24,6 +24,10 @@ int rs_find_reshade(const wchar_t *exe);
  * который не удалось записать */
 int rs_install(HINSTANCE inst, const wchar_t *exe, wchar_t addon[MAX_PATH], wchar_t effect[MAX_PATH]);
 
+/* кладёт аддон и эффект в выбранную папку без игры: fringefix.addon64 прямо в неё, fringefix.fx в
+ * reshade-shaders\Shaders, чтобы папку можно было вылить в каталог ReShade как есть; при успехе пути в addon и effect */
+int rs_export(HINSTANCE inst, const wchar_t *dir, wchar_t addon[MAX_PATH], wchar_t effect[MAX_PATH]);
+
 /* удаляет оба файла, возвращает сколько файлов было удалено; -1 при неверном пути */
 int rs_remove(const wchar_t *exe);
 

@@ -10,3 +10,7 @@
 /* ReShade-аддон ставится из окна "Программа": dll собирается раньше exe, эффект лежит в addon/ */
 202 RCDATA "build/fringefix.addon64"
 203 RCDATA "addon/fringefix.fx"
+
+/* список изменений для окна "Что нового" */
+204 RCDATA "CHANGELOG.ru.md"
+205 RCDATA "CHANGELOG.md"

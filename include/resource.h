@@ -15,4 +15,8 @@
 #define IDR_ADDON 202
 #define IDR_ADDON_FX 203
 
+/* список изменений на двух языках, тип RCDATA, UTF-8 */
+#define IDR_CHANGES_RU 204
+#define IDR_CHANGES_EN 205
+
 #endif

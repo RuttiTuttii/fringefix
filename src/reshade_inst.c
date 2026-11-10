@@ -225,6 +225,37 @@ int rs_install(HINSTANCE inst, const wchar_t *exe, wchar_t addon[MAX_PATH], wcha
     return RS_OK;
 }
 
+int rs_export(HINSTANCE inst, const wchar_t *dir, wchar_t addon[MAX_PATH], wchar_t effect[MAX_PATH])
+{
+    wchar_t effect_dir[MAX_PATH];
+    const void *dll;
+    const void *fx;
+    DWORD dll_size;
+    DWORD fx_size;
+
+    addon[0] = effect[0] = L'\0';
+    if (!dir || dir[0] == L'\0' || wcslen(dir) + wcslen(DEFAULT_EFFECTS) + wcslen(EFFECT_FILE) + 4 >= MAX_PATH) {
+        return RS_ERR_EXE;
+    }
+    dll = resource(inst, IDR_ADDON, &dll_size);
+    fx = resource(inst, IDR_ADDON_FX, &fx_size);
+    if (!dll || !fx || dll_size == 0 || fx_size == 0) {
+        return RS_ERR_RESOURCE;
+    }
+    join(dir, DEFAULT_EFFECTS, effect_dir);
+    make_dirs(effect_dir);
+    join(dir, ADDON_FILE, addon);
+    join(effect_dir, EFFECT_FILE, effect);
+    if (ff_write_file(addon, dll, dll_size) != 0) {
+        return RS_ERR_ADDON;
+    }
+    if (ff_write_file(effect, fx, fx_size) != 0) {
+        wcscpy(addon, effect);
+        return RS_ERR_EFFECT;
+    }
+    return RS_OK;
+}
+
 int rs_remove(const wchar_t *exe)
 {
     wchar_t dir[MAX_PATH];

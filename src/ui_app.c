@@ -15,7 +15,7 @@
 #include "version.h"
 
 #define APP_W 520
-#define APP_H 722
+#define APP_H 766
 #define CARD_ROW 30
 #define CARD_INNER_W 488
 #define WM_REOPEN (WM_APP + 40)
@@ -26,7 +26,6 @@ enum {
     ID_A_LANG = 700,
     ID_A_THEME,
     ID_A_PAUSE,
-    ID_A_ACTION,
     ID_A_ADDAPP,
     ID_A_CHECK,
     ID_A_BETA,
@@ -39,6 +38,7 @@ enum {
     ID_A_DIAG,
     ID_A_RS_INSTALL,
     ID_A_RS_REMOVE,
+    ID_A_RS_EXPORT,
     ID_A_CLOSE
 };
 
@@ -48,30 +48,35 @@ static HWND g_lang;
 /* положение окна при пересоздании после смены языка */
 static POINT g_pos;
 static int g_have_pos;
-static HWND g_action;
 static HICON g_flags[3];
 
-/* карточки окна: заголовок, верхний край и число строк при 96 dpi */
+/* карточки окна сверху вниз по порядку из правок: интерфейс, автопауза, ReShade, сочетания, автозапуск, данные.
+ * высота считается по числу строк, верхний край накапливается с зазором CARD_GAP */
 typedef struct {
     str_id title;
+    int rows;
+    /* карточка интеграции с ReShade выделена цветом: это отдельная возможность со своими правилами */
+    int accent;
     int y;
     int h;
 } card_t;
 
-/* карточки идут сверху вниз с зазором CARD_GAP; автопауза и данные занимают три строки, автозапуск одну */
-static const card_t CARDS_A[] = {
-    { S_CARD_INTERFACE, 16, CARD_HEAD + 2 * CARD_ROW + CARD_PAD },
-    { S_CARD_AUTOPAUSE, 120, CARD_HEAD + 3 * CARD_ROW + CARD_PAD },
-    { S_CARD_DATA, 254, CARD_HEAD + 3 * CARD_ROW + CARD_PAD },
-    { S_CARD_AUTOSTART, 388, CARD_HEAD + 1 * CARD_ROW + CARD_PAD },
-    { S_CARD_HOTKEYS, 462, CARD_HEAD + 2 * CARD_ROW + CARD_PAD },
-    /* диагностика и две кнопки ReShade-аддона */
-    { S_CARD_ENGINE, 566, CARD_HEAD + 2 * CARD_ROW + CARD_PAD },
+static card_t CARDS_A[] = {
+    { S_CARD_INTERFACE, 2, 0, 0, 0 },
+    { S_CARD_AUTOPAUSE, 2, 0, 0, 0 },
+    { S_CARD_RESHADE, 3, 1, 0, 0 },
+    { S_CARD_HOTKEYS, 2, 0, 0, 0 },
+    { S_CARD_AUTOSTART, 1, 0, 0, 0 },
+    { S_CARD_DATA, 4, 0, 0, 0 },
 };
+/* лишняя высота карточки под кнопку диагностики, которая стоит отдельной строкой под рядом кнопок */
+#define DATA_EXTRA 6
 #define NCARDS_A ((int)(sizeof CARDS_A / sizeof CARDS_A[0]))
+enum { C_INTERFACE, C_PAUSE, C_RESHADE, C_HOTKEYS, C_AUTOSTART, C_DATA };
 
-/* режим автопаузы по порядку в списке: значение auto_pause из config.h для каждой строки */
-static const int PAUSE_VALUE[] = { 1, 3, 2, 0 };
+/* режим автопаузы по порядку в списке: значение auto_pause из config.h для каждой строки;
+ * первым стоит режим по умолчанию */
+static const int PAUSE_VALUE[] = { 2, 1, 3, 0 };
 #define NPAUSE ((int)(sizeof PAUSE_VALUE / sizeof PAUSE_VALUE[0]))
 
 typedef struct {
@@ -81,9 +86,21 @@ typedef struct {
 } label_t;
 
 static const label_t LABELS[] = {
-    { S_LANGUAGE, 0, 0 }, { S_THEME, 0, 1 }, { S_AUTOPAUSE, 1, 0 }, { S_GAMEACTION, 1, 1 },
-    { S_HK_TOGGLE, 4, 0 }, { S_HK_QUIT, 4, 1 },
+    { S_LANGUAGE, C_INTERFACE, 0 }, { S_THEME, C_INTERFACE, 1 }, { S_AUTOPAUSE, C_PAUSE, 0 },
+    { S_HK_TOGGLE, C_HOTKEYS, 0 }, { S_HK_QUIT, C_HOTKEYS, 1 },
 };
+
+static void layout_cards(void)
+{
+    int y = 16;
+    int i;
+
+    for (i = 0; i < NCARDS_A; i++) {
+        CARDS_A[i].y = y;
+        CARDS_A[i].h = CARD_HEAD + CARDS_A[i].rows * CARD_ROW + CARD_PAD + (i == C_DATA ? DATA_EXTRA : 0);
+        y += CARDS_A[i].h + CARD_GAP;
+    }
+}
 
 static HWND child(const wchar_t *cls, const wchar_t *text, DWORD style, int x, int y, int w, int h,
                   int id)
@@ -115,16 +132,6 @@ static int pause_index(int value)
         }
     }
     return 0;
-}
-
-/* действие в играх выбирается только при выключенной автопаузе, при включённой стоит заблокированная пауза */
-static void sync_action(void)
-{
-    const ff_config *c = &ui.app->cfg;
-    int free_choice = c->auto_pause == 0;
-
-    SendMessageW(g_action, CB_SETCURSEL, (WPARAM)(free_choice ? c->game_action : 0), 0);
-    EnableWindow(g_action, free_choice);
 }
 
 static void add_items(HWND c, const str_id *ids, int n, int selected)
@@ -186,55 +193,65 @@ static void build(void)
 {
     static const str_id LANGS[] = { S_LANG_AUTO, S_LANG_RU, S_LANG_EN };
     static const str_id THEMES[] = { S_THEME_AUTO, S_THEME_LIGHT, S_THEME_DARK };
-    static const str_id PAUSES[] = { S_AP_FULLSCREEN, S_AP_3D_ONLY, S_AP_3D, S_AP_OFF };
-    static const str_id ACTIONS[] = { S_GA_PAUSE, S_GA_LIGHT };
+    /* порядок из правок: полноэкранные и 3D, полноэкранные, только 3D, выключена */
+    static const str_id PAUSES[] = { S_AP_3D, S_AP_FULLSCREEN, S_AP_3D_ONLY, S_AP_OFF };
     const ff_config *c = &ui.app->cfg;
-    int bw = (CARD_INNER_W - 2 * 16 - 2 * 8) / 3;
-    int by = row_top(2, 2) + 1;
+    int inner = CARD_INNER_W - 2 * COL_LABEL;
+    int bw = (inner - 2 * 8) / 3;
+    int by;
+    int rw;
+    int rb_small = 130;
+    int rb_wide = inner - 2 * rb_small - 2 * 8;
     HWND check;
     HWND beta;
     HWND autostart;
     int i;
 
-    g_lang = combo(0, 0, ID_A_LANG, 1);
+    /* верхние края карточек нужны всем строкам ниже */
+    layout_cards();
+    by = row_top(C_DATA, 2) + 1;
+    rw = row_top(C_RESHADE, 2) + 1;
+    g_lang = combo(C_INTERFACE, 0, ID_A_LANG, 1);
     add_items(g_lang, LANGS, 3, c->language);
-    add_items(combo(0, 1, ID_A_THEME, 0), THEMES, 3, c->theme);
-    add_items(combo(1, 0, ID_A_PAUSE, 0), PAUSES, NPAUSE, pause_index(c->auto_pause));
-    g_action = combo(1, 1, ID_A_ACTION, 0);
-    add_items(g_action, ACTIONS, 2, 0);
-    sync_action();
-    child(L"BUTTON", ff_tr(S_BTN_APP_LISTS), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + 16,
-          row_top(1, 2) + 1, CARD_INNER_W - 32, BTN_H, ID_A_ADDAPP);
-    check = child(L"BUTTON", ff_tr(S_CHECK_UPDATES), BS_AUTOCHECKBOX | WS_TABSTOP,
-                  MARGIN + COL_LABEL, row_top(2, 0), CARD_INNER_W - 2 * COL_LABEL, 24, ID_A_CHECK);
-    SendMessageW(check, BM_SETCHECK, c->check_updates ? BST_CHECKED : BST_UNCHECKED, 0);
-    beta = child(L"BUTTON", ff_tr(S_BETA_CHECK), BS_AUTOCHECKBOX | WS_TABSTOP,
-                 MARGIN + COL_LABEL, row_top(2, 1), CARD_INNER_W - 2 * COL_LABEL, 24, ID_A_BETA);
-    SendMessageW(beta, BM_SETCHECK, c->beta ? BST_CHECKED : BST_UNCHECKED, 0);
-    child(L"BUTTON", ff_tr(S_MENU_UPDATES), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + 16, by, bw, BTN_H,
-          ID_A_UPDATE);
-    child(L"BUTTON", ff_tr(S_BTN_VERSIONS), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + 16 + bw + 8, by, bw,
-          BTN_H, ID_A_VERSIONS);
-    child(L"BUTTON", ff_tr(S_BTN_REPORT), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + 16 + 2 * (bw + 8), by,
-          bw, BTN_H, ID_A_REPORT);
-    autostart = child(L"BUTTON", ff_tr(S_AUTOSTART_CHECK), BS_AUTOCHECKBOX | WS_TABSTOP,
-                      MARGIN + COL_LABEL, row_top(3, 0), CARD_INNER_W - 2 * COL_LABEL, 24,
-                      ID_A_AUTOSTART);
-    SendMessageW(autostart, BM_SETCHECK, autostart_get() ? BST_CHECKED : BST_UNCHECKED, 0);
+    add_items(combo(C_INTERFACE, 1, ID_A_THEME, 0), THEMES, 3, c->theme);
+    add_items(combo(C_PAUSE, 0, ID_A_PAUSE, 0), PAUSES, NPAUSE, pause_index(c->auto_pause));
+    child(L"BUTTON", ff_tr(S_BTN_APP_LISTS), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + COL_LABEL,
+          row_top(C_PAUSE, 1) + 1, inner, BTN_H, ID_A_ADDAPP);
+
+    /* ReShade: пояснение занимает две строки карточки (рисуется в paint), под ним три кнопки */
+    child(L"BUTTON", ff_tr(S_BTN_RS_INSTALL), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + COL_LABEL, rw, rb_small, BTN_H,
+          ID_A_RS_INSTALL);
+    child(L"BUTTON", ff_tr(S_BTN_RS_REMOVE), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + COL_LABEL + rb_small + 8, rw,
+          rb_small, BTN_H, ID_A_RS_REMOVE);
+    child(L"BUTTON", ff_tr(S_BTN_RS_EXPORT), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + COL_LABEL + 2 * (rb_small + 8), rw,
+          rb_wide, BTN_H, ID_A_RS_EXPORT);
+
     /* поля сочетаний: текст разбирается, когда поле теряет фокус */
     for (i = 0; i < 2; i++) {
         CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | WS_TABSTOP,
-                        S(MARGIN + COL_SLIDER), S(row_top(4, i) + 2), S(160), S(24), g_win,
+                        S(MARGIN + COL_SLIDER), S(row_top(C_HOTKEYS, i) + 2), S(160), S(24), g_win,
                         (HMENU)(INT_PTR)(ID_A_HK_TOGGLE + i), ui.app->inst, NULL);
         show_hotkey(ID_A_HK_TOGGLE + i, i == 0 ? &c->hotkey_toggle : &c->hotkey_quit);
     }
-    child(L"BUTTON", ff_tr(S_BTN_DIAG), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + 16, row_top(5, 0) + 1,
-          CARD_INNER_W - 32, BTN_H, ID_A_DIAG);
-    child(L"BUTTON", ff_tr(S_BTN_RS_INSTALL), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + 16, row_top(5, 1) + 1,
-          (CARD_INNER_W - 2 * 16 - 8) / 2, BTN_H, ID_A_RS_INSTALL);
-    child(L"BUTTON", ff_tr(S_BTN_RS_REMOVE), BS_PUSHBUTTON | WS_TABSTOP,
-          MARGIN + 16 + (CARD_INNER_W - 2 * 16 - 8) / 2 + 8, row_top(5, 1) + 1,
-          (CARD_INNER_W - 2 * 16 - 8) / 2, BTN_H, ID_A_RS_REMOVE);
+    autostart = child(L"BUTTON", ff_tr(S_AUTOSTART_CHECK), BS_AUTOCHECKBOX | WS_TABSTOP,
+                      MARGIN + COL_LABEL, row_top(C_AUTOSTART, 0), inner, 24, ID_A_AUTOSTART);
+    SendMessageW(autostart, BM_SETCHECK, autostart_get() ? BST_CHECKED : BST_UNCHECKED, 0);
+
+    /* обновления и данные: две галочки, три кнопки в ряд и диагностика */
+    check = child(L"BUTTON", ff_tr(S_CHECK_UPDATES), BS_AUTOCHECKBOX | WS_TABSTOP,
+                  MARGIN + COL_LABEL, row_top(C_DATA, 0), inner, 24, ID_A_CHECK);
+    SendMessageW(check, BM_SETCHECK, c->check_updates ? BST_CHECKED : BST_UNCHECKED, 0);
+    beta = child(L"BUTTON", ff_tr(S_BETA_CHECK), BS_AUTOCHECKBOX | WS_TABSTOP,
+                 MARGIN + COL_LABEL, row_top(C_DATA, 1), inner, 24, ID_A_BETA);
+    SendMessageW(beta, BM_SETCHECK, c->beta ? BST_CHECKED : BST_UNCHECKED, 0);
+    child(L"BUTTON", ff_tr(S_MENU_UPDATES), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + COL_LABEL, by, bw, BTN_H,
+          ID_A_UPDATE);
+    child(L"BUTTON", ff_tr(S_BTN_VERSIONS), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + COL_LABEL + bw + 8, by, bw,
+          BTN_H, ID_A_VERSIONS);
+    child(L"BUTTON", ff_tr(S_BTN_REPORT), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + COL_LABEL + 2 * (bw + 8), by,
+          bw, BTN_H, ID_A_REPORT);
+    child(L"BUTTON", ff_tr(S_BTN_DIAG), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + COL_LABEL, row_top(C_DATA, 3) + 1 + DATA_EXTRA,
+          inner, BTN_H, ID_A_DIAG);
     child(L"BUTTON", ff_tr(S_VER_CLOSE), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + CARD_INNER_W - 120,
           CARDS_A[NCARDS_A - 1].y + CARDS_A[NCARDS_A - 1].h + 16, 120, BTN_H, ID_A_CLOSE);
     ctl_restyle_window(g_win);
@@ -252,8 +269,12 @@ static void paint(HWND h)
     FillRect(dc, &r, paint_bg());
     SetBkMode(dc, TRANSPARENT);
     for (i = 0; i < NCARDS_A; i++) {
-        paint_card(dc, ui.dpi, MARGIN, CARDS_A[i].y, CARD_INNER_W, CARDS_A[i].h,
-                   ff_tr(CARDS_A[i].title));
+        if (CARDS_A[i].accent) {
+            paint_card_accent(dc, ui.dpi, MARGIN, CARDS_A[i].y, CARD_INNER_W, CARDS_A[i].h,
+                              ff_tr(CARDS_A[i].title), L"beta");
+        } else {
+            paint_card(dc, ui.dpi, MARGIN, CARDS_A[i].y, CARD_INNER_W, CARDS_A[i].h, ff_tr(CARDS_A[i].title));
+        }
     }
     SelectObject(dc, paint_font());
     SetTextColor(dc, p->fg);
@@ -263,6 +284,11 @@ static void paint(HWND h)
         TextOutW(dc, S(MARGIN + COL_LABEL), S(row_top(LABELS[i].card, LABELS[i].row) + 4), t,
                  (int)wcslen(t));
     }
+    /* пояснение карточки ReShade на двух строках над кнопками */
+    SetTextColor(dc, p->muted);
+    SetRect(&r, S(MARGIN + COL_LABEL + 6), S(row_top(C_RESHADE, 0) + 2), S(MARGIN + CARD_INNER_W - COL_LABEL),
+            S(row_top(C_RESHADE, 2) - 2));
+    DrawTextW(dc, ff_tr(S_RS_NOTE), -1, &r, DT_WORDBREAK | DT_NOPREFIX);
     EndPaint(h, &ps);
 }
 
@@ -327,11 +353,6 @@ static void on_command(int id, int code)
         app_save(ui.app);
     } else if (id == ID_A_PAUSE && code == CBN_SELCHANGE) {
         c->auto_pause = PAUSE_VALUE[sel];
-        sync_action();
-        app_wake(ui.app);
-        app_save(ui.app);
-    } else if (id == ID_A_ACTION && code == CBN_SELCHANGE) {
-        c->game_action = sel;
         app_wake(ui.app);
         app_save(ui.app);
     } else if (id == ID_A_CHECK) {
@@ -351,11 +372,8 @@ static void on_command(int id, int code)
         ui_apps_show(ui.app);
     } else if (id == ID_A_AUTOSTART) {
         set_autostart(SendMessageW(GetDlgItem(g_win, ID_A_AUTOSTART), BM_GETCHECK, 0, 0) == BST_CHECKED);
-    } else if (id == ID_A_UPDATE && FF_REPO[0]) {
-        ui_settings_set_status(ff_tr(S_CHECKING));
-        update_check_async(ui.app->hwnd, FF_REPO, 1, c->beta);
     } else if (id == ID_A_UPDATE) {
-        MessageBoxW(g_win, ff_tr(S_NO_REPO), L"fringefix", MB_ICONINFORMATION | MB_TOPMOST);
+        ui_check_updates(ui.app);
     } else if (id == ID_A_VERSIONS) {
         ui_versions_show(ui.app);
     } else if (id == ID_A_REPORT) {
@@ -366,6 +384,8 @@ static void on_command(int id, int code)
         ui_reshade_install(g_win);
     } else if (id == ID_A_RS_REMOVE) {
         ui_reshade_remove(g_win);
+    } else if (id == ID_A_RS_EXPORT) {
+        ui_reshade_export(g_win);
     } else if (id == ID_A_CLOSE) {
         DestroyWindow(g_win);
     }
@@ -404,10 +424,12 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
     case WM_CTLCOLORBTN:
     case WM_CTLCOLORSTATIC:
         /* списки окна красятся как поля, флажок и кнопки как фон */
-        return paint_ctlcolor(m, (HDC)w, (HWND)l,
-                              (HWND)l != GetDlgItem(h, ID_A_CHECK)
-                                      && (HWND)l != GetDlgItem(h, ID_A_BETA)
-                                      && (HWND)l != GetDlgItem(h, ID_A_AUTOSTART) ? (HWND)l : NULL);
+        /* флажки лежат на карточках: фон цвета карточки, остальное красится как поля */
+        if ((HWND)l == GetDlgItem(h, ID_A_CHECK) || (HWND)l == GetDlgItem(h, ID_A_BETA)
+            || (HWND)l == GetDlgItem(h, ID_A_AUTOSTART)) {
+            return paint_ctlcolor_card((HDC)w);
+        }
+        return paint_ctlcolor(m, (HDC)w, (HWND)l, (HWND)l);
     case WM_SETTINGCHANGE:
         if (l && wcscmp((const wchar_t *)l, L"ImmersiveColorSet") == 0) {
             ui_theme_apply();

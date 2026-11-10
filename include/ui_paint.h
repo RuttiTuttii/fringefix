@@ -12,11 +12,17 @@ HFONT paint_bold(void);
 HBRUSH paint_bg(void);
 HBRUSH paint_field(void);
 
+/* WM_CTLCOLORSTATIC и WM_CTLCOLORBTN для подписей и флажков, которые лежат на карточке: фон цвета карточки */
+LRESULT paint_ctlcolor_card(HDC dc);
+
 /* цвета для WM_CTLCOLOR*: поля и списки по цвету поля, остальное по фону; field_ctl принудительно поле */
 LRESULT paint_ctlcolor(UINT msg, HDC dc, HWND ctl, HWND field_ctl);
 
 /* карточка с заголовком; координаты и размеры при 96 dpi, масштаб применяется внутри */
 void paint_card(HDC dc, int dpi, int x, int y, int w, int h, const wchar_t *title);
+
+/* карточка отдельной возможности: фон с оттенком акцента, рамка и полоса слева цветом акцента, на заголовке плашка badge */
+void paint_card_accent(HDC dc, int dpi, int x, int y, int w, int h, const wchar_t *title, const wchar_t *badge);
 
 /* строка выпадающего списка с владельцем: значок слева, текст справа, выбранная строка цветом акцента */
 void paint_draw_item(const DRAWITEMSTRUCT *d, HICON icon, const wchar_t *text, int dpi);
