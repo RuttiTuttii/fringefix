@@ -20,7 +20,9 @@ MONO = "Consolas, 'Cascadia Mono', ui-monospace, monospace"
 ACCENT = "#0078d4"
 
 # константы окна настроек из include/ui_layout.h
-MARGIN, CARD_W, CARD_HEAD, ROW_H, CARD_PAD, CARD_GAP, TOP = 16, 488, 26, 30, 10, 8, 34
+MARGIN, CARD_W, CARD_HEAD, ROW_H, CARD_PAD, CARD_GAP = 16, 488, 26, 30, 10, 8
+MENU_H = 26
+TOP = MENU_H + 32
 COL_LABEL, COL_SLIDER, SLIDER_W, COL_EDIT, EDIT_W, COL_UNIT = 14, 150, 236, 396, 58, 460
 BTN_H = 30
 
@@ -52,6 +54,13 @@ def load_strings(lang: str) -> dict[str, str]:
         text = "".join(parts).replace("\\n", "\n").replace("\\t", "\t").replace('\\"', '"').replace("\\\\", "\\")
         out[m.group(1)] = text
     return out
+
+
+def mix(a: str, b: str, t: int) -> str:
+    """Смесь двух цветов #rrggbb: t из 256 даёт долю b."""
+    ca = [int(a[i:i + 2], 16) for i in (1, 3, 5)]
+    cb = [int(b[i:i + 2], 16) for i in (1, 3, 5)]
+    return "#" + "".join(f"{(x * (256 - t) + y * t) // 256:02x}" for x, y in zip(ca, cb))
 
 
 def esc(text: str) -> str:
@@ -97,6 +106,27 @@ class Canvas:
         self.add(f'<rect x="{x + .5}" y="{y + .5}" width="{w - 1}" height="{h - 1}" rx="8" '
                  f'fill="{self.p.card}" stroke="{self.p.border}"/>')
         self.text(x + COL_LABEL, y + 18, title, ACCENT, 600, 13)
+
+    def card_accent(self, x: float, y: float, w: float, h: float, title: str, badge: str) -> None:
+        """Карточка отдельной возможности, как paint_card_accent: оттенок акцента, полоса слева, плашка у заголовка."""
+        fill = mix(self.p.card, ACCENT, 34 if self.p.window == "#202020" else 22)
+        edge = mix(self.p.border, ACCENT, 140)
+        self.add(f'<rect x="{x + .5}" y="{y + .5}" width="{w - 1}" height="{h - 1}" rx="8" fill="{fill}" stroke="{edge}"/>')
+        self.add(f'<rect x="{x + 1}" y="{y + 10}" width="4" height="{h - 20}" fill="{ACCENT}"/>')
+        self.text(x + COL_LABEL, y + 18, title, ACCENT, 600, 13)
+        bx = x + COL_LABEL + len(title) * 7.4 + 10
+        self.add(f'<rect x="{bx}" y="{y + 6}" width="{len(badge) * 7 + 14}" height="16" rx="8" fill="{ACCENT}"/>')
+        self.text(bx + (len(badge) * 7 + 14) / 2, y + 18, badge, "#ffffff", 600, 11, "middle")
+
+    def menubar(self, width: int, titles: list[str]) -> None:
+        """Полоса меню окна настроек, как menubar_paint: цвет карточки, линия снизу, заголовки подряд."""
+        self.add(f'<rect width="{width}" height="{MENU_H}" fill="{self.p.card}"/>')
+        self.add(f'<rect y="{MENU_H - 1}" width="{width}" height="1" fill="{self.p.border}"/>')
+        x = MARGIN - 4
+        for title in titles:
+            w = len(title) * 7 + 24
+            self.text(x + w / 2, 17, title, anchor="middle")
+            x += w
 
     def slider(self, x: float, y: float, w: float, pos: float, lo: float, hi: float) -> None:
         """Ползунок как в slider.c: дорожка, заливка от нуля, отметка нуля, круг с кольцом."""
@@ -181,10 +211,25 @@ def svg(inner: str, w: int, h: int, title: str) -> str:
 # ---------- окна
 def settings(pal: Palette, t: dict[str, str]) -> str:
     c = Canvas(pal)
-    c.add(f'<rect width="520" height="592" fill="{pal.bg}"/>')
-    c.text(MARGIN, 22, t["HINT"], pal.muted, size=11)
-    cards = [("RED", (0.25, -0.25)), ("GREEN", (0.0, 0.25)), ("BLUE", (-0.25, -0.25))]
+    height = 614
+    c.add(f'<rect width="520" height="{height}" fill="{pal.bg}"/>')
+    c.menubar(520, [t["M_FILE"], t["M_EDIT"], t["M_TOOLS"], t["M_HELP"]])
+    c.text(MARGIN, MENU_H + 22, t["HINT"], pal.muted, size=11)
+    # карточка выбранного монитора: монитор, выключатель его фильтра, резкость
     y = TOP
+    h = CARD_HEAD + 3 * ROW_H + CARD_PAD
+    c.card(MARGIN, y, CARD_W, h, t["IMAGE"])
+    c.text(MARGIN + COL_LABEL, y + CARD_HEAD + 19, t["MONITOR"])
+    c.combo(MARGIN + COL_SLIDER, y + CARD_HEAD + 2, CARD_W - COL_SLIDER - COL_LABEL,
+            "0: \\\\.\\DISPLAY1 (3840x2160)  [" + t["MON_TAG_ON"] + "]")
+    c.text(MARGIN + COL_LABEL, y + CARD_HEAD + ROW_H + 19, t["FILTER"])
+    c.switch(MARGIN + COL_SLIDER, y + CARD_HEAD + ROW_H + 1, True)
+    c.text(MARGIN + COL_SLIDER + 72, y + CARD_HEAD + ROW_H + 19, t["STATE_ON"])
+    c.text(MARGIN + COL_LABEL, y + CARD_HEAD + 2 * ROW_H + 19, t["SHARPEN"])
+    c.slider(MARGIN + COL_SLIDER, y + CARD_HEAD + 2 * ROW_H + 1, SLIDER_W, 0.0, -1, 1)
+    c.edit(MARGIN + COL_EDIT, y + CARD_HEAD + 2 * ROW_H + 3, EDIT_W, 24, "0.00")
+    y += h + CARD_GAP
+    cards = [("RED", (0.25, -0.25)), ("GREEN", (0.0, 0.25)), ("BLUE", (-0.25, -0.25))]
     for name, (x_val, y_val) in cards:
         h = CARD_HEAD + 2 * ROW_H + CARD_PAD
         c.card(MARGIN, y, CARD_W, h, t[name])
@@ -195,59 +240,61 @@ def settings(pal: Palette, t: dict[str, str]) -> str:
             c.edit(MARGIN + COL_EDIT, ry + 3, EDIT_W, 24, f"{val:.2f}")
             c.text(MARGIN + COL_UNIT, ry + 19, "px", pal.muted)
         y += h + CARD_GAP
-    h = CARD_HEAD + 2 * ROW_H + CARD_PAD
-    c.card(MARGIN, y, CARD_W, h, t["IMAGE"])
-    c.text(MARGIN + COL_LABEL, y + CARD_HEAD + 19, t["SHARPEN"])
-    c.slider(MARGIN + COL_SLIDER, y + CARD_HEAD + 1, SLIDER_W, 0.0, -1, 1)
-    c.edit(MARGIN + COL_EDIT, y + CARD_HEAD + 3, EDIT_W, 24, "0.00")
-    c.text(MARGIN + COL_LABEL, y + CARD_HEAD + ROW_H + 19, t["MONITOR"])
-    c.combo(MARGIN + COL_SLIDER, y + CARD_HEAD + ROW_H + 2, CARD_W - COL_SLIDER - COL_LABEL, "0: \\\\.\\DISPLAY1 (3840x2160)")
-    bottom = y + h
-    c.text(MARGIN, bottom + 24, t["VERSION"].replace("%ls", "v0.3.1"), pal.muted)
+    bottom = y - CARD_GAP
+    c.text(MARGIN, bottom + 24, t["VERSION"].replace("%ls", "v0.8.0-beta.1"), pal.muted)
     bw = (CARD_W - 32) // 3
     rows = [("BTN_PATTERN", "BTN_RESET", "BTN_PROGRAM"), ("BTN_PROFILE_LOAD", "BTN_PROFILE_SAVE", "BTN_SAVE")]
     for r, names in enumerate(rows):
         for col, key in enumerate(names):
             c.button(MARGIN + col * (bw + 16), bottom + 40 + r * 34, bw, t[key])
-    # выключатель фильтра в левом нижнем углу, третья строка кнопок
-    c.switch(MARGIN, bottom + 40 + 2 * 34, True)
-    c.text(MARGIN + 70, bottom + 40 + 2 * 34 + 19, t["FILTER_ON"])
-    return svg(window(c, t["WINDOW_TITLE"], 520, 592), 520, 592, t["WINDOW_TITLE"])
+    return svg(window(c, t["WINDOW_TITLE"], 520, height), 520, height, t["WINDOW_TITLE"])
 
 
 def program(pal: Palette, t: dict[str, str]) -> str:
     c = Canvas(pal)
-    height = 630
+    height = 766
     c.add(f'<rect width="520" height="{height}" fill="{pal.bg}"/>')
     langname = t["LANG_RU"] if t["LANGUAGE"] == "Язык" else t["LANG_EN"]
     flag = "ru" if t["LANGUAGE"] == "Язык" else "en"
     combo_w = CARD_W - COL_SLIDER - COL_LABEL
-    # карточки как в ui_app.c: верхний край и число строк
-    c.card(MARGIN, 16, CARD_W, 96, t["CARD_INTERFACE"])
-    c.text(MARGIN + COL_LABEL, 16 + 26 + 19, t["LANGUAGE"])
-    c.combo(MARGIN + COL_SLIDER, 16 + 26 + 1, combo_w, langname, flag)
-    c.text(MARGIN + COL_LABEL, 16 + 56 + 19, t["THEME"])
-    c.combo(MARGIN + COL_SLIDER, 16 + 56 + 1, combo_w, t["THEME_AUTO"])
-    c.card(MARGIN, 120, CARD_W, 126, t["CARD_AUTOPAUSE"])
-    c.text(MARGIN + COL_LABEL, 120 + 26 + 19, t["AUTOPAUSE"])
-    c.combo(MARGIN + COL_SLIDER, 120 + 26 + 1, combo_w, t["AP_FULLSCREEN"])
-    c.text(MARGIN + COL_LABEL, 120 + 56 + 19, t["GAMEACTION"])
-    # при включённой автопаузе действие заблокировано на «Пауза»
-    c.combo(MARGIN + COL_SLIDER, 120 + 56 + 1, combo_w, t["GA_PAUSE"], locked=True)
-    c.button(MARGIN + 16, 120 + 86 + 1, CARD_W - 32, t["BTN_APP_LISTS"])
-    c.card(MARGIN, 254, CARD_W, 126, t["CARD_DATA"])
-    c.checkbox(MARGIN + COL_LABEL, 254 + 26 + 4, t["CHECK_UPDATES"])
-    c.checkbox(MARGIN + COL_LABEL, 254 + 56 + 4, t["BETA_CHECK"], on=False)
-    bw = (CARD_W - 32 - 16) // 3
-    for i, key in enumerate(("MENU_UPDATES", "BTN_VERSIONS", "BTN_REPORT")):
-        c.button(MARGIN + 16 + i * (bw + 8), 254 + 86 + 1, bw, t[key].replace("...", "…") if i else t[key])
-    c.card(MARGIN, 388, CARD_W, 66, t["CARD_AUTOSTART"])
-    c.checkbox(MARGIN + COL_LABEL, 388 + 26 + 4, t["AUTOSTART_CHECK"], on=False)
-    c.card(MARGIN, 462, CARD_W, 96, t["CARD_HOTKEYS"])
+    inner = CARD_W - 2 * COL_LABEL
+    # карточки как в ui_app.c: интерфейс, автопауза, ReShade, сочетания, автозапуск, данные
+    y = 16
+    c.card(MARGIN, y, CARD_W, 96, t["CARD_INTERFACE"])
+    c.text(MARGIN + COL_LABEL, y + 26 + 19, t["LANGUAGE"])
+    c.combo(MARGIN + COL_SLIDER, y + 26 + 1, combo_w, langname, flag)
+    c.text(MARGIN + COL_LABEL, y + 56 + 19, t["THEME"])
+    c.combo(MARGIN + COL_SLIDER, y + 56 + 1, combo_w, t["THEME_AUTO"])
+    y += 96 + CARD_GAP
+    c.card(MARGIN, y, CARD_W, 96, t["CARD_AUTOPAUSE"])
+    c.text(MARGIN + COL_LABEL, y + 26 + 19, t["AUTOPAUSE"])
+    c.combo(MARGIN + COL_SLIDER, y + 26 + 1, combo_w, t["AP_3D"])
+    c.button(MARGIN + COL_LABEL, y + 56 + 1, inner, t["BTN_APP_LISTS"])
+    y += 96 + CARD_GAP
+    c.card_accent(MARGIN, y, CARD_W, 126, t["CARD_RESHADE"], "beta")
+    c.paragraph(MARGIN + COL_LABEL + 6, y + 26 + 15, t["RS_NOTE"], 74, pal.muted, 15)
+    small = 130
+    c.button(MARGIN + COL_LABEL, y + 86 + 1, small, t["BTN_RS_INSTALL"])
+    c.button(MARGIN + COL_LABEL + small + 8, y + 86 + 1, small, t["BTN_RS_REMOVE"])
+    c.button(MARGIN + COL_LABEL + 2 * (small + 8), y + 86 + 1, inner - 2 * small - 16, t["BTN_RS_EXPORT"])
+    y += 126 + CARD_GAP
+    c.card(MARGIN, y, CARD_W, 96, t["CARD_HOTKEYS"])
     for row, (key, value) in enumerate((("HK_TOGGLE", "F10"), ("HK_QUIT", "F11"))):
-        c.text(MARGIN + COL_LABEL, 462 + 26 + row * 30 + 19, t[key])
-        c.edit(MARGIN + COL_SLIDER, 462 + 26 + row * 30 + 2, 160, 24, value)
-    c.button(MARGIN + CARD_W - 120, 574, 120, t["VER_CLOSE"])
+        c.text(MARGIN + COL_LABEL, y + 26 + row * 30 + 19, t[key])
+        c.edit(MARGIN + COL_SLIDER, y + 26 + row * 30 + 2, 160, 24, value)
+    y += 96 + CARD_GAP
+    c.card(MARGIN, y, CARD_W, 66, t["CARD_AUTOSTART"])
+    c.checkbox(MARGIN + COL_LABEL, y + 26 + 4, t["AUTOSTART_CHECK"], on=False)
+    y += 66 + CARD_GAP
+    c.card(MARGIN, y, CARD_W, 162, t["CARD_DATA"])
+    c.checkbox(MARGIN + COL_LABEL, y + 26 + 4, t["CHECK_UPDATES"])
+    c.checkbox(MARGIN + COL_LABEL, y + 56 + 4, t["BETA_CHECK"], on=False)
+    bw = (inner - 16) // 3
+    for i, key in enumerate(("MENU_UPDATES", "BTN_VERSIONS", "BTN_REPORT")):
+        c.button(MARGIN + COL_LABEL + i * (bw + 8), y + 86 + 1, bw, t[key])
+    c.button(MARGIN + COL_LABEL, y + 116 + 1 + 6, inner, t["BTN_DIAG"])
+    y += 162
+    c.button(MARGIN + CARD_W - 120, y + 16, 120, t["VER_CLOSE"])
     return svg(window(c, t["APP_TITLE"], 520, height), 520, height, t["APP_TITLE"])
 
 

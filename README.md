@@ -6,7 +6,7 @@
 
 A Windows overlay that shifts the colour channels of the finished frame by fractions of a pixel to cancel colour fringing on QD-OLED panels with the triangular subpixel layout (4th generation and earlier). Lives in the tray, tuned with sliders, updates from GitHub Releases.
 
-> limitations: checked by hand on one configuration: RTX 4070 Ti and Gigabyte MO32U24 (31.5", 4K, 240 Hz, QD-OLED gen 3), Windows. Everything in the feature list that can be checked on it works. Not checked: AMD and Intel GPUs, other panels, several monitors on different GPUs, DRM video, update authenticity (the hash lives in the same release as the exe). Rotated monitors are not supported, the program stops with an error. The Linux part of CI only checks the portable modules and builds the exe; the overlay itself does not run on Linux. Requires Windows 10 2004 or newer. The ReShade add-on (beta) has not run with a real ReShade or inside a game. More in the "limitations and not done" section.
+> limitations: checked by hand on one configuration: RTX 4070 Ti and Gigabyte MO32U24 (31.5", 4K, 240 Hz, QD-OLED gen 3), Windows. Everything in the feature list that can be checked on it works. Not checked: AMD and Intel GPUs, other panels, several monitors with separate settings (the per-monitor threads and the window menu were written without a run on Windows, checked by compiling and under wine), several monitors on different GPUs, DRM video, update authenticity (the hash lives in the same release as the exe). Rotated monitors are not supported, the program stops with an error. The Linux part of CI only checks the portable modules and builds the exe; the overlay itself does not run on Linux. Requires Windows 10 2004 or newer. The ReShade add-on (beta) has not run with a real ReShade or inside a game. More in the "limitations and not done" section.
 
 ## what the problem looks like
 
@@ -75,7 +75,11 @@ check the network before sending: a transfer to the wrong network cannot be reco
 4. the other shifts are usually unneeded on this panel: red and blue subpixels sit at the same height and green sits midway between them horizontally
 5. press save
 
-The window is split into cards by colour: red, green and blue each have a horizontal and a vertical shift, the Image card holds sharpness and the monitor choice. Everything is at zero until you change it.
+The window is split into cards: the Image card on top has the monitor choice, the filter switch of that monitor and sharpness, below it one card each for red, green and blue with a horizontal and a vertical shift. Everything is at zero until you change it.
+
+**several monitors.** Everything below the monitor list belongs to the monitor chosen in it: shifts, sharpness, the filter switch, the "Save profile..." and "Reset" buttons. The program drives all monitors at once, one capture thread each; every monitor has its own auto-pause (a fullscreen game on one does not switch the filter off on another). The master switch (`F10`, the tray item, the add-on slider) acts on top: a monitor works when both its own switch and the master switch are on. The settings in `fringefix.ini` lie in `mon0_`, `mon1_` and so on blocks by output number, `monitor` keeps the monitor shown in the window; a file of the old form (one set of shifts without a number) is read as the settings of the monitor the overlay ran on. Without settings the filter is on only for monitor 0. A profile holds the shifts and sharpness of the selected monitor. If the overlay of a monitor fails to start it stays silent until you switch the filter on again, and the switch in the settings stays as it was.
+
+**window menu.** The menu bar "File", "Edit", "Tools", "Help" repeats the buttons and adds opening the profiles folder, the master switch, "What's new..." (the change list is embedded in the exe, `CHANGELOG.md` and `CHANGELOG.ru.md`) and "About...". Shortcuts: `Ctrl+O` load a profile, `Ctrl+S` save a profile, `F1` about. The menu is drawn in the palette of the window instead of the system menu so that it does not stay light in the dark theme.
 
 The test pattern is as tall as the settings window and half as wide. The top half is light (black on white), the bottom half is dark (white on black). Each half has three bands: thin lines (1 pixel, 14 pixel pitch), thick lines (5 pixels, 10 pixel pitch) and the alphabet, lowercase letters first, then capitals. In the first two bands horizontal lines are on the left and vertical lines on the right. Line thickness is in physical pixels and does not follow Windows scaling: a one pixel line is the subpixel probe. The pitch is given for 100% and grows with the scaling of the settings window (at 150% a pitch of 14 becomes 21). The pattern moves with the settings window.
 
@@ -96,7 +100,7 @@ the mode is chosen in the Auto-pause rules card of the program settings window (
 - 2 in fullscreen and 3D apps
 - 3 in 3D apps only
 
-the list shows the modes in this order: fullscreen, 3D, both, off.
+the list shows the modes in this order: fullscreen and 3D, fullscreen, 3D, off. Mode 2 is the default.
 
 a fullscreen app is an active window with no title bar or frame that covers the whole overlay monitor (2 pixel slack): a borderless game, exclusive fullscreen, F11 video in a browser. A 3D app is the active window's process that loaded d3d9, d3d11, d3d12, vulkan-1 or opengl32 and is not in the built-in list of known non-games (browsers, editors, messengers, office, the shell). Windows built on the Chromium engine (Electron, CEF) are never counted as 3D apps: they load d3d11 for compositing but are not games. A process protected from reading (anti-cheat) is detected by fullscreen only, so in mode 3 it is not detected at all.
 
@@ -114,17 +118,17 @@ a fullscreen app is an active window with no title bar or frame that covers the 
 ## auto-pause rules
 
 
-the Auto-pause rules card of the program settings window has three items:
+the Auto-pause card of the program settings window has two items:
 
-- "Auto-pause": when to consider a game running (fullscreen, 3D, fullscreen and 3D, off)
+- "Auto-pause": when to consider a game running (fullscreen and 3D, fullscreen, 3D, off). In a game the overlay pauses: it releases the device and the window, the light mode is gone
 - "Action in games": it can be changed only while auto-pause is off, in any other mode it shows a locked "Pause". "Pause" releases the device and the overlay window, "Light mode" keeps the overlay but the shader does one shift per channel without the laplacian and sharpness and costs almost nothing. Light mode does not remove DWM composition, so only a pause lifts the game latency. With auto-pause off and light mode, games are looked for as in the "fullscreen and 3D apps" mode and light mode is used instead of a pause; with auto-pause off and "Pause" nothing is looked for
-- "App lists...": a window with two lists, "Always apply the filter" (`ignore_apps`: photo viewers, players, whatever auto-pause is set to) and "Always pause" (`pause_apps`). The "+ Add..." button opens a picker with the running programs that have a visible window; the search box filters by process name or by window title. An app that is not running can be typed in by hand: when no row matches, the typed name is added. "− Remove" deletes the selected row. An app is in one list at a time: adding it to one list removes it from the other. The name must be Latin, each list takes up to 1023 bytes
+- "App filter...": a window with two lists, "Always apply the filter" (`ignore_apps`: photo viewers, players, whatever auto-pause is set to) and "Always pause" (`pause_apps`). The "+ Add..." button opens a picker with the running programs that have a visible window; the search box filters by process name or by window title. An app that is not running can be typed in by hand: when no row matches, the typed name is added. "− Remove" deletes the selected row. An app is in one list at a time: adding it to one list removes it from the other. The name must be Latin, each list takes up to 1023 bytes
 
 more in `fringefix.ini`:
 
 - `pause_apps = game.exe;other.exe` always treat as a game even when the window is not fullscreen; a name without `.exe` also fits, case is ignored
 - `ignore_apps = player.exe` never treat as a game, for example a fullscreen video player
-- `gpu_priority = -3` GPU priority of the overlay thread from -7 to 7; below zero the overlay yields the GPU to the game, which reduces the FPS cost in light mode
+- `gpu_priority = -3` GPU priority of the overlay thread from -7 to 7; below zero the overlay yields the GPU to the game
 
 ## versions and rollback
 
@@ -136,7 +140,7 @@ the "Versions..." button in the program settings window opens a list of the repo
 
 - "Save profile..." and "Load profile..." work with JSON files, the default folder is `%APPDATA%\fringefix\profiles`
 - the tray menu item "Profiles" lists the files from that folder, picking one applies it at once
-- a profile holds only the look of the picture: the three channel shifts and sharpness, the monitor and the update check stay as they were
+- a profile holds only the look of the picture of the selected monitor: the three channel shifts and sharpness; the monitor switch, the monitor number and the update check stay as they were. "Load profile..." and "Save profile..." always open in the profiles folder of the program
 - the bundled profile "QD-OLED gen 3 4" is built into the exe and put into the profiles folder at start if that file is not there: an edited file is not overwritten, a deleted one comes back at the next start. The files live in `profiles/`, a new profile is a line in `src/res/fringefix.rc`, a number in `include/resource.h` and an entry in the `BUNDLED` table in `src/profile_io.c`
 
 ```json
@@ -175,7 +179,7 @@ everything below is off until you turn it on yourself. Nothing is sent on its ow
 - there are three ways to send: to the project server with the Send button (with a confirmation), through a new GitHub issue (the report is copied to the clipboard and you paste it into the issue yourself), or just save it to a file
 - "Clear statistics" resets the counters and deletes the file
 
-what the report holds: the program version and language; the Windows build number, the GPU name, the monitor resolution and an HDR flag; channel shifts, sharpness, auto-pause mode, the action in games and GPU priority; counters; overlay error texts; for games only the exe name without a path, how it was detected, what the overlay did, the number of sessions and minutes; your comment.
+what the report holds: the program version and language; the Windows build number, the GPU name, the monitor resolution and an HDR flag; channel shifts and sharpness of the selected monitor, auto-pause mode and GPU priority; counters; overlay error texts; for games only the exe name without a path, how it was detected, what the overlay did, the number of sessions and minutes; your comment.
 
 what the report does not hold: user name, computer name, file paths, window titles, monitor serial numbers, a permanent identifier and the send time.
 
@@ -187,7 +191,7 @@ the receiver on the server checks the report against a whitelist of fields, limi
 
 The add-on draws the same filter as engine 2, but inside the game's frame: no desktop capture, no frame comparison and no overlay window. What moves over from the app is `kernel.c` (the 3x3 window weights per channel are computed on the CPU) and the `psk` shader rewritten in the ReShade effect language (`addon/fringefix.fx`). Two files: `fringefix.addon64` (a C++17 dll, about 290 KB) and `fringefix.fx`. Both are embedded in the exe.
 
-**install.** The "Program" window, the "Diagnostics and ReShade" card, the "Install into a game..." button, pick the game exe:
+**install.** The program "Settings" window, the "ReShade integration" card (highlighted with colour), the "Install the add-on..." button, pick the game exe:
 
 - the add-on is copied next to the game's `ReShade.ini` (or into `AddonPath` from its `[ADDON]` section)
 - the effect is copied into the first folder of `EffectSearchPaths` in `[GENERAL]`, `reshade-shaders\Shaders` by default
@@ -225,7 +229,7 @@ Add-on limitations:
 
 > beta: engines 1 and 2 and the diagnostics window were written without running on a real GPU. The shaders compile with the real `d3dcompiler_47`, the 3x3 kernel math is checked against the classic shader formulas by a test over 400 shift sets, and on D3D11 under wine (software GL) the kernel shader differs from the classic one by at most 0.003 while the compute comparison flags match the pixel one block for block. The first run shows time and power on real hardware.
 
-The "Diagnostics and measurements..." button in the program settings window opens a window with a summary, graphs and a run. The `engine` ini key stores the chosen engine (0, 1 or 2), 0 by default.
+The "Diagnostics and measurements..." button in the "Updates and data" card of the program settings window opens a window with the choice of engine, frame output and GPU priority, a run and a results table; the measurements and the panel belong to the monitor chosen in the main window. Graphs and counters are shown by a panel over the overlay (below). The `engine` ini key stores the chosen engine (0, 1 or 2), 2 by default; engine 2 is labelled "(default)" in the list.
 
 | engine | frame comparison | filter |
 | --- | --- | --- |
@@ -233,7 +237,7 @@ The "Diagnostics and measurements..." button in the program settings window open
 | 1, compute comparison | compute shader, a 16 by 16 thread group per block, 8.3 million threads | same as 0 |
 | 2, compute and 3x3 kernel | same as 1 | one 3x3 window per channel, weights computed on the CPU; 9 reads per pixel when the shift spread between channels is under one pixel on each axis, otherwise 27 |
 
-The picture is the same for all three. Engine 2 differs from the classic one only in that bilinear weights are exact rather than the 8-bit hardware ones, so values can differ by a fraction of the lowest bit. If the compute shader or the kernel shader fails to create on the GPU, the diagnostics window states the reason and the overlay runs on the engine below. Light mode in games always uses the classic shader.
+The picture is the same for all three. Engine 2 differs from the classic one only in that bilinear weights are exact rather than the 8-bit hardware ones, so values can differ by a fraction of the lowest bit. If the compute shader or the kernel shader fails to create on the GPU, the diagnostics window states the reason and the overlay runs on the engine below. On a monitor where the channel shifts differ by more than a pixel on any axis the kernel reads 27 pixels instead of 9, and engine 1 runs instead of engine 2; the diagnostics window and the panel show the engine in effect and the reason.
 
 What is measured while the window is open:
 
@@ -248,6 +252,27 @@ What is measured while the window is open:
 
 "Save CSV..." writes the run results (or a summary of the last seconds if there was no run) and, after a `# samples` line, the raw data of the last 4096 cycles.
 
+**Panel over the overlay.** While the diagnostics window is open and the "Measurement panel over the overlay" box is ticked (on by default), a panel sits in the top left corner of the overlay monitor: a header with the active engine, output mode and priority, a line of frame counters, stage times, latencies and three graphs (GPU stages, latencies, power). It is a separate window: it is excluded from capture (`WDA_EXCLUDEFROMCAPTURE`), so the filter does not distort it and it does not cause echo frames, it lets the mouse through, takes no focus and is raised above the overlay together with it every two seconds. The panel does not exist while the overlay does not run: paused, filter off, after an error. If the system does not accept `WDA_EXCLUDEFROMCAPTURE`, the panel is not created at all and the overlay works as usual. Updating the panel four times a second may wake DWM, which adds a few cycles per second to the measurements.
+
+The counters in the `per s` line:
+
+- `dwm` desktop updates DWM delivered (the sum of `AccumulatedFrames`; it includes updates caused by the overlay's own window)
+- `got` frames the program managed to receive and copy
+- `drawn` how many of them were drawn
+- `merged` the share of merged ones, `(dwm - got) / dwm`; the line turns red above 25%. A merged frame is several desktop updates that DWM handed over as one because the cycle did not take them one by one: this is how game frames get lost with the filter on
+- `echo` how many frames were judged an echo of the overlay's own window
+
+The CSV carries the same numbers: an `accum` column in the raw frames, `source_per_s` and `merged_pct` in the results, and a `merged%` column in the window's results table.
+
+**Frame output and GPU priority (beta).** Two lists sit next to the engine choice:
+
+- "Frame output": 0 waits for vsync (`Present(1, 0)`, as before), 1 does not wait (`Present(0, ALLOW_TEARING)`, the swap chain is created with the tearing flag). The `present_mode` ini key. If the system does not support tearing, vsync stays and the window shows "requested 1, active 0". Changing the output mode recreates the swap chain and the overlay window
+- "GPU priority": -7, -3, 0, +3, +7, the `gpu_priority` ini key. It applies on the live device and the window reads back what was accepted: the system may refuse a priority above zero without privileges
+
+**Rollback in 10 seconds.** Any change of engine, output or priority is a trial: it is not written to the ini, a strip with "Keep" and "Revert" buttons and a countdown appears under the hint, and the panel shows a red "Trial: reverting in N s" line. "Keep" writes the value to the ini. If nothing is pressed, everything returns after 10 seconds and the ini is rewritten with the previous values. The rollback is immediate, without the timer, if the overlay failed to start (the device failure counter grows) and if the diagnostics window is closed. While a trial runs, the all-engines run cannot start. The timer lives in the diagnostics window, so a lost picture reverts by itself and nothing needs to be pressed. If the process dies during a trial, the ini still holds the previous values. Exception: another program window that saves settings during the trial writes the trial values to the ini too, and the rollback then rewrites the file back.
+
+Checked under wine: the panel drawing at 96 and 192 dpi, creating and closing the panel window, the trial countdown and rollback, the ini after a rollback and after "Keep"; wine does not accept `WDA_EXCLUDEFROMCAPTURE`, so the panel window was looked at with that check disabled in a copy of the code. Not checked: the panel over the real overlay and a game, tearing output on a real GPU, a GPU priority above zero, the merged frame count in a game.
+
 Measurement limits: the ring keeps the last 4096 cycles, about 17 seconds at 240 Hz; GPU timers run only while the window is open; NVML power is averaged by the driver and refreshes no more than once per 100 ms.
 
 ## how it works
@@ -258,13 +283,13 @@ Measurement limits: the ring keeps the last 4096 cycles, about 17 seconds at 240
 ```
 main.c ─ ui_tray.c ─ ui_settings.c ─ ui_controls.c, ui_paint.c, slider.c, theme.c
   │         │            └─ ui_profile.c, pattern.c
-  │         │            └─ ui_bench.c ─ bench.c, power.c, benchstat.c
+  │         │            └─ ui_bench.c ─ bench.c, power.c, benchstat.c, trial.c
   │         │            └─ ui_versions.c, ui_app.c, ui_prefs.c, autostart.c
   │         │            └─ ui_reshade.c ─ reshade_inst.c, rspaths.c
   │         │            └─ ui_report.c ─ report_actions.c, report_send.c, report.c
   │         └─ ui_update.c ─ update.c, update_install.c ─ http.c, sha256.c, release.c
   └─ app.c ─ config.c, profile.c, profile_io.c, i18n.c, stats.c, stats_store.c, live.c
-       └─ capture.c (own thread) ─ gamedetect.c ─ applist.c
+       └─ capture.c (own thread) ─ gamedetect.c ─ applist.c, hud.c
             └─ gfx.c, gfx_frame.c, gfx_sig.c, gfx_prof.c ─ shader.c, kernel.c, output.c
 
 add-on (own dll, src/ is shared):  addon/addon.cpp ─ fringefix.fx, kernel.c, config.c, live.c, power.c, benchstat.c
