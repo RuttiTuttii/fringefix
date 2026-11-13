@@ -2,6 +2,18 @@
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow the `vX.Y.Z` tags. Betas carry `-beta.N`.
 
+## v0.8.0-beta.4 (2026-11-14)
+
+### Changed
+
+- the monitor list and the state line under the settings window show what really happens to the filter of each monitor: off, did not start, master switch off, or paused because a game or a 3D app is on that monitor
+- the monitor switch and `F10` write `fringefix.ini` at once (except while a trial of the diagnostics window is running), so the choice of the filtered monitors survives a restart; before, it was kept only by the next "Save"
+
+### Fixed
+
+- the game crashed when the ReShade menu was opened with the add-on of v0.8.0-beta.1 to v0.8.0-beta.3 loaded: the add-on read the cursor position from ReShade with a calling convention different from the one ReShade is built with (an `ImVec2` result goes through a hidden pointer there), and ReShade wrote the result into a random address; the add-on is rebuilt with the matching call
+- the filter switch of a monitor turned in mode B of the rotation did not work: it wrote into the settings set of the orientation, which does not hold the switch
+
 ## v0.8.0-beta.3 (2026-11-13)
 
 ### Added
