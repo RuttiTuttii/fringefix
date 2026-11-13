@@ -670,12 +670,26 @@ void slider(const char *label, float *v, float lim, bool *changed, bool *commit)
     }
 }
 
+/* ReShade собран MSVC: ImVec2 с конструктором не POD, и такие функции таблицы ImGui возвращают его через скрытый
+ * указатель в rcx. g++ ждёт его в rax и оставляет в rcx мусор, куда ReShade и пишет результат: вылет при открытии
+ * вкладки. зовём функцию как MSVC. остальные функции таблицы с ImVec2 в результате (GetWindowPos, GetCursorPos,
+ * CalcTextSize и так далее) вызывать только так же */
+ImVec2 cursor_screen_pos()
+{
+    using fn_t = ImVec2 *(*)(ImVec2 *out);
+    ImVec2 p;
+
+    /* через void *, чтобы g++ не ругался на приведение между типами функций: так и задумано */
+    reinterpret_cast<fn_t>(reinterpret_cast<void *>(imgui_function_table_instance()->GetCursorScreenPos))(&p);
+    return p;
+}
+
 /* выключатель-ползунок: true в момент щелчка, *on уже перевёрнут */
 bool toggle(const char *id, bool *on, const char *tip)
 {
     const float h = ImGui::GetFrameHeight();
     const float w = h * 1.8f;
-    const ImVec2 p = ImGui::GetCursorScreenPos();
+    const ImVec2 p = cursor_screen_pos();
     ImDrawList *dl = ImGui::GetWindowDrawList();
     bool clicked = ImGui::InvisibleButton(id, ImVec2(w, h));
     const float r = h * 0.5f;
