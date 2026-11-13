@@ -39,6 +39,22 @@ const ff_view *ff_config_view_const(const ff_config *cfg, int index)
     return &cfg->view[clamp_index(index)];
 }
 
+ff_view *ff_config_view_for(ff_config *cfg, int index, int rot)
+{
+    if (cfg->rot_mode == 1 && rot >= 1 && rot <= 3) {
+        return &cfg->rview[clamp_index(index)][rot - 1];
+    }
+    return &cfg->view[clamp_index(index)];
+}
+
+const ff_view *ff_config_view_for_const(const ff_config *cfg, int index, int rot)
+{
+    if (cfg->rot_mode == 1 && rot >= 1 && rot <= 3) {
+        return &cfg->rview[clamp_index(index)][rot - 1];
+    }
+    return &cfg->view[clamp_index(index)];
+}
+
 void ff_view_reset(ff_view *v)
 {
     memset(v->shift, 0, sizeof v->shift);
@@ -109,11 +125,12 @@ static void move_legacy(ff_config *cfg, int m)
     cfg->legacy_view = m + 1;
 }
 
-/* ключ красок монитора: red_x старого вида или mon3_red_x нового. возвращает 1, если ключ этого вида; в *res
- * кладёт принятое значение или -1, если оно мусор */
+/* ключ красок монитора: red_x старого вида, mon3_red_x нового или mon3_r1_red_x набора режима Б для поворота на 90 градусов.
+ * возвращает 1, если ключ этого вида; в *res кладёт принятое значение или -1, если оно мусор */
 static int parse_view_key(const char *key, ff_config *cfg, double *res, const char *val)
 {
     int idx = -1;
+    int rot = 0;
     int legacy = 1;
     int k;
     double v;
@@ -122,13 +139,18 @@ static int parse_view_key(const char *key, ff_config *cfg, double *res, const ch
         idx = key[3] - '0';
         key += 5;
         legacy = 0;
+        if (key[0] == 'r' && key[1] >= '1' && key[1] <= '3' && key[2] == '_') {
+            rot = key[1] - '0';
+            key += 3;
+        }
     }
     for (k = 0; k < NVIEW_KEYS; k++) {
         if (strcmp(key, VIEW_KEYS[k]) == 0) {
             break;
         }
     }
-    if (k == NVIEW_KEYS || (legacy && k == 7)) {
+    /* флаг включения есть только у основного вида монитора */
+    if (k == NVIEW_KEYS || ((legacy || rot) && k == 7)) {
         return 0;
     }
     if (idx >= FF_MAX_MONITORS) {
@@ -154,7 +176,7 @@ static int parse_view_key(const char *key, ff_config *cfg, double *res, const ch
         cfg->legacy_view = idx + 1;
         cfg->view[idx].enabled = 1;
     }
-    *view_slot(&cfg->view[idx], k) = (float)v;
+    *view_slot(rot ? &cfg->rview[idx][rot - 1] : &cfg->view[idx], k) = (float)v;
     *res = 1.0;
     return 1;
 }
@@ -185,6 +207,13 @@ static int parse_line(char *line, ff_config *cfg)
         }
         cfg->monitor = (int)v;
         move_legacy(cfg, cfg->monitor);
+        return 1;
+    }
+    if (strcmp(key, "rotation_mode") == 0) {
+        if (!parse_number(val, 0.0, 1.0, &v)) {
+            return 0;
+        }
+        cfg->rot_mode = (int)v;
         return 1;
     }
     if (strcmp(key, "auto_pause") == 0) {
@@ -306,9 +335,8 @@ int ff_config_parse(const char *text, ff_config *cfg)
 }
 
 /* вид монитора по умолчанию: нулевые сдвиги, включён только нулевой монитор; такой блок в файл не пишется */
-static int view_is_default(const ff_config *cfg, int m)
+static int shifts_are_zero(const ff_view *v)
 {
-    const ff_view *v = &cfg->view[m];
     int ch;
 
     for (ch = 0; ch < 6; ch++) {
@@ -316,7 +344,12 @@ static int view_is_default(const ff_config *cfg, int m)
             return 0;
         }
     }
-    return v->sharpen == 0.0f && v->enabled == (m == 0);
+    return v->sharpen == 0.0f;
+}
+
+static int view_is_default(const ff_config *cfg, int m)
+{
+    return shifts_are_zero(&cfg->view[m]) && cfg->view[m].enabled == (m == 0);
 }
 
 int ff_config_format(const ff_config *cfg, char *buf, size_t n)
@@ -334,8 +367,11 @@ int ff_config_format(const ff_config *cfg, char *buf, size_t n)
         "; на сколько пикселей экрана уезжает содержимое канала, плюс означает вправо и вниз, диапазон от -2 до 2\n"
         "; резкость от -1 до 1, минус смягчает картинку; enabled включает фильтр на этом мониторе, 0 или 1\n"
         "; комментарии только на отдельной строке\n"
-        "\n; монитор, настройки которого показаны в окне, выходы всех видеокарт считаются подряд с нуля\nmonitor = %d\n",
-        cfg->monitor);
+        "\n; монитор, настройки которого показаны в окне, выходы всех видеокарт считаются подряд с нуля\nmonitor = %d\n"
+        "\n; повёрнутый монитор: 0 режим А, настройки альбомной ориентации применяются к панели и поворачиваются вместе с ней;\n"
+        "; 1 режим Б, у поворотов 90, 180 и 270 градусов свои наборы mon0_r1_red_x и так далее, значения в осях рабочего стола\n"
+        "rotation_mode = %d\n",
+        cfg->monitor, cfg->rot_mode);
     if (w < 0 || (size_t)w >= n) {
         return -1;
     }
@@ -343,23 +379,44 @@ int ff_config_format(const ff_config *cfg, char *buf, size_t n)
     for (m = 0; m < FF_MAX_MONITORS; m++) {
         const ff_view *v = &cfg->view[m];
 
+        int r;
+
         /* нулевой монитор пишется всегда, чтобы файл не выглядел пустым, остальные только с настройками */
-        if (m != 0 && view_is_default(cfg, m)) {
-            continue;
+        if (m == 0 || !view_is_default(cfg, m)) {
+            w = snprintf(buf + pos, n - pos,
+                "\nmon%d_enabled = %d\n"
+                "mon%d_red_x = %.3f\nmon%d_red_y = %.3f\n"
+                "mon%d_green_x = %.3f\nmon%d_green_y = %.3f\n"
+                "mon%d_blue_x = %.3f\nmon%d_blue_y = %.3f\n"
+                "mon%d_sharpen = %.3f\n",
+                m, v->enabled != 0, m, (double)v->shift[0][0], m, (double)v->shift[0][1],
+                m, (double)v->shift[1][0], m, (double)v->shift[1][1],
+                m, (double)v->shift[2][0], m, (double)v->shift[2][1], m, (double)v->sharpen);
+            if (w < 0 || pos + (size_t)w >= n) {
+                return -1;
+            }
+            pos += (size_t)w;
         }
-        w = snprintf(buf + pos, n - pos,
-            "\nmon%d_enabled = %d\n"
-            "mon%d_red_x = %.3f\nmon%d_red_y = %.3f\n"
-            "mon%d_green_x = %.3f\nmon%d_green_y = %.3f\n"
-            "mon%d_blue_x = %.3f\nmon%d_blue_y = %.3f\n"
-            "mon%d_sharpen = %.3f\n",
-            m, v->enabled != 0, m, (double)v->shift[0][0], m, (double)v->shift[0][1],
-            m, (double)v->shift[1][0], m, (double)v->shift[1][1],
-            m, (double)v->shift[2][0], m, (double)v->shift[2][1], m, (double)v->sharpen);
-        if (w < 0 || pos + (size_t)w >= n) {
-            return -1;
+        /* наборы режима Б: только непустые */
+        for (r = 1; r <= 3; r++) {
+            const ff_view *rv = &cfg->rview[m][r - 1];
+
+            if (shifts_are_zero(rv)) {
+                continue;
+            }
+            w = snprintf(buf + pos, n - pos,
+                "\nmon%d_r%d_red_x = %.3f\nmon%d_r%d_red_y = %.3f\n"
+                "mon%d_r%d_green_x = %.3f\nmon%d_r%d_green_y = %.3f\n"
+                "mon%d_r%d_blue_x = %.3f\nmon%d_r%d_blue_y = %.3f\n"
+                "mon%d_r%d_sharpen = %.3f\n",
+                m, r, (double)rv->shift[0][0], m, r, (double)rv->shift[0][1],
+                m, r, (double)rv->shift[1][0], m, r, (double)rv->shift[1][1],
+                m, r, (double)rv->shift[2][0], m, r, (double)rv->shift[2][1], m, r, (double)rv->sharpen);
+            if (w < 0 || pos + (size_t)w >= n) {
+                return -1;
+            }
+            pos += (size_t)w;
         }
-        pos += (size_t)w;
     }
     w = snprintf(buf + pos, n - pos,
         "\n; проверять обновления при запуске, 0 или 1\ncheck_updates = %d\n"

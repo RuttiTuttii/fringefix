@@ -13,6 +13,7 @@ typedef struct {
     int hi;
     int pos;
     int drag;
+    int on_window;
 } slider_t;
 
 static slider_t *state(HWND h)
@@ -86,6 +87,43 @@ static void fill_round(HDC dc, COLORREF color, int x0, int y0, int x1, int y1)
     DeleteObject(b);
 }
 
+/* переключатель как в системных настройках Windows: капсула и круглый бегунок; включённый залит цветом акцента
+ * с белым бегунком, выключенный это контур и бегунок цвета текста */
+static void paint_switch(HDC dc, const RECT *r, const slider_t *s, const ff_palette *p, int focused)
+{
+    int th = r->bottom * 20 / 28;
+    int tw = th * 2;
+    int x0 = 0;
+    int y0 = (r->bottom - th) / 2;
+    int d = th * 3 / 5 + (s->pos == s->hi ? 2 : 0);
+    int gap = (th - d) / 2;
+    int kx = s->pos == s->hi ? x0 + tw - gap - d : x0 + gap;
+    int on = s->pos == s->hi;
+    HBRUSH track = on ? CreateSolidBrush(p->accent) : (HBRUSH)GetStockObject(NULL_BRUSH);
+    HPEN edge = on ? (HPEN)GetStockObject(NULL_PEN) : CreatePen(PS_SOLID, 1, p->muted);
+    HBRUSH knob = CreateSolidBrush(on ? RGB(255, 255, 255) : p->fg);
+    HGDIOBJ ob = SelectObject(dc, track);
+    HGDIOBJ op = SelectObject(dc, edge);
+
+    RoundRect(dc, x0, y0, x0 + tw, y0 + th, th, th);
+    SelectObject(dc, GetStockObject(NULL_PEN));
+    SelectObject(dc, knob);
+    Ellipse(dc, kx, y0 + gap, kx + d + 1, y0 + gap + d + 1);
+    SelectObject(dc, op);
+    SelectObject(dc, ob);
+    if (on) {
+        DeleteObject(track);
+    } else {
+        DeleteObject(edge);
+    }
+    DeleteObject(knob);
+    if (focused) {
+        RECT fr = { x0 - 2, y0 - 2, x0 + tw + 3, y0 + th + 3 };
+
+        DrawFocusRect(dc, &fr);
+    }
+}
+
 static void paint(HWND h, const slider_t *s)
 {
     PAINTSTRUCT ps;
@@ -120,10 +158,14 @@ static void paint(HWND h, const slider_t *s)
     old = SelectObject(mem, bmp);
 
     /* выключатель, как и ползунки, стоит на карточке */
-    back = p->card;
+    back = s->on_window ? p->bg : p->card;
     bg = CreateSolidBrush(back);
     FillRect(mem, &r, bg);
     DeleteObject(bg);
+    if (is_switch(s)) {
+        paint_switch(mem, &r, s, p, GetFocus() == h);
+        goto blit;
+    }
 
     /* дорожка, заливка от нуля до значения и отметка нуля */
     zero_x = pos_to_x(s, w, pad, clamp_pos(s, 0));
@@ -153,6 +195,7 @@ static void paint(HWND h, const slider_t *s)
     DeleteObject(ring);
     DeleteObject(tb);
 
+blit:
     BitBlt(dc, 0, 0, r.right, r.bottom, mem, 0, 0, SRCCOPY);
     SelectObject(mem, old);
     DeleteObject(bmp);
@@ -200,6 +243,7 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
         }
         s->lo = -100;
         s->hi = 100;
+        s->on_window = (((CREATESTRUCTW *)l)->style & FFSS_ON_WINDOW) != 0;
         SetWindowLongPtrW(h, GWLP_USERDATA, (LONG_PTR)s);
         return 0;
     case WM_NCDESTROY:

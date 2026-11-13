@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "bench.h"
+#include "crash.h"
 #include "gfx.h"
 #include "kernel.h"
 
@@ -38,6 +39,30 @@ typedef struct {
 
 typedef char cb_size_must_be_224[sizeof(cb_data) == 224 ? 1 : -1];
 
+/* вектор сдвига в осях панели переводится в оси повёрнутого рабочего стола: панель повёрнута по часовой стрелке
+ * на rot * 90 градусов, и содержимое канала уезжает на столько же */
+static void rotate_shift(int rot, const float in[2], float out[2])
+{
+    switch (rot) {
+    case 1:
+        out[0] = -in[1];
+        out[1] = in[0];
+        break;
+    case 2:
+        out[0] = -in[0];
+        out[1] = -in[1];
+        break;
+    case 3:
+        out[0] = in[1];
+        out[1] = -in[0];
+        break;
+    default:
+        out[0] = in[0];
+        out[1] = in[1];
+        break;
+    }
+}
+
 void gfx_upload(ff_gfx *g, const ff_config *c, const ff_view *v)
 {
     D3D11_MAPPED_SUBRESOURCE m;
@@ -48,17 +73,27 @@ void gfx_upload(ff_gfx *g, const ff_config *c, const ff_view *v)
     int ch;
     int row;
 
+    /* режим А: настройки альбомной ориентации привязаны к субпикселям панели и едут вместе с ней; в режиме Б значения
+     * это набор ориентации, и они уже в осях рабочего стола */
+    for (ch = 0; ch < 3; ch++) {
+        if (c->rot_mode == 0) {
+            rotate_shift(g->rot, v->shift[ch], &flat[ch * 2]);
+        } else {
+            flat[ch * 2] = v->shift[ch][0];
+            flat[ch * 2 + 1] = v->shift[ch][1];
+        }
+    }
     memset(&d, 0, sizeof d);
-    d.shift_rg[0] = v->shift[0][0];
-    d.shift_rg[1] = v->shift[0][1];
-    d.shift_rg[2] = v->shift[1][0];
-    d.shift_rg[3] = v->shift[1][1];
-    d.shift_bx[0] = v->shift[2][0];
-    d.shift_bx[1] = v->shift[2][1];
+    d.shift_rg[0] = flat[0];
+    d.shift_rg[1] = flat[1];
+    d.shift_rg[2] = flat[2];
+    d.shift_rg[3] = flat[3];
+    d.shift_bx[0] = flat[4];
+    d.shift_bx[1] = flat[5];
     d.shift_bx[2] = v->sharpen;
     d.shift_bx[3] = g->hdr ? 1.0f : 0.0f;
     d.mode[0] = g->light ? 1.0f : 0.0f;
-    memcpy(flat, v->shift, sizeof flat);
+    d.mode[1] = (float)g->rot;
     ff_kernel_build(flat, v->sharpen, &k);
     d.kbase[0] = k.base[0][0];
     d.kbase[1] = k.base[0][1];
@@ -103,8 +138,8 @@ static void draw(ff_gfx *g)
 
     vp.TopLeftX = 0.0f;
     vp.TopLeftY = 0.0f;
-    vp.Width = (float)g->w;
-    vp.Height = (float)g->h;
+    vp.Width = (float)g->ow;
+    vp.Height = (float)g->oh;
     vp.MinDepth = 0.0f;
     vp.MaxDepth = 1.0f;
 
@@ -120,6 +155,7 @@ static void draw(ff_gfx *g)
     ID3D11DeviceContext_PSSetConstantBuffers(g->ctx, 0, 1, &g->cb);
     ID3D11DeviceContext_Draw(g->ctx, 3, 0);
     gfx_prof_mark(g, 3);
+    crash_mark(g->mon, "present");
     {
         LARGE_INTEGER before;
         LARGE_INTEGER after;
@@ -216,6 +252,7 @@ int gfx_pump(ff_gfx *g, UINT timeout_ms, int force)
     int echo = 0;
 
     gfx_prof_collect(g);
+    crash_mark(g->mon, "acquire");
     hr = IDXGIOutputDuplication_AcquireNextFrame(g->dup, timeout_ms, &info, &res);
 
     if (hr == DXGI_ERROR_WAIT_TIMEOUT) {
@@ -241,6 +278,7 @@ int gfx_pump(ff_gfx *g, UINT timeout_ms, int force)
                     return 0;
                 }
                 first = !g->have_frame;
+                crash_mark(g->mon, "copy");
 
                 /* новый кадр ложится во вторую копию, прежний остаётся для сравнения */
                 gfx_prof_begin(g, info.LastPresentTime.QuadPart, info.AccumulatedFrames);
@@ -250,6 +288,7 @@ int gfx_pump(ff_gfx *g, UINT timeout_ms, int force)
                 gfx_prof_mark(g, 1);
                 ID3D11Texture2D_Release(tex);
                 g->have_frame = 1;
+                crash_mark(g->mon, "compare");
                 if (frame_changed(g, &info) || first) {
                     force = 1;
                 }
@@ -260,6 +299,7 @@ int gfx_pump(ff_gfx *g, UINT timeout_ms, int force)
         IDXGIOutputDuplication_ReleaseFrame(g->dup);
     }
     if (force && g->have_frame) {
+        crash_mark(g->mon, "draw");
         draw(g);
         gfx_prof_end(g, 1, echo);
     } else {

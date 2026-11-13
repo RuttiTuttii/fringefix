@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "app.h"
+#include "crash.h"
 #include "i18n.h"
 #include "stats_store.h"
 #include "theme.h"
@@ -51,6 +52,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show)
     if (!single) {
         return 0;
     }
+    crash_install();
     update_cleanup();
     /* до загрузки настроек язык берётся у системы, чтобы сообщение об ошибке было понятным */
     ui_language_apply(0);

@@ -13,12 +13,13 @@
 
 #define MAX_OUTPUTS 8
 #define EDIT_CHARS 24
-#define POWER_W 60
+#define POWER_W 46
 
-/* вид монитора, выбранного в списке окна: все ползунки и поля правят его */
+/* набор монитора, выбранного в списке окна: все ползунки и поля правят его; в режиме Б повёрнутого монитора
+ * это набор его ориентации */
 static ff_view *cur_view(void)
 {
-    return ff_config_view(&ui.app->cfg, ui.app->cfg.monitor);
+    return app_edit_view(ui.app);
 }
 
 static float *row_value(int idx)
@@ -31,6 +32,8 @@ static float *row_value(int idx)
 /* имена выходов на момент построения окна: список мониторов пересобирается из них при каждой смене состояния */
 static wchar_t g_names[MAX_OUTPUTS][OUTPUT_NAME_LEN];
 static int g_nout;
+/* поворот выбранного монитора, при котором в поля положены значения: в режиме Б при смене поворота набор другой */
+static int g_rot_seen = -1;
 
 /* список мониторов с пометкой, где фильтр включён; выбран монитор из настроек */
 static void fill_monitors(void)
@@ -39,11 +42,16 @@ static void fill_monitors(void)
 
     SendMessageW(ui.monitor, CB_RESETCONTENT, 0, 0);
     for (i = 0; i < g_nout; i++) {
-        wchar_t item[OUTPUT_NAME_LEN + 32];
+        wchar_t item[OUTPUT_NAME_LEN + 64];
+        wchar_t rot[24] = L"";
 
-        _snwprintf(item, sizeof item / sizeof item[0], L"%ls  [%ls]", g_names[i],
+        /* повёрнутый монитор помечается углом */
+        if (ui.app->rot[i]) {
+            _snwprintf(rot, sizeof rot / sizeof rot[0], L", %ls %ld\u00b0", ff_tr(S_MON_ROT), ui.app->rot[i] * 90L);
+        }
+        _snwprintf(item, sizeof item / sizeof item[0], L"%ls  [%ls%ls]", g_names[i],
                    ff_tr(ui.app->cfg.view[i].enabled && !app_monitor_failed(ui.app, i) ? S_MON_TAG_ON
-                                                                                       : S_MON_TAG_OFF));
+                                                                                       : S_MON_TAG_OFF), rot);
         item[sizeof item / sizeof item[0] - 1] = L'\0';
         SendMessageW(ui.monitor, CB_ADDSTRING, 0, (LPARAM)item);
     }
@@ -72,14 +80,20 @@ void ctl_edit_show(int idx)
     ui.sync--;
 }
 
-void ctl_sync(void)
+static void sync_values(void)
 {
     int i;
 
+    g_rot_seen = (int)ui.app->rot[ui.app->cfg.monitor];
     for (i = 0; i <= IDX_SHARPEN; i++) {
         SendMessageW(ui.slider[i], FFS_SETPOS, (WPARAM)to_pos(*row_value(i)), 0);
         ctl_edit_show(i);
     }
+}
+
+void ctl_sync(void)
+{
+    sync_values();
     ctl_sync_power();
 }
 
@@ -91,13 +105,17 @@ void ctl_sync_power(void)
     const wchar_t *state = ff_tr(on ? S_STATE_ON : S_STATE_OFF);
     wchar_t label[96];
 
+    /* поток захвата увидел другой поворот монитора: значения в режиме Б теперь из другого набора */
+    if ((int)ui.app->rot[ui.app->cfg.monitor] != g_rot_seen) {
+        sync_values();
+    }
     SendMessageW(ui.power, FFS_SETPOS, (WPARAM)on, 0);
     if (on && app_monitor_failed(ui.app, ui.app->cfg.monitor)) {
         state = ff_tr(S_STATE_FAILED);
     } else if (on && !ui.app->enabled) {
         state = ff_tr(S_FILTER_MASTER_OFF);
     }
-    _snwprintf(label, sizeof label / sizeof label[0], L"%ls", state);
+    _snwprintf(label, sizeof label / sizeof label[0], L"%ls: %ls", ff_tr(S_FILTER), state);
     SetWindowTextW(ui.power_label, label);
     fill_monitors();
 }
@@ -193,15 +211,13 @@ static void build_button(str_id text, int col, int y, int id)
           BTN_H, id);
 }
 
-/* выключатель фильтра выбранного монитора: ползунок из двух положений, справа подпись с состоянием */
-static void build_power(const row_def *r)
+/* выключатель фильтра выбранного монитора: переключатель в стиле Windows под левой кнопкой, справа подпись с состоянием */
+static void build_power(void)
 {
-    int y = row_y(r);
-
-    ui.power = child(FF_SLIDER_CLASS, L"", WS_TABSTOP, 0, MARGIN + COL_SLIDER, y + 1, POWER_W, CTRL_H, ID_POWER);
+    ui.power = child(FF_SLIDER_CLASS, L"", WS_TABSTOP | FFSS_ON_WINDOW, 0, MARGIN, POWER_Y, POWER_W, CTRL_H, ID_POWER);
     SendMessageW(ui.power, FFS_SETRANGE, 0, 1);
-    ui.power_label = child(L"STATIC", L"", SS_LEFT | SS_CENTERIMAGE, 0, MARGIN + COL_SLIDER + POWER_W + 12,
-                           y + 1, CARD_W - COL_SLIDER - POWER_W - 12 - COL_LABEL, CTRL_H, ID_POWER_LABEL);
+    ui.power_label = child(L"STATIC", L"", SS_LEFT | SS_CENTERIMAGE, 0, MARGIN + POWER_W + 12, POWER_Y,
+                           CARD_W - POWER_W - 12, CTRL_H, ID_POWER_LABEL);
 }
 
 /* список мониторов в строке таблицы */
@@ -226,8 +242,6 @@ void ctl_build(void)
             build_row(i);
         } else if (ROWS[i].idx == IDX_MONITOR) {
             build_monitor(&ROWS[i]);
-        } else if (ROWS[i].idx == IDX_POWER) {
-            build_power(&ROWS[i]);
         }
     }
     build_button(S_BTN_PATTERN, 0, BTN1_Y, ID_PATTERN);
@@ -236,6 +250,9 @@ void ctl_build(void)
     build_button(S_BTN_PROFILE_LOAD, 0, BTN2_Y, ID_PROF_LOAD);
     build_button(S_BTN_PROFILE_SAVE, 1, BTN2_Y, ID_PROF_SAVE);
     build_button(S_BTN_SAVE, 2, BTN2_Y, ID_SAVE);
+    build_power();
+    ui.about = child(L"BUTTON", L"?", BS_OWNERDRAW | WS_TABSTOP, 0, MARGIN + CARD_W - ABOUT_D, STATUS_Y - 2, ABOUT_D,
+                     ABOUT_D, ID_ABOUT);
 }
 
 static BOOL CALLBACK restyle_one(HWND c, LPARAM unused)

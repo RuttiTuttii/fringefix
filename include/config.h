@@ -34,6 +34,12 @@ typedef struct {
     ff_view view[FF_MAX_MONITORS];
     /* монитор, настройки которого показаны в окне; на работу других мониторов не влияет */
     int monitor;
+    /* монитор повёрнут в Windows (портрет, перевёрнутая альбомная): 0 режим А, настройки альбомной ориентации применяются
+     * как есть к панели, то есть вместе с поворотом; 1 режим Б, у каждой ориентации свой набор в rview со значениями
+     * в осях рабочего стола, как их видно на экране */
+    int rot_mode;
+    /* наборы режима Б по мониторам для поворотов на 90, 180 и 270 градусов; поле enabled в них не используется */
+    ff_view rview[FF_MAX_MONITORS][3];
     /* проверять обновления при запуске, 0 или 1 */
     int check_updates;
     /* получать бета-версии при проверке обновлений, 0 или 1; релизы-беты помечены на GitHub как prerelease */
@@ -79,6 +85,11 @@ void ff_config_defaults(ff_config *cfg);
 /* вид монитора по номеру; номер вне диапазона зажимается */
 ff_view *ff_config_view(ff_config *cfg, int index);
 const ff_view *ff_config_view_const(const ff_config *cfg, int index);
+
+/* набор, который правится и рисуется на мониторе index при повороте rot (0 альбомная, 1, 2, 3 повороты на 90, 180, 270):
+ * в режиме Б это набор ориентации, во всех остальных случаях основной вид монитора */
+ff_view *ff_config_view_for(ff_config *cfg, int index, int rot);
+const ff_view *ff_config_view_for_const(const ff_config *cfg, int index, int rot);
 
 /* все сдвиги и резкость в ноль, флаг включения остаётся */
 void ff_view_reset(ff_view *v);

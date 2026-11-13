@@ -27,6 +27,9 @@ void paint_card_accent(HDC dc, int dpi, int x, int y, int w, int h, const wchar_
 /* строка выпадающего списка с владельцем: значок слева, текст справа, выбранная строка цветом акцента */
 void paint_draw_item(const DRAWITEMSTRUCT *d, HICON icon, const wchar_t *text, int dpi);
 
+/* круглая кнопка «?» из WM_DRAWITEM: кружок цвета акцента, нажатая темнее */
+void paint_about_button(const DRAWITEMSTRUCT *d);
+
 /* рисует фон, карточки, заголовки, подписи строк и строку состояния */
 void paint_window(HWND h, int dpi, const wchar_t *status);
 

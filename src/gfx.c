@@ -118,10 +118,17 @@ static int open_capture(ff_gfx *g, int monitor, RECT *rect, char *err)
     g->fmt = want;
     g->w = dd.ModeDesc.Width;
     g->h = dd.ModeDesc.Height;
-    /* у повёрнутого монитора поверхность лежит в ориентации панели, а окно и шейдер этого не учитывают:
-     * вместо мусора поверх экрана остановка с понятной ошибкой */
-    if (dd.Rotation != DXGI_MODE_ROTATION_IDENTITY && dd.Rotation != DXGI_MODE_ROTATION_UNSPECIFIED) {
-        FAILMSG("rotated monitors are not supported, set the display orientation to landscape");
+    g->ow = g->w;
+    g->oh = g->h;
+    /* у повёрнутого монитора поверхность лежит в ориентации панели, а окно и цепочка в ориентации рабочего стола:
+     * размер рабочего стола берётся у системы, кадр это он же, повёрнутый обратно */
+    g->rot = dd.Rotation == DXGI_MODE_ROTATION_ROTATE90 ? 1 : dd.Rotation == DXGI_MODE_ROTATION_ROTATE180 ? 2
+             : dd.Rotation == DXGI_MODE_ROTATION_ROTATE270 ? 3 : 0;
+    if (g->rot & 1) {
+        g->ow = (UINT)(rect->right - rect->left);
+        g->oh = (UINT)(rect->bottom - rect->top);
+        g->w = g->oh;
+        g->h = g->ow;
     }
 
     if (make_frames(g, err) != 0) {
@@ -153,7 +160,7 @@ static int open_window(ff_gfx *g, const RECT *rect, char *err)
     g->hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TRANSPARENT
                                   | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
                               OVERLAY_CLASS, L"fringefix", WS_POPUP, rect->left, rect->top,
-                              (int)g->w, (int)g->h, NULL, NULL, GetModuleHandleW(NULL), NULL);
+                              (int)g->ow, (int)g->oh, NULL, NULL, GetModuleHandleW(NULL), NULL);
     if (!g->hwnd) {
         snprintf(err, GFX_ERR_LEN, "CreateWindowEx failed (%lu)", GetLastError());
         return -1;
@@ -221,8 +228,8 @@ static int open_swapchain(ff_gfx *g, const ff_config *cfg, char *err)
     TRY(IDXGIAdapter_GetParent(ad, &IID_IDXGIFactory2, (void **)&fac), "GetParent");
 
     memset(&sd, 0, sizeof sd);
-    sd.Width = g->w;
-    sd.Height = g->h;
+    sd.Width = g->ow;
+    sd.Height = g->oh;
     sd.Format = g->fmt;
     sd.SampleDesc.Count = 1;
     sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -388,6 +395,7 @@ int gfx_init(ff_gfx *g, const ff_config *cfg, char *err)
 
     memset(g, 0, sizeof *g);
     err[0] = '\0';
+    g->mon = cfg->monitor;
     if (open_capture(g, cfg->monitor, &rect, err) != 0 || open_window(g, &rect, err) != 0
         || open_swapchain(g, cfg, err) != 0 || open_pipeline(g, err) != 0
         || gfx_sig_open(g, err) != 0) {

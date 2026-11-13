@@ -20,7 +20,7 @@
 #include "ui_state.h"
 
 #define DIAG_W 820
-#define DIAG_H 548
+#define DIAG_H 584
 #define TICK_MS 250
 #define TIMER_ID 1
 /* прогон: выключенный фильтр для базового потребления, затем три движка; сначала разогрев, потом замер */
@@ -33,7 +33,7 @@
 #define LIVE_MS 4000.0
 
 enum { ID_D_ENGINE = 800, ID_D_FORCE, ID_D_RUN, ID_D_SAVE, ID_D_CLOSE, ID_D_PRESENT, ID_D_PRIO, ID_D_HUD,
-       ID_D_KEEP, ID_D_REVERT, ID_D_TRIALTXT, ID_D_CORNER };
+       ID_D_KEEP, ID_D_REVERT, ID_D_TRIALTXT, ID_D_CORNER, ID_D_ROT };
 
 /* приоритет GPU в списке: значения из ini ближе всего к одному из пунктов */
 static const int PRIO_VALUES[5] = { -7, -3, 0, 3, 7 };
@@ -153,18 +153,19 @@ static void paint(HWND h)
     bench_get_variant_info(&p_req, &p_eff, &q_req, &q_eff, vnote, sizeof vnote);
 
     /* параметры лежат на карточке с отступом 16 от краёв окна, как в остальных окнах программы */
-    paint_card(dc, ui.dpi, 16, 16, DIAG_W - 32, 134, ff_tr(S_DIAG_PARAMS));
+    paint_card(dc, ui.dpi, 16, 16, DIAG_W - 32, 170, ff_tr(S_DIAG_PARAMS));
     SelectObject(dc, paint_font());
     text(dc, S(30), S(49), ff_tr(S_ENGINE), pal->fg);
     text(dc, S(30), S(85), ff_tr(S_DIAG_PRESENT), pal->fg);
     text(dc, S(410), S(85), ff_tr(S_DIAG_PRIO), pal->fg);
     text(dc, S(410), S(121), ff_tr(S_DIAG_CORNER), pal->fg);
+    text(dc, S(30), S(157), ff_tr(S_DIAG_ROT), pal->fg);
 
     /* пока идёт проба, под подсказкой плашка с кнопками, а состояние и итоги уезжают вниз */
     off = ff_trial_active(&g_trial) ? S(72) : 0;
 
     /* строки состояния: прогон или откат, что действует на самом деле, нет NVML */
-    y = S(240) + off;
+    y = S(276) + off;
     if (g_status[0]) {
         text(dc, S(16), y, g_status, pal->accent);
     }
@@ -188,7 +189,7 @@ static void paint(HWND h)
     }
 
     /* итоги прогона */
-    y = S(318) + off;
+    y = S(354) + off;
     text(dc, S(16), y, ff_tr(S_DIAG_TABLE), pal->fg);
     SelectObject(dc, g_mono);
     _snwprintf(line, 260, L"%-8ls %7ls %8ls %7ls %8ls %9ls %8ls %7ls %6ls %7ls %5ls %6ls", L"mode", L"cyc/s",
@@ -556,6 +557,19 @@ static void on_command(int id, int code)
             }
             app_wake(ui.app);
         }
+    } else if (id == ID_D_ROT && code == CBN_SELCHANGE) {
+        /* режим поворота не пробная настройка, как и угол панели: действует сразу */
+        int sel = (int)SendMessageW(GetDlgItem(g_win, ID_D_ROT), CB_GETCURSEL, 0, 0);
+
+        if (sel == 0 || sel == 1) {
+            ui.app->cfg.rot_mode = sel;
+            if (!ff_trial_active(&g_trial)) {
+                app_save(ui.app);
+            }
+            app_apply(ui.app);
+            /* ползунки главного окна теперь правят другой набор */
+            ui_settings_refresh();
+        }
     } else if (id == ID_D_HUD) {
         bench_set_hud(SendMessageW(GetDlgItem(g_win, ID_D_HUD), BM_GETCHECK, 0, 0) == BST_CHECKED);
         app_wake(ui.app);
@@ -701,6 +715,15 @@ void ui_bench_show(ff_app *a)
         }
         SendMessageW(corner, CB_SETCURSEL, (WPARAM)ui.app->cfg.hud_corner, 0);
     }
+    {
+        static const str_id ROTS[] = { S_ROT_A, S_ROT_B };
+        HWND rot = child(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 130, 152, 520, 200, ID_D_ROT);
+
+        for (i = 0; i < 2; i++) {
+            SendMessageW(rot, CB_ADDSTRING, 0, (LPARAM)ff_tr(ROTS[i]));
+        }
+        SendMessageW(rot, CB_SETCURSEL, (WPARAM)ui.app->cfg.rot_mode, 0);
+    }
     SendMessageW(hud, BM_SETCHECK, BST_CHECKED, 0);
     bench_set_hud(1);
     child(L"BUTTON", ff_tr(S_DIAG_RUN), BS_PUSHBUTTON | WS_TABSTOP, 16, by, bw, 30, ID_D_RUN);
@@ -708,12 +731,12 @@ void ui_bench_show(ff_app *a)
     child(L"BUTTON", ff_tr(S_VER_CLOSE), BS_PUSHBUTTON | WS_TABSTOP, DIAG_W - 16 - 120, by, 120, 30, ID_D_CLOSE);
 
     /* подсказка отдельным статическим текстом, она длиннее строки состояния */
-    child(L"STATIC", ff_tr(S_DIAG_HINT), SS_LEFT, 16, 162, DIAG_W - 32, 64, 0);
+    child(L"STATIC", ff_tr(S_DIAG_HINT), SS_LEFT, 16, 198, DIAG_W - 32, 64, 0);
 
     /* плашка пробы с двумя кнопками скрыта, пока нечего подтверждать */
-    child(L"STATIC", L"", SS_LEFT, 16, 240, DIAG_W - 32, 34, ID_D_TRIALTXT);
-    child(L"BUTTON", ff_tr(S_DIAG_KEEP), BS_PUSHBUTTON | WS_TABSTOP, 16, 278, 120, 28, ID_D_KEEP);
-    child(L"BUTTON", ff_tr(S_DIAG_REVERT), BS_PUSHBUTTON | WS_TABSTOP, 144, 278, 120, 28, ID_D_REVERT);
+    child(L"STATIC", L"", SS_LEFT, 16, 276, DIAG_W - 32, 34, ID_D_TRIALTXT);
+    child(L"BUTTON", ff_tr(S_DIAG_KEEP), BS_PUSHBUTTON | WS_TABSTOP, 16, 314, 120, 28, ID_D_KEEP);
+    child(L"BUTTON", ff_tr(S_DIAG_REVERT), BS_PUSHBUTTON | WS_TABSTOP, 144, 314, 120, 28, ID_D_REVERT);
     show_trial(0);
 
     bench_set_wanted(1);

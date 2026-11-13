@@ -13,18 +13,35 @@ static const char HLSL[] =
     "cbuffer cb : register(b0) {\n"
     "    float4 shiftRG;\n"   /* rx, ry, gx, gy */
     "    float4 shiftBX;\n"   /* bx, by, sharpen, hdr */
-    "    float4 mode;\n"      /* light, 0, 0, 0 */
+    "    float4 mode;\n"      /* light, поворот рабочего стола 0..3, 0, 0 */
     "};\n"
+    /* size это размер кадра в ориентации панели, dsz размер рабочего стола; повёрнутый рабочий стол это кадр, повёрнутый
+     * по часовой стрелке на mode.y * 90 градусов, поэтому координаты рабочего стола переводятся в координаты кадра */
     "static float2 size;\n"
+    "static float2 dsz;\n"
+    "int2 tc(int2 c) {\n"
+    "    int r = (int)(mode.y + 0.5);\n"
+    "    c = clamp(c, int2(0, 0), int2(dsz) - 1);\n"
+    "    if (r == 1) { return int2(c.y, int(dsz.x) - 1 - c.x); }\n"
+    "    if (r == 2) { return int2(dsz) - 1 - c; }\n"
+    "    if (r == 3) { return int2(int(dsz.y) - 1 - c.y, c.x); }\n"
+    "    return c;\n"
+    "}\n"
+    "float2 tuv(float2 uv) {\n"
+    "    int r = (int)(mode.y + 0.5);\n"
+    "    if (r == 1) { return float2(uv.y, 1.0 - uv.x); }\n"
+    "    if (r == 2) { return 1.0 - uv; }\n"
+    "    if (r == 3) { return float2(1.0 - uv.y, uv.x); }\n"
+    "    return uv;\n"
+    "}\n"
     "float ld(int2 c, int ch) {\n"
-    "    c = clamp(c, int2(0, 0), int2(size) - 1);\n"
-    "    float4 t = src.Load(int3(c, 0));\n"
+    "    float4 t = src.Load(int3(tc(c), 0));\n"
     "    return t[ch];\n"
     "}\n"
     "float chan(float2 pix, float2 s, int ch) {\n"
     "    float2 f = s - round(s);\n"
     "    float2 p = pix - s;\n"
-    "    float4 t = src.SampleLevel(lin, p / size, 0);\n"
+    "    float4 t = src.SampleLevel(lin, tuv(p / dsz), 0);\n"
     "    float v = t[ch];\n"
     "    if (mode.x > 0.5) {\n"
     "        return shiftBX.w > 0.5 ? v : saturate(v);\n"
@@ -65,6 +82,7 @@ static const char HLSL[] =
     "    float w, h;\n"
     "    src.GetDimensions(w, h);\n"
     "    size = float2(w, h);\n"
+    "    dsz = ((int)(mode.y + 0.5) & 1) != 0 ? size.yx : size;\n"
     "    float2 sr = shiftRG.xy, sg = shiftRG.zw, sb = shiftBX.xy;\n"
     /* общий для всех каналов сдвиг не виден, зато доли пикселя становятся меньше */
     "    float2 c = -(min(sr, min(sg, sb)) + max(sr, max(sg, sb))) * 0.5;\n"
@@ -86,8 +104,15 @@ static const char HLSL_EXT[] =
     "};\n"
     /* то же самое готовым окном 3x3 на канал: веса посчитаны на процессоре (kernel.c), шейдер только читает
      * пиксели и умножает. при общей клетке девять пикселей читаются один раз на все три канала */
+    /* координаты рабочего стола в координаты кадра: см. tc в классическом шейдере */
     "float4 ldk(int2 c, uint2 sz) {\n"
-    "    return src.Load(int3(clamp(c, int2(0, 0), int2(sz) - 1), 0));\n"
+    "    int r = (int)(mode.y + 0.5);\n"
+    "    int2 d = (r & 1) != 0 ? int2(sz.y, sz.x) : int2(sz);\n"
+    "    c = clamp(c, int2(0, 0), d - 1);\n"
+    "    if (r == 1) { c = int2(c.y, d.x - 1 - c.x); }\n"
+    "    else if (r == 2) { c = d - 1 - c; }\n"
+    "    else if (r == 3) { c = int2(d.y - 1 - c.y, c.x); }\n"
+    "    return src.Load(int3(c, 0));\n"
     "}\n"
     "float4 psk(float4 pos : SV_Position) : SV_Target {\n"
     "    uint2 sz;\n"
@@ -151,15 +176,16 @@ static const char HLSL_EXT[] =
     "}\n";
 
 /* скомпилированные шейдеры живут до конца процесса: устройство пересоздаётся при каждом выходе из паузы,
- * а сборка расширений движка занимает около 60 мс. вызывается только из потока захвата */
+ * а сборка расширений движка занимает около 60 мс. вызывается из потоков захвата */
 #define CACHE_N 8
 static struct {
     char entry[16];
     ID3DBlob *blob;
 } g_cache[CACHE_N];
+/* потоки захвата разных мониторов собирают шейдеры одновременно при запуске: без замка они разбирали бы кеш наперегонки */
+static SRWLOCK g_cache_lock = SRWLOCK_INIT;
 
-HRESULT ff_shader_compile(const char *entry, const char *target, ID3DBlob **blob, char *err,
-                          size_t err_len)
+static HRESULT compile_locked(const char *entry, const char *target, ID3DBlob **blob, char *err, size_t err_len)
 {
     ID3DBlob *msg = NULL;
     int ext = strcmp(entry, "psk") == 0 || strcmp(entry, "csdiff") == 0;
@@ -192,5 +218,16 @@ HRESULT ff_shader_compile(const char *entry, const char *target, ID3DBlob **blob
     if (msg) {
         ID3D10Blob_Release(msg);
     }
+    return hr;
+}
+
+HRESULT ff_shader_compile(const char *entry, const char *target, ID3DBlob **blob, char *err,
+                          size_t err_len)
+{
+    HRESULT hr;
+
+    AcquireSRWLockExclusive(&g_cache_lock);
+    hr = compile_locked(entry, target, blob, err, err_len);
+    ReleaseSRWLockExclusive(&g_cache_lock);
     return hr;
 }

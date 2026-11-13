@@ -136,8 +136,8 @@ int app_profile_load(ff_app *a, const wchar_t *path)
 {
     char buf[PROFILE_MAX];
     DWORD got = 0;
-    /* профиль относится к монитору, выбранному в окне */
-    ff_view *cur = ff_config_view(&a->cfg, a->cfg.monitor);
+    /* профиль относится к набору, который правится в окне: монитор из списка, а в режиме Б и его ориентация */
+    ff_view *cur = app_edit_view(a);
     ff_view next = *cur;
     HANDLE f = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
                            FILE_ATTRIBUTE_NORMAL, NULL);
@@ -163,7 +163,7 @@ int app_profile_load(ff_app *a, const wchar_t *path)
 int app_profile_save(ff_app *a, const wchar_t *path)
 {
     char buf[PROFILE_MAX];
-    int n = ff_profile_format(ff_config_view_const(&a->cfg, a->cfg.monitor), buf, sizeof buf);
+    int n = ff_profile_format(app_edit_view(a), buf, sizeof buf);
 
     return n < 0 ? -1 : ff_write_file(path, buf, (size_t)n);
 }

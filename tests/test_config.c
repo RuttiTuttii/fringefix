@@ -219,6 +219,38 @@ static void test_views(void)
     CHECK(c.view[2].shift[2][1] == 0.0f && c.view[2].sharpen == 0.0f && c.view[2].enabled == 1);
 }
 
+static void test_rotation_sets(void)
+{
+    ff_config c;
+    ff_config b;
+    char buf[8192];
+
+    /* режим А: любой поворот правит основной вид; режим Б: набор своей ориентации */
+    ff_config_defaults(&c);
+    CHECK(ff_config_view_for(&c, 1, 2) == &c.view[1] && ff_config_view_for(&c, 1, 0) == &c.view[1]);
+    c.rot_mode = 1;
+    CHECK(ff_config_view_for(&c, 1, 0) == &c.view[1] && ff_config_view_for(&c, 1, 1) == &c.rview[1][0]);
+    CHECK(ff_config_view_for(&c, 1, 3) == &c.rview[1][2] && ff_config_view_for(&c, 1, 4) == &c.view[1]);
+    CHECK(ff_config_view_for_const(&c, 0, 2) == &c.rview[0][1]);
+
+    /* круг запись-чтение: режим, наборы и их отсутствие у нетронутых ориентаций */
+    c.rview[0][0].shift[1][0] = 0.75f;
+    c.rview[0][0].sharpen = -0.2f;
+    c.rview[3][2].shift[2][1] = -1.5f;
+    CHECK(ff_config_format(&c, buf, sizeof buf) > 0);
+    CHECK(strstr(buf, "rotation_mode = 1") && strstr(buf, "mon0_r1_green_x") && strstr(buf, "mon3_r3_blue_y"));
+    CHECK(!strstr(buf, "mon0_r2_") && !strstr(buf, "mon1_r"));
+    ff_config_defaults(&b);
+    CHECK(ff_config_parse(buf, &b) > 0);
+    CHECK(b.rot_mode == 1 && memcmp(c.rview, b.rview, sizeof c.rview) == 0);
+
+    /* флаг включения у набора поворота не принимается, номер поворота вне 1..3 тоже; режим вне 0..1 зажимается */
+    ff_config_defaults(&b);
+    CHECK(ff_config_parse("mon0_r1_enabled=1\nmon0_r4_red_x=1\nmon0_r0_red_x=1\n", &b) == 0);
+    CHECK(b.rview[0][0].shift[0][0] == 0.0f && b.view[0].shift[0][0] == 0.0f);
+    CHECK(ff_config_parse("rotation_mode=2\n", &b) == 1 && b.rot_mode == 1);
+}
+
 static void test_junk(void)
 {
     ff_config c;
@@ -290,7 +322,7 @@ static void test_roundtrip(void)
     n = ff_config_format(&a, buf, sizeof buf);
     CHECK(n > 0);
     ff_config_defaults(&b);
-    CHECK(ff_config_parse(buf, &b) == 24);
+    CHECK(ff_config_parse(buf, &b) == 25);
     CHECK(memcmp(&a, &b, sizeof a) == 0);
     /* маленький буфер не должен молча обрезать файл */
     CHECK(ff_config_format(&a, tiny, sizeof tiny) == -1);
@@ -308,6 +340,7 @@ int main(void)
     test_game_keys();
     test_legacy();
     test_views();
+    test_rotation_sets();
     test_junk();
     test_bom();
     test_line_endings();

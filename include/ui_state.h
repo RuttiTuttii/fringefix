@@ -13,9 +13,11 @@ typedef struct {
     HWND slider[IDX_SHARPEN + 1];
     HWND edit[IDX_SHARPEN + 1];
     HWND monitor;
-    /* выключатель фильтра выбранного монитора: ползунок из двух положений и подпись */
+    /* выключатель фильтра выбранного монитора: переключатель в стиле Windows и подпись */
     HWND power;
     HWND power_label;
+    /* круглая кнопка «?» со сведениями о программе */
+    HWND about;
     int dpi;
     /* больше нуля, пока поля правятся из кода: EN_CHANGE тогда не считается вводом пользователя */
     int sync;
@@ -37,20 +39,7 @@ enum {
     ID_SAVE,
     ID_POWER,
     ID_POWER_LABEL,
-    /* пункты меню окна: остальные команды меню повторяют кнопки */
-    ID_M_HIDE = 160,
-    ID_M_QUIT,
-    ID_M_FILTER,
-    ID_M_MASTER,
-    ID_M_OPENDIR,
-    ID_M_APPS,
-    ID_M_DIAG,
-    ID_M_RESHADE,
-    ID_M_CHANGES,
-    ID_M_UPDATE,
-    ID_M_VERSIONS,
-    ID_M_REPORT,
-    ID_M_ABOUT
+    ID_ABOUT
 };
 
 /* создаёт все элементы по таблицам ui_layout.h */

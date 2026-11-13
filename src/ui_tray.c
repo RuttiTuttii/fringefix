@@ -149,6 +149,28 @@ static void toggle(ff_app *a)
     ui_settings_refresh_power();
 }
 
+/* сочетание включения: фильтр выбранного в окне монитора, остальные мониторы не трогаются. пока в игре работает
+ * ReShade-аддон, клавиша принадлежит ему, и действие остаётся общим, как у самого аддона */
+static void toggle_selected(ff_app *a)
+{
+    ff_view *v;
+
+    if (a->suspended && a->pause_addon) {
+        toggle(a);
+        return;
+    }
+    v = ff_config_view(&a->cfg, a->cfg.monitor);
+    v->enabled = !v->enabled;
+    /* включение при выключенном общем выключателе (трей, аддон) иначе осталось бы незаметным */
+    if (v->enabled && !a->enabled) {
+        app_set_enabled(a, 1);
+    }
+    app_retry(a);
+    app_apply(a);
+    tray_notify(a, NIM_MODIFY);
+    ui_settings_refresh_power();
+}
+
 void ui_check_updates(ff_app *a)
 {
     if (!FF_REPO[0]) {
@@ -235,7 +257,7 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
         return 0;
     case WM_HOTKEY:
         if (w == HK_TOGGLE) {
-            toggle(a);
+            toggle_selected(a);
         } else if (w == HK_QUIT) {
             DestroyWindow(h);
         }
@@ -267,6 +289,8 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
         return 0;
     case WM_APP_STATE:
         tray_notify(a, NIM_MODIFY);
+        /* список мониторов в окне показывает поворот и сбой запуска каждого */
+        ui_settings_refresh_power();
         return 0;
     case WM_ENDSESSION:
         /* выключение или выход из сеанса убивает процесс без WM_DESTROY: статистика уходит в файл сейчас */

@@ -96,7 +96,10 @@ static int has_gfx_module(HANDLE proc)
     return 0;
 }
 
-/* игра по признакам процесса; результат на 5 секунд запоминается по pid, перебор модулей не бесплатный */
+/* игра по признакам процесса; результат на 5 секунд запоминается по pid, перебор модулей не бесплатный.
+ * зовётся потоками всех мониторов, пока окно лежит на нескольких сразу (его тащат между экранами), поэтому запись замкнута */
+static SRWLOCK g_cache_lock = SRWLOCK_INIT;
+
 static int is_3d_app(DWORD pid)
 {
     static DWORD cached_pid;
@@ -106,9 +109,16 @@ static int is_3d_app(DWORD pid)
     DWORD len = MAX_PATH;
     HANDLE p;
     int result = 0;
+    int hit = 0;
 
+    AcquireSRWLockExclusive(&g_cache_lock);
     if (pid == cached_pid && GetTickCount64() - cached_at < CACHE_MS) {
-        return cached;
+        result = cached;
+        hit = 1;
+    }
+    ReleaseSRWLockExclusive(&g_cache_lock);
+    if (hit) {
+        return result;
     }
     p = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
     if (p) {
@@ -117,9 +127,11 @@ static int is_3d_app(DWORD pid)
         }
         CloseHandle(p);
     }
+    AcquireSRWLockExclusive(&g_cache_lock);
     cached_pid = pid;
     cached = result;
     cached_at = GetTickCount64();
+    ReleaseSRWLockExclusive(&g_cache_lock);
     return result;
 }
 

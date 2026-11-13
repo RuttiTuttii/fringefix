@@ -5,6 +5,7 @@
 
 #include "app.h"
 #include "bench.h"
+#include "crash.h"
 #include "gamedetect.h"
 #include "gfx.h"
 #include "hud.h"
@@ -45,6 +46,10 @@ typedef struct {
 } worker;
 
 static worker g_workers[FF_MAX_MONITORS];
+
+/* поднятие устройств идёт по одному потоку за раз: создание устройства, дублирование вывода и сборка шейдеров
+ * разных мониторов не должны накладываться, а все остальное работает параллельно */
+static SRWLOCK g_init_lock = SRWLOCK_INIT;
 
 static void pump_messages(void)
 {
@@ -103,6 +108,7 @@ static void flush_counters(ff_gfx *g)
 
 static void shutdown_gfx(worker *w, ff_gfx *g)
 {
+    crash_mark(w->index, "shutdown");
     /* панель замеров принадлежит оверлею: без него её нет */
     if (w->hud_open) {
         hud_sync(NULL, 0);
@@ -174,6 +180,7 @@ static DWORD WINAPI capture_main(LPVOID arg)
     game_state gs;
     char err[GFX_ERR_LEN];
     int started_ok = 0;
+    int ret;
     int lost = 0;
     int force = 0;
     ULONGLONG last_assert = 0;
@@ -203,6 +210,7 @@ static DWORD WINAPI capture_main(LPVOID arg)
         }
 
         /* на паузе устройство и окно не держим: полноэкранная игра снова получает прямой вывод без композиции */
+        crash_mark(idx, "detect");
         update_game_state(w, &gs);
         if (gs.paused) {
             shutdown_gfx(w, &g);
@@ -215,7 +223,11 @@ static DWORD WINAPI capture_main(LPVOID arg)
 
             /* свой монитор потока, а не выбранный в окне */
             snap.monitor = idx;
-            if (gfx_init(&g, &snap, err) != 0) {
+            crash_mark(idx, "init");
+            AcquireSRWLockExclusive(&g_init_lock);
+            ret = gfx_init(&g, &snap, err);
+            ReleaseSRWLockExclusive(&g_init_lock);
+            if (ret != 0) {
                 stats_store_error(err);
                 /* окно диагностики по росту этого счётчика откатывает пробную настройку, не дожидаясь таймера */
                 bench_note_gfx_failure();
@@ -236,6 +248,10 @@ static DWORD WINAPI capture_main(LPVOID arg)
             }
             started_ok = 1;
             ff_output_rect(idx, &gs.mon);
+            /* окну настроек важно знать поворот: в режиме Б от него зависит, какой набор значений на экране */
+            if (InterlockedExchange(&a->rot[idx], g.rot) != g.rot) {
+                PostMessageW(a->hwnd, WM_APP_STATE, 0, 0);
+            }
             InterlockedOr(&a->dirty_mask, bit);
         }
 
@@ -243,7 +259,9 @@ static DWORD WINAPI capture_main(LPVOID arg)
         if (InterlockedAnd(&a->dirty_mask, ~bit) & bit) {
             ff_config c = a->cfg;
 
-            gfx_upload(&g, &c, &c.view[idx]);
+            crash_mark(idx, "upload");
+
+            gfx_upload(&g, &c, ff_config_view_for_const(&c, idx, g.rot));
             force = 1;
         }
         /* панель замеров поверх оверлея выбранного монитора: есть, пока открыто окно диагностики и включена галка */

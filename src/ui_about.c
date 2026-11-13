@@ -20,7 +20,6 @@
 #endif
 
 #define ABOUT_W 480
-#define ABOUT_H 366
 #define CHANGES_W 600
 #define CHANGES_H 520
 #define CHANGES_MAX (96 * 1024)
@@ -30,6 +29,17 @@
 
 enum { ID_AB_CHANGES = 900, ID_AB_SITE, ID_AB_FOLDER, ID_AB_CLOSE, ID_CH_TEXT, ID_CH_CLOSE };
 
+/* высоты абзацев зависят от языка, шрифта и масштаба, поэтому раскладка окна считается по тексту (всё при 96 dpi) */
+typedef struct {
+    int desc_h;
+    int lic_y;
+    int cred_y;
+    int card_h;
+    int btn_y;
+    int win_h;
+} about_lay;
+
+static about_lay g_lay;
 static const wchar_t ABOUT_CLASS[] = L"fringefix_about";
 static const wchar_t CHANGES_CLASS[] = L"fringefix_changes";
 static HWND g_about;
@@ -119,6 +129,31 @@ static void about_command(int id)
     }
 }
 
+/* высота абзаца в 96-х долях при ширине текста окна */
+static int para_h(HDC dc, const wchar_t *text)
+{
+    RECT r;
+
+    SetRect(&r, 0, 0, S(ABOUT_W - 2 * MARGIN - 28), 0);
+    DrawTextW(dc, text, -1, &r, DT_WORDBREAK | DT_NOPREFIX | DT_CALCRECT);
+    return MulDiv(r.bottom, 96, ui.dpi);
+}
+
+static void about_measure(HDC dc)
+{
+    HGDIOBJ old = SelectObject(dc, paint_font());
+    int cred_h;
+
+    g_lay.desc_h = para_h(dc, ff_tr(S_ABOUT_DESC));
+    g_lay.lic_y = 114 + g_lay.desc_h + 10;
+    g_lay.cred_y = g_lay.lic_y + para_h(dc, ff_tr(S_ABOUT_LICENSE)) + 8;
+    cred_h = para_h(dc, ff_tr(S_ABOUT_CREDITS));
+    g_lay.card_h = g_lay.cred_y + cred_h;
+    g_lay.btn_y = 14 + g_lay.card_h + 18;
+    g_lay.win_h = g_lay.btn_y + BTN_H + 10 + BTN_H + 14;
+    SelectObject(dc, old);
+}
+
 static void about_paint(HWND h)
 {
     PAINTSTRUCT ps;
@@ -131,7 +166,7 @@ static void about_paint(HWND h)
     GetClientRect(h, &r);
     FillRect(dc, &r, paint_bg());
     SetBkMode(dc, TRANSPARENT);
-    paint_card(dc, ui.dpi, MARGIN, 14, ABOUT_W - 2 * MARGIN, 252, L"");
+    paint_card(dc, ui.dpi, MARGIN, 14, ABOUT_W - 2 * MARGIN, g_lay.card_h, L"");
     if (icon) {
         DrawIconEx(dc, S(MARGIN + 14), S(30), icon, S(64), S(64), 0, NULL, DI_NORMAL);
         DestroyIcon(icon);
@@ -148,12 +183,12 @@ static void about_paint(HWND h)
     TextOutW(dc, S(MARGIN + 94), S(80), ff_tr(S_ABOUT_AUTHOR), (int)wcslen(ff_tr(S_ABOUT_AUTHOR)));
 
     SetTextColor(dc, p->fg);
-    SetRect(&r, S(MARGIN + 14), S(114), S(ABOUT_W - MARGIN - 14), S(166));
+    SetRect(&r, S(MARGIN + 14), S(114), S(ABOUT_W - MARGIN - 14), S(114 + g_lay.desc_h));
     DrawTextW(dc, ff_tr(S_ABOUT_DESC), -1, &r, DT_WORDBREAK | DT_NOPREFIX);
     SetTextColor(dc, p->muted);
-    SetRect(&r, S(MARGIN + 14), S(168), S(ABOUT_W - MARGIN - 14), S(212));
+    SetRect(&r, S(MARGIN + 14), S(g_lay.lic_y), S(ABOUT_W - MARGIN - 14), S(g_lay.cred_y - 8));
     DrawTextW(dc, ff_tr(S_ABOUT_LICENSE), -1, &r, DT_WORDBREAK | DT_NOPREFIX);
-    SetRect(&r, S(MARGIN + 14), S(214), S(ABOUT_W - MARGIN - 14), S(262));
+    SetRect(&r, S(MARGIN + 14), S(g_lay.cred_y), S(ABOUT_W - MARGIN - 14), S(14 + g_lay.card_h));
     DrawTextW(dc, ff_tr(S_ABOUT_CREDITS), -1, &r, DT_WORDBREAK | DT_NOPREFIX);
     EndPaint(h, &ps);
 }
@@ -192,7 +227,8 @@ void ui_about_show(ff_app *a)
 {
     int bw = 104;
     int gap = 8;
-    int by = 284;
+    int by;
+    HDC dc;
 
     ui.app = a;
     if (g_about) {
@@ -200,7 +236,11 @@ void ui_about_show(ff_app *a)
         return;
     }
     register_class(ABOUT_CLASS, about_proc);
-    g_about = make_window(ABOUT_CLASS, ff_tr(S_ABOUT_TITLE), ABOUT_W, ABOUT_H);
+    dc = GetDC(NULL);
+    about_measure(dc);
+    ReleaseDC(NULL, dc);
+    by = g_lay.btn_y;
+    g_about = make_window(ABOUT_CLASS, ff_tr(S_ABOUT_TITLE), ABOUT_W, g_lay.win_h);
     if (!g_about) {
         return;
     }

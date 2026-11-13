@@ -3,7 +3,6 @@
 #include "i18n.h"
 #include "theme.h"
 #include "ui_layout.h"
-#include "ui_menubar.h"
 #include "ui_paint.h"
 
 #define S(v) MulDiv((v), dpi, 96)
@@ -212,9 +211,7 @@ void paint_window(HWND h, int dpi, const wchar_t *status)
     SetBkMode(dc, TRANSPARENT);
     SelectObject(dc, g_font);
 
-    menubar_paint(dc, dpi, r.right);
-    SelectObject(dc, g_font);
-    text(dc, S(MARGIN), S(MENU_H + 8), ff_tr(S_HINT), p->muted);
+    text(dc, S(MARGIN), S(10), ff_tr(S_HINT), p->muted);
     for (i = 0; i < NCARDS; i++) {
         paint_card(dc, dpi, MARGIN, card_y(i), CARD_W, card_h(i), ff_tr(CARDS[i].title));
     }
@@ -229,5 +226,39 @@ void paint_window(HWND h, int dpi, const wchar_t *status)
         }
     }
     text(dc, S(MARGIN), S(STATUS_Y), status, p->muted);
+    /* «О программе» справа в той же строке, круглая кнопка с вопросом стоит за подписью */
+    {
+        const wchar_t *label = ff_tr(S_ABOUT_LABEL);
+        SIZE sz;
+
+        GetTextExtentPoint32W(dc, label, (int)wcslen(label), &sz);
+        text(dc, S(MARGIN + CARD_W - ABOUT_D - 8) - sz.cx, S(STATUS_Y), label, p->muted);
+    }
     EndPaint(h, &ps);
+}
+
+void paint_about_button(const DRAWITEMSTRUCT *d)
+{
+    const ff_palette *p = theme_get();
+    HBRUSH fill = CreateSolidBrush((d->itemState & ODS_SELECTED) ? mix(p->accent, RGB(0, 0, 0), 60) : p->accent);
+    HGDIOBJ ob;
+    HGDIOBJ op;
+    RECT r = d->rcItem;
+
+    FillRect(d->hDC, &r, g_bg);
+    ob = SelectObject(d->hDC, fill);
+    op = SelectObject(d->hDC, GetStockObject(NULL_PEN));
+    Ellipse(d->hDC, r.left, r.top, r.right, r.bottom);
+    SelectObject(d->hDC, op);
+    SelectObject(d->hDC, ob);
+    DeleteObject(fill);
+    SelectObject(d->hDC, g_bold);
+    SetBkMode(d->hDC, TRANSPARENT);
+    SetTextColor(d->hDC, RGB(255, 255, 255));
+    DrawTextW(d->hDC, L"?", 1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    SelectObject(d->hDC, g_font);
+    if (d->itemState & ODS_FOCUS) {
+        InflateRect(&r, 2, 2);
+        DrawFocusRect(d->hDC, &r);
+    }
 }

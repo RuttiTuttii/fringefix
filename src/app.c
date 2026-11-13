@@ -93,6 +93,11 @@ int app_monitor_failed(const ff_app *a, int index)
     return (a->fail_mask & (1L << index)) != 0;
 }
 
+ff_view *app_edit_view(ff_app *a)
+{
+    return ff_config_view_for(&a->cfg, a->cfg.monitor, (int)a->rot[a->cfg.monitor]);
+}
+
 int app_monitor_active(const ff_app *a, int index)
 {
     return a->enabled && ff_config_view_const(&a->cfg, index)->enabled && !app_monitor_failed(a, index);
