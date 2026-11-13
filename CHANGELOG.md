@@ -2,15 +2,30 @@
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow the `vX.Y.Z` tags. Betas carry `-beta.N`.
 
-## v0.8.0-beta.2 (2026-11-11)
+## v0.8.0-beta.2 (2026-11-13)
 
 ### Added
 
 - a "Panel position" list in the diagnostics window: the measurement panel goes to any of the four corners of the monitor (the `hud_corner` key) so that it does not collide with, for example, the MSI Afterburner counter
+- screen rotation: a monitor turned in Windows (portrait, flipped landscape) is filtered instead of stopping with an error; the "Screen rotation" list of the diagnostics window chooses mode A (the landscape settings, shift vectors rotate together with the panel) or mode B (a separate set of settings for each orientation, `rotation_mode` and `mon0_r1_red_x` keys); the monitor list marks a rotated monitor with the angle
+- the "?" button next to the version line opens the "About" window
+- `crash.log` in `%APPDATA%\fringefix`: after a crash it holds the exception, the address in the exe and the last step of each capture thread
+
+### Changed
+
+- the filter switch moved to the very bottom of the settings window and looks like a Windows switch; it acts only on the monitor chosen in the list
+- `F10` toggles the filter of the selected monitor only; while the ReShade add-on works in a game it still acts on all monitors
+- the "Image" card went under the "Blue" card as in the old versions
+- the description in the "About" window is rewritten
+
+### Removed
+
+- the menu bar of the settings window; "What's new..." and the settings folder stay in the "About" window
 
 ### Fixed
 
 - when the program, app filter, About and What's new windows are moved to a monitor with another Windows scale they are recreated in the new scale
+- capture threads of different monitors no longer build shaders and create devices at the same time, and the shader cache and the 3D-app cache are guarded by a lock; the crash on dragging a window between two filtered monitors was not reproduced, `crash.log` will show its place if it remains
 
 ## v0.8.0-beta.1 (2026-11-11)
 
