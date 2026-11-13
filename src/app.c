@@ -125,6 +125,13 @@ int app_save(ff_app *a)
     return n < 0 ? -1 : ff_write_file(a->ini, buf, (size_t)n);
 }
 
+void app_save_toggle(ff_app *a)
+{
+    if (bench_trial_left() < 0) {
+        app_save(a);
+    }
+}
+
 void app_retry(ff_app *a)
 {
     InterlockedExchange(&a->fail_mask, 0);

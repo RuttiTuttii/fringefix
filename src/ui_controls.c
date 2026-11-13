@@ -22,6 +22,12 @@ static ff_view *cur_view(void)
     return app_edit_view(ui.app);
 }
 
+/* флаг включения лежит только в основном наборе монитора: у наборов поворота режима Б он не используется */
+static ff_view *power_view(void)
+{
+    return ff_config_view(&ui.app->cfg, ui.app->cfg.monitor);
+}
+
 static float *row_value(int idx)
 {
     ff_view *v = cur_view();
@@ -35,7 +41,22 @@ static int g_nout;
 /* поворот выбранного монитора, при котором в поля положены значения: в режиме Б при смене поворота набор другой */
 static int g_rot_seen = -1;
 
-/* список мониторов с пометкой, где фильтр включён; выбран монитор из настроек */
+/* что на самом деле происходит с фильтром монитора: выключатель монитора, ошибка запуска, общий выключатель, пауза игры */
+static str_id monitor_tag(int i)
+{
+    if (!ui.app->cfg.view[i].enabled) {
+        return S_MON_TAG_OFF;
+    }
+    if (app_monitor_failed(ui.app, i)) {
+        return S_MON_TAG_FAILED;
+    }
+    if (!ui.app->enabled) {
+        return S_MON_TAG_MASTER;
+    }
+    return (ui.app->susp_mask & (1L << i)) ? S_MON_TAG_PAUSED : S_MON_TAG_ON;
+}
+
+/* список мониторов с пометкой, что с фильтром на каждом; выбран монитор из настроек */
 static void fill_monitors(void)
 {
     int i;
@@ -49,9 +70,7 @@ static void fill_monitors(void)
         if (ui.app->rot[i]) {
             _snwprintf(rot, sizeof rot / sizeof rot[0], L", %ls %ld\u00b0", ff_tr(S_MON_ROT), ui.app->rot[i] * 90L);
         }
-        _snwprintf(item, sizeof item / sizeof item[0], L"%ls  [%ls%ls]", g_names[i],
-                   ff_tr(ui.app->cfg.view[i].enabled && !app_monitor_failed(ui.app, i) ? S_MON_TAG_ON
-                                                                                       : S_MON_TAG_OFF), rot);
+        _snwprintf(item, sizeof item / sizeof item[0], L"%ls  [%ls%ls]", g_names[i], ff_tr(monitor_tag(i)), rot);
         item[sizeof item / sizeof item[0] - 1] = L'\0';
         SendMessageW(ui.monitor, CB_ADDSTRING, 0, (LPARAM)item);
     }
@@ -101,7 +120,7 @@ void ctl_sync(void)
  * ползунок хранит выбор этого монитора, а общий выключатель действует поверх всех */
 void ctl_sync_power(void)
 {
-    int on = cur_view()->enabled != 0;
+    int on = power_view()->enabled != 0;
     const wchar_t *state = ff_tr(on ? S_STATE_ON : S_STATE_OFF);
     wchar_t label[96];
 
@@ -114,6 +133,8 @@ void ctl_sync_power(void)
         state = ff_tr(S_STATE_FAILED);
     } else if (on && !ui.app->enabled) {
         state = ff_tr(S_FILTER_MASTER_OFF);
+    } else if (on && (ui.app->susp_mask & (1L << ui.app->cfg.monitor))) {
+        state = ff_tr(S_STATE_PAUSED);
     }
     _snwprintf(label, sizeof label / sizeof label[0], L"%ls: %ls", ff_tr(S_FILTER), state);
     SetWindowTextW(ui.power_label, label);
@@ -163,7 +184,8 @@ void ctl_reset(void)
 
 void ctl_power_changed(void)
 {
-    cur_view()->enabled = (int)SendMessageW(ui.power, FFS_GETPOS, 0, 0);
+    power_view()->enabled = (int)SendMessageW(ui.power, FFS_GETPOS, 0, 0);
+    app_save_toggle(ui.app);
     /* включение даёт монитору, упавшему при запуске, новую попытку */
     app_retry(ui.app);
     ctl_sync_power();

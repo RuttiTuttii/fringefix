@@ -161,6 +161,7 @@ static void toggle_selected(ff_app *a)
     }
     v = ff_config_view(&a->cfg, a->cfg.monitor);
     v->enabled = !v->enabled;
+    app_save_toggle(a);
     /* включение при выключенном общем выключателе (трей, аддон) иначе осталось бы незаметным */
     if (v->enabled && !a->enabled) {
         app_set_enabled(a, 1);
