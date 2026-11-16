@@ -15,6 +15,8 @@
 #define STACK_GUARANTEE (96 * 1024)
 /* исключения, которые драйверы и библиотеки глотают штатно, в журнале шумят: пишем только первые */
 #define FIRST_CHANCE_BUDGET 64
+/* сколько раз подряд программа сама поднимается после сбоя; ручной запуск обнуляет счёт */
+#define MAX_RELAUNCH 3
 
 static const char *volatile g_stage[FF_MAX_MONITORS];
 static volatile DWORD g_tid[FF_MAX_MONITORS];
@@ -22,6 +24,7 @@ static wchar_t g_path[MAX_PATH];
 static wchar_t g_dump[MAX_PATH];
 static volatile LONG g_budget = FIRST_CHANCE_BUDGET;
 static volatile LONG g_busy;
+static int g_crashes;
 
 void crash_mark(int worker, const char *stage)
 {
@@ -211,6 +214,36 @@ static void write_dump(EXCEPTION_POINTERS *ep)
     ff_log(-1, "minidump %s, last error %lu", ok ? "written to crash.dmp" : "failed", ok ? 0UL : GetLastError());
 }
 
+/* сбой внутри чужого кода (хуки оверлеев правят dxgi.dll прямо в процессе) нам не починить, но без перезапуска
+ * фильтр пропадает до ручного запуска. процесс-преемник ждёт освобождения мьютекса единственного экземпляра сам (--relaunch) */
+static int relaunch(void)
+{
+    wchar_t exe[MAX_PATH];
+    wchar_t cmd[MAX_PATH + 48];
+    STARTUPINFOW si;
+    PROCESS_INFORMATION pi;
+
+    if (g_crashes >= MAX_RELAUNCH) {
+        ff_log(-1, "relaunch skipped: %d crashes in a row", g_crashes);
+        return 0;
+    }
+    if (GetModuleFileNameW(NULL, exe, MAX_PATH) == 0) {
+        return 0;
+    }
+    _snwprintf(cmd, sizeof cmd / sizeof cmd[0], L"\"%ls\" --relaunch --crashes=%d", exe, g_crashes + 1);
+    cmd[sizeof cmd / sizeof cmd[0] - 1] = L'\0';
+    memset(&si, 0, sizeof si);
+    si.cb = sizeof si;
+    if (!CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+        ff_log(-1, "relaunch failed (%lu)", GetLastError());
+        return 0;
+    }
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    ff_log(-1, "relaunched after the crash (%d of %d)", g_crashes + 1, MAX_RELAUNCH);
+    return 1;
+}
+
 static void on_abort(int sig)
 {
     int i;
@@ -315,11 +348,18 @@ static LONG WINAPI filter(EXCEPTION_POINTERS *ep)
         CloseHandle(f);
     }
     write_dump(ep);
+    /* после своего запуска процесс завершается сам: системное окно сбоя поверх игры не нужно */
+    if (relaunch()) {
+        TerminateProcess(GetCurrentProcess(), er->ExceptionCode);
+    }
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
 void crash_install(void)
 {
+    const wchar_t *opt = wcsstr(GetCommandLineW(), L"--crashes=");
+
+    g_crashes = opt ? _wtoi(opt + 10) : 0;
     ff_log_path(L"crash.log", g_path);
     ff_log_path(L"crash.dmp", g_dump);
     crash_guard_stack();

@@ -15,6 +15,10 @@ void ff_log_shutdown(void);
 /* mon это номер выхода монитора или -1, если событие общее */
 void ff_log(int mon, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 
+/* имена всех модулей процесса в журнал, по строке на ~400 символов: по ним видно, кто подцепился к процессу
+ * (оверлеи вроде RTSS и NVIDIA, хуки шрифтов, прокси dxgi.dll). инжекторы приходят позже старта, поэтому зовётся не один раз */
+void ff_log_modules(const char *why);
+
 /* путь файла name в папке настроек; папка создаётся. без APPDATA файл ложится в текущую папку */
 void ff_log_path(const wchar_t *name, wchar_t out[MAX_PATH]);
 

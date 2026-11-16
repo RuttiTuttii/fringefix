@@ -203,6 +203,7 @@ static DWORD WINAPI capture_main(LPVOID arg)
     ULONGLONG next_beat = GetTickCount64() + BEAT_MS;
     ULONGLONG frames = 0;
     int was_active = -1;
+    int modules_logged = 0;
 
     crash_guard_stack();
     ff_log(idx, "worker started");
@@ -213,6 +214,18 @@ static DWORD WINAPI capture_main(LPVOID arg)
 
         /* окно оверлея принадлежит этому потоку, его сообщения разбираем здесь */
         pump_messages();
+
+        /* в начале цикла, а не в конце: поток, который крутится в повторах запуска или на паузе, тоже должен быть слышен */
+        if (GetTickCount64() >= next_beat) {
+            next_beat = GetTickCount64() + BEAT_MS;
+            ff_log(idx, "alive: device %s, paused %d, active %d, frames drawn %llu, stage %s", g.alive ? "up" : "down",
+                   gs.paused, active, (unsigned long long)frames, crash_stage(idx));
+            /* оверлеи и хуки цепляются к процессу не сразу: повторный список через минуту после старта */
+            if (idx == 0 && !modules_logged) {
+                modules_logged = 1;
+                ff_log_modules("after 1 min");
+            }
+        }
 
         if (active != was_active) {
             ff_log(idx, "filter %s", active ? "on" : "off");
@@ -308,11 +321,6 @@ static DWORD WINAPI capture_main(LPVOID arg)
             next_flush = GetTickCount64() + FLUSH_MS;
             frames += g.drawn;
             flush_counters(&g);
-        }
-        if (GetTickCount64() >= next_beat) {
-            next_beat = GetTickCount64() + BEAT_MS;
-            ff_log(idx, "alive: device %s, paused %d, frames drawn %llu, stage %s", g.alive ? "up" : "down", gs.paused,
-                   (unsigned long long)frames, crash_stage(idx));
         }
         /* файл статистики один на программу: пишет первый поток */
         if (idx == 0 && GetTickCount64() >= next_save) {

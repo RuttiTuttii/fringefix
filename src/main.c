@@ -55,6 +55,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show)
     }
     ff_log_init();
     crash_install();
+    ff_log_modules("start");
     update_cleanup();
     /* до загрузки настроек язык берётся у системы, чтобы сообщение об ошибке было понятным */
     ui_language_apply(0);

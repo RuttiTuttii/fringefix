@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <psapi.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -61,6 +62,52 @@ void ff_log(int mon, const char *fmt, ...)
     line[n++] = '\r';
     line[n++] = '\n';
     WriteFile(g_file, line, (DWORD)n, &w, NULL);
+}
+
+void ff_log_modules(const char *why)
+{
+    HMODULE mods[1024];
+    DWORD need = 0;
+    DWORD i;
+    DWORD n;
+    char line[400];
+    size_t used = 0;
+
+    if (!EnumProcessModulesEx(GetCurrentProcess(), mods, sizeof mods, &need, LIST_MODULES_ALL)) {
+        ff_log(-1, "modules (%s): enumeration failed (%lu)", why, GetLastError());
+        return;
+    }
+    n = need / sizeof(HMODULE);
+    if (n > 1024) {
+        n = 1024;
+    }
+    ff_log(-1, "modules (%s): %lu loaded", why, n);
+    line[0] = '\0';
+    for (i = 0; i < n; i++) {
+        wchar_t w[MAX_PATH];
+        char name[96];
+        const wchar_t *slash;
+        int len;
+
+        if (GetModuleFileNameW(mods[i], w, MAX_PATH) == 0) {
+            continue;
+        }
+        slash = wcsrchr(w, L'\\');
+        len = WideCharToMultiByte(CP_UTF8, 0, slash ? slash + 1 : w, -1, name, sizeof name - 1, NULL, NULL);
+        if (len <= 0) {
+            continue;
+        }
+        name[len < (int)sizeof name ? len : (int)sizeof name - 1] = '\0';
+        if (used + strlen(name) + 3 >= sizeof line) {
+            ff_log(-1, "  %s", line);
+            line[0] = '\0';
+            used = 0;
+        }
+        used += (size_t)snprintf(line + used, sizeof line - used, "%s ", name);
+    }
+    if (used > 0) {
+        ff_log(-1, "  %s", line);
+    }
 }
 
 void ff_log_init(void)

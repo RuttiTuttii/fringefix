@@ -2,6 +2,14 @@
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow the `vX.Y.Z` tags. Betas carry `-beta.N`.
 
+## Unreleased
+
+### Added
+
+- after a crash the program starts again by itself, at most three times in a row (a manual start resets the count); the log has a line about it
+- `fringefix.log` lists the names of all modules of the process at start and a minute after it: it shows the overlays and hooks that attached to the program (RTSS, the NVIDIA overlay, a `dxgi.dll` proxy)
+- the "alive" line of a monitor thread is now written also while the thread retries the device start or sits on pause, and it shows whether the monitor is on
+
 ## v0.8.0-beta.6 (2026-11-17)
 
 ### Added
