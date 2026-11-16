@@ -2,7 +2,7 @@
 
 Формат по [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/), версии по тегам `vX.Y.Z`. Беты помечены `-beta.N`.
 
-## Не выпущено
+## v0.8.0-beta.6 (2026-11-17)
 
 ### Добавлено
 
