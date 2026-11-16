@@ -161,9 +161,16 @@ static void draw(ff_gfx *g)
         LARGE_INTEGER before;
         LARGE_INTEGER after;
 
+        HRESULT hr;
+
         QueryPerformanceCounter(&before);
-        IDXGISwapChain1_Present(g->sc, g->tearing ? 0 : 1, g->tearing ? DXGI_PRESENT_ALLOW_TEARING : 0);
+        hr = IDXGISwapChain1_Present(g->sc, g->tearing ? 0 : 1, g->tearing ? DXGI_PRESENT_ALLOW_TEARING : 0);
         QueryPerformanceCounter(&after);
+        /* не S_OK это окклюзия окна, потеря устройства или сброс драйвера; сам кадр уже нарисован, поэтому только журнал */
+        if (hr != S_OK && g->warns++ < 20) {
+            ff_log(g->mon, "Present returned 0x%08lx, device removed reason 0x%08lx", (unsigned long)hr,
+                   (unsigned long)ID3D11Device_GetDeviceRemovedReason(g->dev));
+        }
         gfx_prof_present(g, before.QuadPart, after.QuadPart);
     }
     g->drawn++;

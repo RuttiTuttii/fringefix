@@ -204,6 +204,7 @@ static DWORD WINAPI capture_main(LPVOID arg)
     ULONGLONG frames = 0;
     int was_active = -1;
 
+    crash_guard_stack();
     ff_log(idx, "worker started");
     memset(&g, 0, sizeof g);
     memset(&gs, 0, sizeof gs);
@@ -310,8 +311,8 @@ static DWORD WINAPI capture_main(LPVOID arg)
         }
         if (GetTickCount64() >= next_beat) {
             next_beat = GetTickCount64() + BEAT_MS;
-            ff_log(idx, "alive: device %s, paused %d, frames drawn %llu", g.alive ? "up" : "down", gs.paused,
-                   (unsigned long long)frames);
+            ff_log(idx, "alive: device %s, paused %d, frames drawn %llu, stage %s", g.alive ? "up" : "down", gs.paused,
+                   (unsigned long long)frames, crash_stage(idx));
         }
         /* файл статистики один на программу: пишет первый поток */
         if (idx == 0 && GetTickCount64() >= next_save) {

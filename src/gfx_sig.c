@@ -6,6 +6,7 @@
 
 #include "gfx.h"
 #include "com.h"
+#include "log.h"
 #include "shader.h"
 
 int gfx_sig_open(ff_gfx *g, char *err)
@@ -80,6 +81,7 @@ int gfx_sig_diff(ff_gfx *g, int *changed)
     D3D11_MAPPED_SUBRESOURCE m;
     ID3D11ShaderResourceView *srvs[2];
     ID3D11ShaderResourceView *none[2] = { NULL, NULL };
+    HRESULT hr;
     UINT x;
     UINT y;
 
@@ -114,8 +116,12 @@ int gfx_sig_diff(ff_gfx *g, int *changed)
     gfx_prof_mark(g, 2);
     ID3D11DeviceContext_CopyResource(g->ctx, (ID3D11Resource *)g->sig_stage,
                                      (ID3D11Resource *)g->sig_tex);
-    if (FAILED(ID3D11DeviceContext_Map(g->ctx, (ID3D11Resource *)g->sig_stage, 0, D3D11_MAP_READ, 0,
-                                       &m))) {
+    hr = ID3D11DeviceContext_Map(g->ctx, (ID3D11Resource *)g->sig_stage, 0, D3D11_MAP_READ, 0, &m);
+    if (FAILED(hr)) {
+        if (g->warns++ < 20) {
+            ff_log(g->mon, "Map of the compare texture failed 0x%08lx, device removed reason 0x%08lx", (unsigned long)hr,
+                   (unsigned long)ID3D11Device_GetDeviceRemovedReason(g->dev));
+        }
         return -1;
     }
     *changed = 0;

@@ -167,7 +167,7 @@ static int open_window(ff_gfx *g, const RECT *rect, char *err)
     }
     SetLayeredWindowAttributes(g->hwnd, 0, 255, LWA_ALPHA);
     if (!SetWindowDisplayAffinity(g->hwnd, WDA_EXCLUDEFROMCAPTURE)) {
-        snprintf(err, GFX_ERR_LEN, "SetWindowDisplayAffinity failed, need Windows 10 2004+");
+        snprintf(err, GFX_ERR_LEN, "SetWindowDisplayAffinity failed (%lu), need Windows 10 2004+", GetLastError());
         return -1;
     }
     return 0;

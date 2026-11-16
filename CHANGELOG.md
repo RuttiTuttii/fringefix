@@ -2,6 +2,14 @@
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow the `vX.Y.Z` tags. Betas carry `-beta.N`.
 
+## Unreleased
+
+### Added
+
+- on a crash `crash.log` now has the exception name (for example `ACCESS_VIOLATION`, `STACK_OVERFLOW`, `HEAP_CORRUPTION`), `GetLastError`, the registers, the address and the kind of access, and where the other capture threads are at that moment (address in a module and return addresses from the exe); a `crash.dmp` with the stacks of all threads is written next to it
+- `fringefix.log` gets the exceptions that a driver or a library swallows by itself (the first 64: code, module with offset, thread and its step); a stack overflow is always written, and threads keep a stack reserve for the write
+- return codes that used to be lost: `Present` not `S_OK`, a failed read of the frame compare texture, a frame format change, a failed rebuild; each with the device removal reason (`GetDeviceRemovedReason`); the "alive" line of a thread now carries its step
+
 ## v0.8.0-beta.5 (2026-11-17)
 
 ### Added
