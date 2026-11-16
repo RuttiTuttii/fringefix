@@ -198,6 +198,10 @@ static int parse_line(char *line, ff_config *cfg)
         return 0;
     }
 
+    /* имя выхода монитора: mon1_device = \\.\DISPLAY2 */
+    if (strncmp(key, "mon", 3) == 0 && key[3] >= '0' && key[3] <= '9' && strcmp(key + 4, "_device") == 0) {
+        return key[3] - '0' < FF_MAX_MONITORS && copy_string(val, cfg->device[key[3] - '0'], FF_DEVICE_LEN);
+    }
     if (parse_view_key(key, cfg, &v, val)) {
         return v >= 0.0 ? 1 : 0;
     }
@@ -221,6 +225,13 @@ static int parse_line(char *line, ff_config *cfg)
             return 0;
         }
         cfg->auto_pause = (int)v;
+        return 1;
+    }
+    if (strcmp(key, "pause_all_monitors") == 0) {
+        if (!parse_number(val, 0.0, 1.0, &v)) {
+            return 0;
+        }
+        cfg->pause_all = v >= 0.5;
         return 1;
     }
     /* облегчённого режима больше нет: ключ из старых файлов принимается и ничего не меняет */
@@ -397,6 +408,13 @@ int ff_config_format(const ff_config *cfg, char *buf, size_t n)
             }
             pos += (size_t)w;
         }
+        if (cfg->device[m][0]) {
+            w = snprintf(buf + pos, n - pos, "mon%d_device = %s\n", m, cfg->device[m]);
+            if (w < 0 || pos + (size_t)w >= n) {
+                return -1;
+            }
+            pos += (size_t)w;
+        }
         /* наборы режима Б: только непустые */
         for (r = 1; r <= 3; r++) {
             const ff_view *rv = &cfg->rview[m][r - 1];
@@ -425,6 +443,7 @@ int ff_config_format(const ff_config *cfg, char *buf, size_t n)
         "; F1-F24 или буква и цифра с Ctrl, Alt, Shift, Win через плюс, none выключает\n"
         "hotkey_toggle = %s\nhotkey_quit = %s\n"
         "\n; автопауза: 0 выключена, 1 в полноэкранных приложениях, 2 в полноэкранных и 3D-приложениях, 3 только в 3D-приложениях\nauto_pause = %d\n"
+        "\n; где действует автопауза: 0 на мониторе с приложением, 1 на всех мониторах\npause_all_monitors = %d\n"
         "\n; приоритет GPU оверлея от -7 до 7, ниже ноля уступает видеокарту игре\ngpu_priority = %d\n"
         "\n; имена exe через точку с запятой: всегда на паузу (pause_apps) и никогда не на паузу, то есть фильтр применяется всегда (ignore_apps)\npause_apps = %s\nignore_apps = %s\n"
         "\n; язык интерфейса: 0 как в системе, 1 русский, 2 английский\nlanguage = %d\n"
@@ -434,7 +453,7 @@ int ff_config_format(const ff_config *cfg, char *buf, size_t n)
         "\n; способ вывода кадра (бета): 0 с ожиданием вертикальной синхронизации, 1 без ожидания (tearing)\npresent_mode = %d\n"
         "\n; угол монитора для панели замеров: 0 слева сверху, 1 справа сверху, 2 слева снизу, 3 справа снизу\nhud_corner = %d\n"
         "\n; последняя папка кнопок ReShade-аддона\nreshade_dir = %s\n",
-        cfg->check_updates, cfg->beta, hk_toggle, hk_quit, cfg->auto_pause, cfg->gpu_priority,
+        cfg->check_updates, cfg->beta, hk_toggle, hk_quit, cfg->auto_pause, cfg->pause_all, cfg->gpu_priority,
         cfg->pause_apps, cfg->ignore_apps, cfg->language, cfg->theme, cfg->stats, cfg->engine, cfg->present_mode, cfg->hud_corner, cfg->reshade_dir);
 
     return (w < 0 || pos + (size_t)w >= n) ? -1 : (int)(pos + (size_t)w);

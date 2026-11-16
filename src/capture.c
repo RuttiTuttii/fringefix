@@ -38,6 +38,8 @@ typedef struct {
     /* открытый сеанс игры для статистики */
     char exe[64];
     int in_game;
+    /* пауза держится игрой на другом мониторе (режим паузы на всех мониторах), своей игры тут нет */
+    int paused_elsewhere;
 } game_state;
 
 /* поток одного монитора: свой захват, оверлей и автопауза; число потоков равно числу выходов на запуске */
@@ -150,6 +152,44 @@ static void refresh_monitor(game_state *s, int index)
     }
 }
 
+/* прямоугольники всех мониторов Windows: паузе на всех мониторах нужны чужие, а не только свой */
+typedef struct {
+    RECT r[FF_MAX_MONITORS];
+    int n;
+} rect_list;
+
+static BOOL CALLBACK collect_rect(HMONITOR m, HDC dc, LPRECT r, LPARAM p)
+{
+    rect_list *l = (rect_list *)p;
+
+    (void)m;
+    (void)dc;
+    if (l->n < FF_MAX_MONITORS) {
+        l->r[l->n++] = *r;
+    }
+    return TRUE;
+}
+
+/* игра или полноэкранное приложение на другом мониторе, чем свой; при pause_all этого достаточно для паузы здесь.
+ * окно, растянутое на несколько мониторов, находит и свой монитор, сюда оно попадает только если свой не покрыт */
+static int detect_elsewhere(const ff_config *c, const RECT *own, int *how, char exe[64])
+{
+    rect_list l;
+    int i;
+
+    l.n = 0;
+    EnumDisplayMonitors(NULL, NULL, collect_rect, (LPARAM)&l);
+    for (i = 0; i < l.n; i++) {
+        if (memcmp(&l.r[i], own, sizeof *own) != 0) {
+            *how = game_detect(c, &l.r[i], exe);
+            if (*how != GAME_NONE) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 /* раз в DETECT_MS спрашивает, не игра ли на переднем плане этого монитора, и ставит паузу.
  * процесс с ReShade-аддоном ставит паузу при любых настройках: фильтр в нём рисует аддон */
 static void update_game_state(worker *w, game_state *s)
@@ -160,6 +200,7 @@ static void update_game_state(worker *w, game_state *s)
     ff_config c = a->cfg;
     char exe[64];
     int how;
+    int elsewhere = 0;
 
     if (now < s->next) {
         return;
@@ -167,18 +208,28 @@ static void update_game_state(worker *w, game_state *s)
     s->next = now + DETECT_MS;
     refresh_monitor(s, w->index);
     how = game_detect(&c, &s->mon, exe);
+    if (how == GAME_NONE && c.pause_all && detect_elsewhere(&c, &s->mon, &how, exe)) {
+        elsewhere = 1;
+    }
     if (how != GAME_NONE) {
         s->clear = 0;
         InterlockedExchange(&a->pause_addon, how == GAME_ADDON);
         set_state(a, s, w->index, 1);
-        /* новый сеанс, если сменилась программа; имя без пути, пустое заменяется на unknown */
-        if (!s->in_game || strcmp(exe, s->exe) != 0) {
+        /* игра на чужом мониторе не открывает сеанс на этом: статистика считает её один раз, там, где она идёт */
+        if (elsewhere) {
+            if (!s->paused_elsewhere) {
+                ff_log(w->index, "pause by %s on another monitor: %s", HOW[how], exe[0] ? exe : "unknown");
+            }
+            end_session(s);
+        } else if (!s->in_game || strcmp(exe, s->exe) != 0) {
             snprintf(s->exe, sizeof s->exe, "%s", exe[0] ? exe : "unknown");
             ff_log(w->index, "pause by %s: %s", HOW[how], s->exe);
             stats_store_game_begin(s->exe, HOW[how], "pause");
             s->in_game = 1;
         }
+        s->paused_elsewhere = elsewhere;
     } else if (s->paused && ++s->clear >= RESUME_CHECKS) {
+        s->paused_elsewhere = 0;
         set_state(a, s, w->index, 0);
         end_session(s);
     }

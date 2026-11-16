@@ -62,6 +62,30 @@ static void test_hud_corner(void)
     CHECK(ff_config_parse("hud_corner = x\n", &c) == 0 && c.hud_corner == 0);
 }
 
+static void test_pause_scope_and_devices(void)
+{
+    ff_config c;
+    ff_config b;
+    char buf[8192];
+
+    ff_config_defaults(&c);
+    CHECK(c.pause_all == 0);
+    CHECK(ff_config_parse("pause_all_monitors = 1\n", &c) == 1 && c.pause_all == 1);
+    CHECK(ff_config_parse("pause_all_monitors = x\n", &c) == 0 && c.pause_all == 1);
+    /* имена выходов: монитор вне диапазона и слишком длинное имя отбрасываются */
+    CHECK(ff_config_parse("mon1_device = \\\\.\\DISPLAY2\n", &c) == 1);
+    CHECK(strcmp(c.device[1], "\\\\.\\DISPLAY2") == 0);
+    CHECK(ff_config_parse("mon9_device = \\\\.\\DISPLAY9\n", &c) == 0);
+    CHECK(ff_config_parse("mon0_device = 0123456789012345678901234567890123456789\n", &c) == 0 && c.device[0][0] == '\0');
+    /* круг запись-чтение */
+    snprintf(c.device[0], sizeof c.device[0], "%s", "\\\\.\\DISPLAY1");
+    CHECK(ff_config_format(&c, buf, sizeof buf) > 0);
+    ff_config_defaults(&b);
+    ff_config_parse(buf, &b);
+    CHECK(b.pause_all == 1);
+    CHECK(strcmp(b.device[0], "\\\\.\\DISPLAY1") == 0 && strcmp(b.device[1], "\\\\.\\DISPLAY2") == 0);
+}
+
 static void test_hotkeys_and_beta(void)
 {
     ff_config c;
@@ -322,7 +346,7 @@ static void test_roundtrip(void)
     n = ff_config_format(&a, buf, sizeof buf);
     CHECK(n > 0);
     ff_config_defaults(&b);
-    CHECK(ff_config_parse(buf, &b) == 25);
+    CHECK(ff_config_parse(buf, &b) == 26);
     CHECK(memcmp(&a, &b, sizeof a) == 0);
     /* маленький буфер не должен молча обрезать файл */
     CHECK(ff_config_format(&a, tiny, sizeof tiny) == -1);
@@ -335,6 +359,7 @@ int main(void)
     test_long_lists();
     test_engine();
     test_hud_corner();
+    test_pause_scope_and_devices();
     test_hotkeys_and_beta();
     test_clamp();
     test_game_keys();

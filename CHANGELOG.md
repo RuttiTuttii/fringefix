@@ -9,6 +9,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 - after a crash the program starts again by itself, at most three times in a row (a manual start resets the count); the log has a line about it
 - `fringefix.log` lists the names of all modules of the process at start and a minute after it: it shows the overlays and hooks that attached to the program (RTSS, the NVIDIA overlay, a `dxgi.dll` proxy)
 - the "alive" line of a monitor thread is now written also while the thread retries the device start or sits on pause, and it shows whether the monitor is on
+- a "Pause on all monitors when the app is open on any of them" checkbox in the Program window (key `pause_all_monitors`): a fullscreen or 3D app on one monitor pauses the filter on the other ones too; without it the pause stays as before, on the monitor with the app only
+- `fringefix.ini` holds the output names (`mon0_device`, `mon1_device`): the ReShade add-on without a running program takes the settings of the monitor the game runs on, not the one selected in the program window
+
+### Changed
+
+- ReShade add-on: a game window stretched over several monitors gets the settings of the monitor that holds most of it, and the add-on window shows a line about it; the add-on cannot apply different settings to parts of one picture
 
 ## v0.8.0-beta.6 (2026-11-17)
 

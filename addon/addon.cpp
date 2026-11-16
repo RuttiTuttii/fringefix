@@ -113,7 +113,9 @@ struct rt_state {
 struct globals {
     bool inited = false;
     bool follow_app = true;
-    settings own, eff, ini;
+    settings own, eff;
+    /* разобранный ini приложения целиком: монитор выбирается по имени выхода окна игры при каждом опросе */
+    ff_config ini_cfg = {};
     int source = SRC_OWN;
     unsigned version = 1;
     ULONGLONG next_poll = 0;
@@ -139,6 +141,8 @@ struct globals {
     bool key_prev = false;
     /* имя выхода, на котором окно игры */
     wchar_t device[FF_LIVE_DEV_LEN] = {};
+    /* на скольких мониторах окно игры лежит заметной частью: больше одного значит игра растянута на несколько экранов */
+    int span = 1;
     ring watts, util;
     float clock_mhz = -1.0f;
     CRITICAL_SECTION lock;
@@ -238,7 +242,6 @@ bool read_ini(settings &out)
         DWORD got = 0;
         HANDLE f = CreateFileW(G.ini_path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                                nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-        ff_config c;
 
         if (f == INVALID_HANDLE_VALUE) {
             return false;
@@ -248,33 +251,93 @@ bool read_ini(settings &out)
         }
         CloseHandle(f);
         buf[got] = '\0';
-        ff_config_defaults(&c);
-        ff_config_parse(buf, &c);
-        /* в ini нет имён выходов, поэтому берётся монитор, выбранный в окне приложения */
-        const ff_view &v = *ff_config_view_const(&c, c.monitor);
-
-        for (int i = 0; i < 6; i++) {
-            G.ini.shift[i] = v.shift[i / 2][i % 2];
-        }
-        G.ini.sharpen = v.sharpen;
-        G.ini.enabled = v.enabled;
-        G.hotkey = c.hotkey_toggle;
+        ff_config_defaults(&G.ini_cfg);
+        ff_config_parse(buf, &G.ini_cfg);
+        G.hotkey = G.ini_cfg.hotkey_toggle;
         G.ini_time = fa.ftLastWriteTime;
         G.ini_valid = true;
     }
-    out = G.ini;
+    /* монитор окна игры по имени выхода из ini; без имён (старый ini) остаётся выбранный в окне приложения */
+    char dev[FF_DEVICE_LEN] = {};
+    int idx = G.ini_cfg.monitor;
+
+    WideCharToMultiByte(CP_UTF8, 0, G.device, -1, dev, sizeof dev - 1, nullptr, nullptr);
+    for (int i = 0; dev[0] && i < FF_MAX_MONITORS; i++) {
+        if (_stricmp(G.ini_cfg.device[i], dev) == 0) {
+            idx = i;
+            break;
+        }
+    }
+    const ff_view &v = *ff_config_view_const(&G.ini_cfg, idx);
+
+    for (int i = 0; i < 6; i++) {
+        out.shift[i] = v.shift[i / 2][i % 2];
+    }
+    out.sharpen = v.sharpen;
+    out.enabled = v.enabled;
     return true;
 }
 
-/* имя выхода, на котором окно игры: по нему приложение отдаёт настройки именно этого монитора */
+/* перебор мониторов Windows: какая часть окна игры лежит на каждом */
+struct overlap_scan {
+    RECT win;
+    LONGLONG best_area;
+    LONGLONG win_area;
+    int count;
+    wchar_t device[FF_LIVE_DEV_LEN];
+};
+
+BOOL CALLBACK scan_monitor(HMONITOR m, HDC, LPRECT r, LPARAM p)
+{
+    overlap_scan *o = reinterpret_cast<overlap_scan *>(p);
+    RECT x;
+    MONITORINFOEXW mi;
+
+    if (!IntersectRect(&x, &o->win, r)) {
+        return TRUE;
+    }
+    const LONGLONG area = static_cast<LONGLONG>(x.right - x.left) * (x.bottom - x.top);
+
+    /* заметной считается часть от десятой доли окна: край, заехавший на соседний экран на пару пикселей, не растяжка */
+    if (area * 10 >= o->win_area) {
+        o->count++;
+    }
+    mi.cbSize = sizeof mi;
+    if (area > o->best_area && GetMonitorInfoW(m, &mi)) {
+        o->best_area = area;
+        wcsncpy(o->device, mi.szDevice, FF_LIVE_DEV_LEN - 1);
+        o->device[FF_LIVE_DEV_LEN - 1] = L'\0';
+    }
+    return TRUE;
+}
+
+/* имя выхода, на котором окно игры: по нему берутся настройки именно этого монитора, а не выбранного в окне приложения.
+ * окно, растянутое на несколько мониторов, получает настройки того, где его площадь больше; применить разные настройки
+ * к частям одной картинки аддон не умеет, поэтому G.span только предупреждает об этом в окне аддона */
 void update_device(effect_runtime *rt)
 {
     HWND w = static_cast<HWND>(rt->get_hwnd());
-    HMONITOR m = w ? MonitorFromWindow(w, MONITOR_DEFAULTTONEAREST) : nullptr;
+    overlap_scan o = {};
     MONITORINFOEXW mi;
+    HMONITOR m;
 
-    mi.cbSize = sizeof mi;
     G.device[0] = L'\0';
+    G.span = 1;
+    if (!w) {
+        return;
+    }
+    if (GetWindowRect(w, &o.win) && o.win.right > o.win.left && o.win.bottom > o.win.top) {
+        o.win_area = static_cast<LONGLONG>(o.win.right - o.win.left) * (o.win.bottom - o.win.top);
+        EnumDisplayMonitors(nullptr, nullptr, scan_monitor, reinterpret_cast<LPARAM>(&o));
+        if (o.device[0]) {
+            wcsncpy(G.device, o.device, FF_LIVE_DEV_LEN - 1);
+            G.span = o.count > 0 ? o.count : 1;
+            return;
+        }
+    }
+    /* окно целиком вне мониторов или свернуто: ближайший монитор */
+    m = MonitorFromWindow(w, MONITOR_DEFAULTTONEAREST);
+    mi.cbSize = sizeof mi;
     if (m && GetMonitorInfoW(m, &mi)) {
         wcsncpy(G.device, mi.szDevice, FF_LIVE_DEV_LEN - 1);
         G.device[FF_LIVE_DEV_LEN - 1] = L'\0';
@@ -729,6 +792,12 @@ void draw_filter_toggle()
     ImGui::TextUnformatted("Filter");
     if (G.source == SRC_APP && G.app_master && !G.app_view) {
         ImGui::TextDisabled("Off for this monitor in the fringefix app.");
+    }
+    if (G.span > 1) {
+        char dev[FF_LIVE_DEV_LEN] = {};
+
+        WideCharToMultiByte(CP_UTF8, 0, G.device, -1, dev, sizeof dev - 1, nullptr, nullptr);
+        ImGui::TextDisabled("The game covers %d monitors: the settings of %s apply to all of it.", G.span, dev);
     }
 }
 

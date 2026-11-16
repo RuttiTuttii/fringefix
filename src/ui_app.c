@@ -19,7 +19,7 @@
 #endif
 
 #define APP_W 520
-#define APP_H 766
+#define APP_H 796
 #define CARD_ROW 30
 #define CARD_INNER_W 488
 #define WM_REOPEN (WM_APP + 40)
@@ -30,6 +30,7 @@ enum {
     ID_A_LANG = 700,
     ID_A_THEME,
     ID_A_PAUSE,
+    ID_A_PAUSE_ALL,
     ID_A_ADDAPP,
     ID_A_CHECK,
     ID_A_BETA,
@@ -67,7 +68,7 @@ typedef struct {
 
 static card_t CARDS_A[] = {
     { S_CARD_INTERFACE, 2, 0, 0, 0 },
-    { S_CARD_AUTOPAUSE, 2, 0, 0, 0 },
+    { S_CARD_AUTOPAUSE, 3, 0, 0, 0 },
     { S_CARD_RESHADE, 3, 1, 0, 0 },
     { S_CARD_HOTKEYS, 2, 0, 0, 0 },
     { S_CARD_AUTOSTART, 1, 0, 0, 0 },
@@ -219,8 +220,11 @@ static void build(void)
     add_items(g_lang, LANGS, 3, c->language);
     add_items(combo(C_INTERFACE, 1, ID_A_THEME, 0), THEMES, 3, c->theme);
     add_items(combo(C_PAUSE, 0, ID_A_PAUSE, 0), PAUSES, NPAUSE, pause_index(c->auto_pause));
+    SendMessageW(child(L"BUTTON", ff_tr(S_PAUSE_ALL), BS_AUTOCHECKBOX | WS_TABSTOP, MARGIN + COL_LABEL,
+                       row_top(C_PAUSE, 1), inner, 24, ID_A_PAUSE_ALL),
+                 BM_SETCHECK, c->pause_all ? BST_CHECKED : BST_UNCHECKED, 0);
     child(L"BUTTON", ff_tr(S_BTN_APP_LISTS), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + COL_LABEL,
-          row_top(C_PAUSE, 1) + 1, inner, BTN_H, ID_A_ADDAPP);
+          row_top(C_PAUSE, 2) + 1, inner, BTN_H, ID_A_ADDAPP);
 
     /* ReShade: пояснение занимает две строки карточки (рисуется в paint), под ним три кнопки */
     child(L"BUTTON", ff_tr(S_BTN_RS_INSTALL), BS_PUSHBUTTON | WS_TABSTOP, MARGIN + COL_LABEL, rw, rb_small, BTN_H,
@@ -359,6 +363,10 @@ static void on_command(int id, int code)
         c->auto_pause = PAUSE_VALUE[sel];
         app_wake(ui.app);
         app_save(ui.app);
+    } else if (id == ID_A_PAUSE_ALL) {
+        c->pause_all = SendMessageW(GetDlgItem(g_win, ID_A_PAUSE_ALL), BM_GETCHECK, 0, 0) == BST_CHECKED;
+        app_wake(ui.app);
+        app_save(ui.app);
     } else if (id == ID_A_CHECK) {
         c->check_updates = SendMessageW(GetDlgItem(g_win, ID_A_CHECK), BM_GETCHECK, 0, 0) == BST_CHECKED;
         app_save(ui.app);
@@ -430,7 +438,7 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
         /* списки окна красятся как поля, флажок и кнопки как фон */
         /* флажки лежат на карточках: фон цвета карточки, остальное красится как поля */
         if ((HWND)l == GetDlgItem(h, ID_A_CHECK) || (HWND)l == GetDlgItem(h, ID_A_BETA)
-            || (HWND)l == GetDlgItem(h, ID_A_AUTOSTART)) {
+            || (HWND)l == GetDlgItem(h, ID_A_PAUSE_ALL) || (HWND)l == GetDlgItem(h, ID_A_AUTOSTART)) {
             return paint_ctlcolor_card((HDC)w);
         }
         return paint_ctlcolor(m, (HDC)w, (HWND)l, (HWND)l);

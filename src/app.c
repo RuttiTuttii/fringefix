@@ -68,6 +68,11 @@ int app_init(ff_app *a, HINSTANCE inst)
     hud_set_corner(a->cfg.hud_corner);
     /* имена выходов один раз: аддон находит по ним монитор окна игры */
     a->ndev = ff_output_devices(a->dev, FF_MAX_MONITORS);
+    /* и в ini: без запущенной программы аддон находит настройки монитора игры по этим именам */
+    for (i = 0; i < a->ndev; i++) {
+        WideCharToMultiByte(CP_UTF8, 0, a->dev[i], -1, a->cfg.device[i], FF_DEVICE_LEN - 1, NULL, NULL);
+        a->cfg.device[i][FF_DEVICE_LEN - 1] = '\0';
+    }
     /* аддон ReShade читает отсюда живые значения; без памяти он берёт ini, поэтому сбой не фатален */
     if (live_publish_open() == 0) {
         live_publish(&a->cfg, 1, (const wchar_t (*)[FF_LIVE_DEV_LEN])a->dev, a->ndev);
