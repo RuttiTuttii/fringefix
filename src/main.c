@@ -9,6 +9,7 @@
 #include "app.h"
 #include "crash.h"
 #include "i18n.h"
+#include "log.h"
 #include "stats_store.h"
 #include "theme.h"
 #include "ui.h"
@@ -52,6 +53,7 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show)
     if (!single) {
         return 0;
     }
+    ff_log_init();
     crash_install();
     update_cleanup();
     /* до загрузки настроек язык берётся у системы, чтобы сообщение об ошибке было понятным */
@@ -59,6 +61,8 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show)
     InitCommonControlsEx(&icc);
 
     if (app_init(&app, inst) != 0) {
+        ff_log(-1, "app_init failed");
+        ff_log_shutdown();
         MessageBoxW(NULL, ff_tr(S_START_FAILED), L"fringefix", MB_ICONERROR);
         return 1;
     }
@@ -74,6 +78,8 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show)
     theme_set_mode(app.cfg.theme);
     theme_refresh();
     if (ui_tray_create(&app) != 0 || capture_start(&app) != 0) {
+        ff_log(-1, "tray or capture start failed");
+        ff_log_shutdown();
         MessageBoxW(NULL, ff_tr(S_START_FAILED), L"fringefix", MB_ICONERROR);
         return 1;
     }
@@ -89,8 +95,10 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show)
             DispatchMessageW(&m);
         }
     }
+    ff_log(-1, "message loop ended, stopping");
     app_shutdown(&app);
     stats_store_save();
+    ff_log_shutdown();
     ReleaseMutex(single);
     CloseHandle(single);
     return 0;

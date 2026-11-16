@@ -6,6 +6,7 @@
 
 #include "gfx.h"
 #include "i18n.h"
+#include "output.h"
 #include "pattern.h"
 #include "resource.h"
 #include "stats_store.h"
@@ -292,6 +293,10 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
         tray_notify(a, NIM_MODIFY);
         /* список мониторов в окне показывает поворот и сбой запуска каждого */
         ui_settings_refresh_power();
+        return 0;
+    case WM_DISPLAYCHANGE:
+        /* раскладка, разрешение или поворот мониторов изменились: вторым монитором мог быть не тот выход, что на старте */
+        ff_output_log("display change");
         return 0;
     case WM_ENDSESSION:
         /* выключение или выход из сеанса убивает процесс без WM_DESTROY: статистика уходит в файл сейчас */

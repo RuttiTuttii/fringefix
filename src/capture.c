@@ -9,6 +9,7 @@
 #include "gamedetect.h"
 #include "gfx.h"
 #include "hud.h"
+#include "log.h"
 #include "output.h"
 #include "stats_store.h"
 
@@ -22,6 +23,8 @@
 #define RESUME_CHECKS 2
 #define FLUSH_MS 1000
 #define SAVE_MS (5 * 60 * 1000)
+/* раз в минуту каждый поток пишет в журнал, что жив: по последней строке видно, когда и какой из них замолчал */
+#define BEAT_MS (60 * 1000)
 
 /* состояние автопаузы монитора: оверлей либо работает, либо молчит */
 typedef struct {
@@ -77,6 +80,7 @@ static void set_state(ff_app *a, game_state *s, int index, int paused)
     if (paused != s->paused) {
         LONG mask;
 
+        ff_log(index, "autopause %s", paused ? "on" : "off");
         if (paused) {
             stats_store_pause();
             mask = InterlockedOr(&a->susp_mask, 1L << index) | (1L << index);
@@ -106,9 +110,13 @@ static void flush_counters(ff_gfx *g)
     g->echo_skipped = 0;
 }
 
-static void shutdown_gfx(worker *w, ff_gfx *g)
+static void shutdown_gfx(worker *w, ff_gfx *g, const char *why)
 {
     crash_mark(w->index, "shutdown");
+    /* пустая структура на каждом обороте цикла не пишется, только живое устройство */
+    if (g->dev) {
+        ff_log(w->index, "device closing (%s)", why);
+    }
     /* панель замеров принадлежит оверлею: без него её нет */
     if (w->hud_open) {
         hud_sync(NULL, 0);
@@ -123,6 +131,7 @@ static void shutdown_gfx(worker *w, ff_gfx *g)
 static void refresh_monitor(game_state *s, int index)
 {
     MONITORINFO mi;
+    RECT before = s->mon;
 
     if (!s->hmon || s->mon_index != index) {
         s->hmon = ff_output_hmonitor(index);
@@ -131,6 +140,10 @@ static void refresh_monitor(game_state *s, int index)
     mi.cbSize = sizeof mi;
     if (s->hmon && GetMonitorInfoW(s->hmon, &mi)) {
         s->mon = mi.rcMonitor;
+        if (memcmp(&before, &s->mon, sizeof before) != 0) {
+            ff_log(index, "monitor rect %ld,%ld %ldx%ld", (long)s->mon.left, (long)s->mon.top,
+                   (long)(s->mon.right - s->mon.left), (long)(s->mon.bottom - s->mon.top));
+        }
     } else {
         /* дескриптор устарел после смены конфигурации мониторов: следующая проверка найдёт его заново */
         s->hmon = NULL;
@@ -161,6 +174,7 @@ static void update_game_state(worker *w, game_state *s)
         /* новый сеанс, если сменилась программа; имя без пути, пустое заменяется на unknown */
         if (!s->in_game || strcmp(exe, s->exe) != 0) {
             snprintf(s->exe, sizeof s->exe, "%s", exe[0] ? exe : "unknown");
+            ff_log(w->index, "pause by %s: %s", HOW[how], s->exe);
             stats_store_game_begin(s->exe, HOW[how], "pause");
             s->in_game = 1;
         }
@@ -186,7 +200,11 @@ static DWORD WINAPI capture_main(LPVOID arg)
     ULONGLONG last_assert = 0;
     ULONGLONG next_flush = 0;
     ULONGLONG next_save = GetTickCount64() + SAVE_MS;
+    ULONGLONG next_beat = GetTickCount64() + BEAT_MS;
+    ULONGLONG frames = 0;
+    int was_active = -1;
 
+    ff_log(idx, "worker started");
     memset(&g, 0, sizeof g);
     memset(&gs, 0, sizeof gs);
     while (!a->quit) {
@@ -195,8 +213,12 @@ static DWORD WINAPI capture_main(LPVOID arg)
         /* окно оверлея принадлежит этому потоку, его сообщения разбираем здесь */
         pump_messages();
 
+        if (active != was_active) {
+            ff_log(idx, "filter %s", active ? "on" : "off");
+            was_active = active;
+        }
         if (!active || (InterlockedAnd(&a->reinit_mask, ~bit) & bit)) {
-            shutdown_gfx(w, &g);
+            shutdown_gfx(w, &g, active ? "reinit requested" : "filter off");
             started_ok = 0;
         }
         if (!active) {
@@ -213,7 +235,7 @@ static DWORD WINAPI capture_main(LPVOID arg)
         crash_mark(idx, "detect");
         update_game_state(w, &gs);
         if (gs.paused) {
-            shutdown_gfx(w, &g);
+            shutdown_gfx(w, &g, "autopause");
             WaitForSingleObject(a->wake[idx], DETECT_MS);
             continue;
         }
@@ -224,10 +246,12 @@ static DWORD WINAPI capture_main(LPVOID arg)
             /* свой монитор потока, а не выбранный в окне */
             snap.monitor = idx;
             crash_mark(idx, "init");
+            ff_log(idx, "device init");
             AcquireSRWLockExclusive(&g_init_lock);
             ret = gfx_init(&g, &snap, err);
             ReleaseSRWLockExclusive(&g_init_lock);
             if (ret != 0) {
+                ff_log(idx, "device init failed: %s", err);
                 stats_store_error(err);
                 /* окно диагностики по росту этого счётчика откатывает пробную настройку, не дожидаясь таймера */
                 bench_note_gfx_failure();
@@ -247,6 +271,8 @@ static DWORD WINAPI capture_main(LPVOID arg)
                 lost = 0;
             }
             started_ok = 1;
+            ff_log(idx, "device ready: %ux%u (desktop %ux%u) rot %d hdr %d fmt %d gpu %s", g.w, g.h, g.ow, g.oh, g.rot,
+                   g.hdr, (int)g.fmt, g.adapter);
             ff_output_rect(idx, &gs.mon);
             /* окну настроек важно знать поворот: в режиме Б от него зависит, какой набор значений на экране */
             if (InterlockedExchange(&a->rot[idx], g.rot) != g.rot) {
@@ -274,12 +300,18 @@ static DWORD WINAPI capture_main(LPVOID arg)
         }
         if (!gfx_pump(&g, a->fast ? FRAME_WAIT_UI_MS : FRAME_WAIT_MS, force || (g.diag && bench_force()))) {
             lost = 1;
-            shutdown_gfx(w, &g);
+            shutdown_gfx(w, &g, "capture lost");
         }
         force = 0;
         if (GetTickCount64() >= next_flush) {
             next_flush = GetTickCount64() + FLUSH_MS;
+            frames += g.drawn;
             flush_counters(&g);
+        }
+        if (GetTickCount64() >= next_beat) {
+            next_beat = GetTickCount64() + BEAT_MS;
+            ff_log(idx, "alive: device %s, paused %d, frames drawn %llu", g.alive ? "up" : "down", gs.paused,
+                   (unsigned long long)frames);
         }
         /* файл статистики один на программу: пишет первый поток */
         if (idx == 0 && GetTickCount64() >= next_save) {
@@ -295,7 +327,8 @@ static DWORD WINAPI capture_main(LPVOID arg)
             }
         }
     }
-    shutdown_gfx(w, &g);
+    shutdown_gfx(w, &g, "exit");
+    ff_log(idx, "worker stopped");
     return 0;
 }
 
@@ -307,6 +340,8 @@ int capture_start(ff_app *a)
 
     /* без единого выхода (сеанс без видеокарты) поток нулевого монитора всё равно запускается и сообщит ошибку */
     a->nmon = n > 0 ? n : 1;
+    ff_output_log("start");
+    ff_log(-1, "capture threads: %d", a->nmon);
     for (i = 0; i < a->nmon; i++) {
         g_workers[i].app = a;
         g_workers[i].index = i;

@@ -7,6 +7,7 @@
 #include "fileio.h"
 #include "hud.h"
 #include "live.h"
+#include "log.h"
 #include "output.h"
 
 #define INI_MAX 8192
@@ -147,6 +148,7 @@ void app_apply(ff_app *a)
 
 void app_set_enabled(ff_app *a, int on)
 {
+    ff_log(-1, "global switch %s", on ? "on" : "off");
     InterlockedExchange(&a->fail_mask, 0);
     InterlockedExchange(&a->enabled, on ? 1 : 0);
     publish(a);

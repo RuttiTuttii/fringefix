@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "com.h"
+#include "log.h"
 #include "output.h"
 
 /* ненулевой возврат останавливает перебор */
@@ -186,4 +187,37 @@ HMONITOR ff_output_hmonitor(int index)
     FF_REL(out);
     FF_REL(ad);
     return mon;
+}
+
+/* выходы пишутся по строке: по журналу видно, на какой видеокарте сидит каждый монитор и менялась ли раскладка */
+static int log_cb(int n, IDXGIAdapter1 *ad, IDXGIOutput *out, void *ctx)
+{
+    IDXGIOutput6 *o6 = NULL;
+    DXGI_OUTPUT_DESC1 d;
+    DXGI_ADAPTER_DESC1 a;
+    char gpu[96] = "?";
+    char dev[48] = "?";
+
+    (void)ctx;
+    if (SUCCEEDED(IDXGIAdapter1_GetDesc1(ad, &a))) {
+        WideCharToMultiByte(CP_UTF8, 0, a.Description, -1, gpu, sizeof gpu - 1, NULL, NULL);
+    }
+    if (SUCCEEDED(IDXGIOutput_QueryInterface(out, &IID_IDXGIOutput6, (void **)&o6))) {
+        if (SUCCEEDED(IDXGIOutput6_GetDesc1(o6, &d))) {
+            WideCharToMultiByte(CP_UTF8, 0, d.DeviceName, -1, dev, sizeof dev - 1, NULL, NULL);
+            ff_log(-1, "output %d %s at %ld,%ld size %ldx%ld rotation %d hdr %d gpu %s", n, dev,
+                   (long)d.DesktopCoordinates.left, (long)d.DesktopCoordinates.top,
+                   (long)(d.DesktopCoordinates.right - d.DesktopCoordinates.left),
+                   (long)(d.DesktopCoordinates.bottom - d.DesktopCoordinates.top), (int)d.Rotation,
+                   d.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020, gpu);
+        }
+        FF_REL(o6);
+    }
+    return 0;
+}
+
+void ff_output_log(const char *why)
+{
+    ff_log(-1, "outputs (%s)", why);
+    each_output(log_cb, NULL);
 }

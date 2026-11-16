@@ -1,8 +1,11 @@
 #include <windows.h>
 #include <stdio.h>
+#include <signal.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "crash.h"
+#include "log.h"
 #include "version.h"
 
 #define STACK_WORDS 512
@@ -53,6 +56,20 @@ static void describe(HANDLE f, const char *what, ULONG_PTR addr)
         (unsigned long long)(addr - (ULONG_PTR)m));
 }
 
+static void on_abort(int sig)
+{
+    int i;
+
+    (void)sig;
+    ff_log(-1, "abort() called, see the last stages below");
+    for (i = 0; i < FF_MAX_MONITORS; i++) {
+        if (g_stage[i]) {
+            ff_log(i, "last stage: %s", g_stage[i]);
+        }
+    }
+    _exit(3);
+}
+
 static LONG WINAPI filter(EXCEPTION_POINTERS *ep)
 {
     HANDLE f = CreateFileW(g_path, FILE_APPEND_DATA, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -100,22 +117,21 @@ static LONG WINAPI filter(EXCEPTION_POINTERS *ep)
         }
     }
     CloseHandle(f);
+    /* в основном журнале остаётся одна строка с указателем на подробности и этапы потоков */
+    ff_log(-1, "CRASH exception 0x%08lx at 0x%llx, details in crash.log", er->ExceptionCode,
+           (unsigned long long)(ULONG_PTR)er->ExceptionAddress);
+    for (i = 0; i < FF_MAX_MONITORS; i++) {
+        if (g_stage[i]) {
+            ff_log(i, "last stage: %s", g_stage[i]);
+        }
+    }
     return EXCEPTION_CONTINUE_SEARCH;
 }
 
 void crash_install(void)
 {
-    wchar_t dir[MAX_PATH];
-    DWORD n = GetEnvironmentVariableW(L"APPDATA", dir, MAX_PATH);
-
-    if (n == 0 || n >= MAX_PATH - 32) {
-        wcscpy(g_path, L"crash.log");
-    } else {
-        _snwprintf(g_path, MAX_PATH, L"%ls\\fringefix", dir);
-        g_path[MAX_PATH - 1] = L'\0';
-        CreateDirectoryW(g_path, NULL);
-        _snwprintf(g_path, MAX_PATH, L"%ls\\fringefix\\crash.log", dir);
-        g_path[MAX_PATH - 1] = L'\0';
-    }
+    ff_log_path(L"crash.log", g_path);
     SetUnhandledExceptionFilter(filter);
+    /* abort() из библиотек C обходит фильтр исключений: ловим его отдельно */
+    signal(SIGABRT, on_abort);
 }

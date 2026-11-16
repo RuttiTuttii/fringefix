@@ -33,4 +33,7 @@ int ff_output_rect(int index, RECT *rect);
  * без перебора адаптеров; NULL, если выхода нет */
 HMONITOR ff_output_hmonitor(int index);
 
+/* пишет в журнал все выходы: имя, прямоугольник, поворот, HDR и видеокарту; why это повод записи */
+void ff_output_log(const char *why);
+
 #endif

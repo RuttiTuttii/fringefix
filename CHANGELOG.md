@@ -2,6 +2,18 @@
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow the `vX.Y.Z` tags. Betas carry `-beta.N`.
 
+## v0.8.0-beta.5 (2026-11-17)
+
+### Added
+
+- `fringefix.log` in `%APPDATA%\fringefix`: a work log, one line per event with a millisecond time, the thread number and the monitor; it holds the start and the Windows version, every output (name, position, rotation, HDR, video card), the start and stop of each monitor thread, device creation and closing with the reason, the autopause and the game that caused it, a change of the monitor layout, a capture loss with the error code and the device removal reason, and an "alive" line from each thread once a minute; a log over 1 MB goes to `fringefix.log.1` at start
+- if the previous run ended without a clean exit (a killed process, a crash without an exception, a power loss), the log has a line about it at the next start
+- a crash through `abort()` now reaches the log too, and on an exception the log keeps a line with the address and the last step of each thread; the details stay in `crash.log`
+
+### Known issues
+
+- the cause of the crash on two monitors is not found: each monitor already runs its own thread, and the shared places (device creation, the shader cache, the 3D app check cache) have been under a lock since `v0.8.0-beta.3`; this build is meant to locate the failure through `fringefix.log` and `crash.log`
+
 ## v0.8.0-beta.4 (2026-11-14)
 
 ### Changed

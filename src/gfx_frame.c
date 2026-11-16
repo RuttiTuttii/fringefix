@@ -8,6 +8,7 @@
 #include "crash.h"
 #include "gfx.h"
 #include "kernel.h"
+#include "log.h"
 
 /* перерисовка по метаданным нужна, если сдвинулось окно или изменилась малая область:
  * доля экрана 1/50 отделяет курсор, каретку и текст от полноэкранного эха оверлея */
@@ -258,6 +259,9 @@ int gfx_pump(ff_gfx *g, UINT timeout_ms, int force)
     if (hr == DXGI_ERROR_WAIT_TIMEOUT) {
         /* экран не менялся, перерисовка только по force */
     } else if (FAILED(hr)) {
+        /* причина потери устройства отличает сброс драйвера от смены режима монитора: ACCESS_LOST это второе */
+        ff_log(g->mon, "AcquireNextFrame failed 0x%08lx, device removed reason 0x%08lx", (unsigned long)hr,
+               (unsigned long)ID3D11Device_GetDeviceRemovedReason(g->dev));
         return 0;
     } else {
         /* кадр только с курсором не копируем и не рисуем */
@@ -271,7 +275,12 @@ int gfx_pump(ff_gfx *g, UINT timeout_ms, int force)
                 /* формат настоящей поверхности важнее ожидаемого: при несовпадении CopyResource ничего не делает
                  * и оверлей показывал бы чёрный или застывший кадр */
                 ID3D11Texture2D_GetDesc(tex, &td);
+                if (td.Format != g->fmt) {
+                    ff_log(g->mon, "frame format changed %d -> %d", (int)g->fmt, (int)td.Format);
+                }
                 if (td.Format != g->fmt && gfx_reformat(g, td.Format) != 0) {
+                    ff_log(g->mon, "reformat failed, device removed reason 0x%08lx",
+                           (unsigned long)ID3D11Device_GetDeviceRemovedReason(g->dev));
                     ID3D11Texture2D_Release(tex);
                     IDXGIResource_Release(res);
                     IDXGIOutputDuplication_ReleaseFrame(g->dup);
