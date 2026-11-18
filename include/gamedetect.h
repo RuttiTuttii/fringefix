@@ -21,4 +21,11 @@ enum { GAME_NONE = 0, GAME_FULLSCREEN, GAME_3D, GAME_LISTED, GAME_ADDON };
  * поэтому в режиме 3 оно не определяется совсем */
 int game_detect(const ff_config *cfg, const RECT *monitor, char exe[64]);
 
+/* программа показывает свой интерфейс поверх экрана и не держит фокус постоянно (оверлей NVIDIA по Alt+Z): окно то
+ * получает активность, то отдаёт её обратно, пока интерфейс ещё виден. по имени файла из game_detect */
+int game_is_overlay_ui(const char *exe);
+
+/* класс, стиль и прямоугольник активного окна одной строкой для журнала: по ней видно, что именно сошло за игру */
+void game_describe_foreground(char out[128]);
+
 #endif

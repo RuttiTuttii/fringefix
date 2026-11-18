@@ -64,7 +64,6 @@ int app_init(ff_app *a, HINSTANCE inst)
     resolve_ini(a->ini);
     load_ini(a);
     app_profile_install_bundled(a);
-    a->enabled = 1;
     hud_set_corner(a->cfg.hud_corner);
     /* имена выходов один раз: аддон находит по ним монитор окна игры */
     a->ndev = ff_output_devices(a->dev, FF_MAX_MONITORS);
@@ -75,14 +74,14 @@ int app_init(ff_app *a, HINSTANCE inst)
     }
     /* аддон ReShade читает отсюда живые значения; без памяти он берёт ini, поэтому сбой не фатален */
     if (live_publish_open() == 0) {
-        live_publish(&a->cfg, 1, (const wchar_t (*)[FF_LIVE_DEV_LEN])a->dev, a->ndev);
+        live_publish(&a->cfg, (const wchar_t (*)[FF_LIVE_DEV_LEN])a->dev, a->ndev);
     }
     return 0;
 }
 
 static void publish(ff_app *a)
 {
-    live_publish(&a->cfg, (int)a->enabled, (const wchar_t (*)[FF_LIVE_DEV_LEN])a->dev, a->ndev);
+    live_publish(&a->cfg, (const wchar_t (*)[FF_LIVE_DEV_LEN])a->dev, a->ndev);
 }
 
 static void wake_all(ff_app *a)
@@ -104,9 +103,33 @@ ff_view *app_edit_view(ff_app *a)
     return ff_config_view_for(&a->cfg, a->cfg.monitor, (int)a->rot[a->cfg.monitor]);
 }
 
+int app_monitor_neutral(const ff_app *a, int index)
+{
+    int i = index < 0 ? 0 : (index >= FF_MAX_MONITORS ? FF_MAX_MONITORS - 1 : index);
+
+    /* в режиме Б у повёрнутого монитора свой набор значений: нейтральность смотрится по тому, что реально на экране */
+    return ff_view_is_neutral(ff_config_view_for_const(&a->cfg, i, (int)a->rot[i]));
+}
+
 int app_monitor_active(const ff_app *a, int index)
 {
-    return a->enabled && ff_config_view_const(&a->cfg, index)->enabled && !app_monitor_failed(a, index);
+    if (a->override_mode == APP_OVERRIDE_OFF || !ff_config_view_const(&a->cfg, index)->enabled
+        || app_monitor_failed(a, index)) {
+        return 0;
+    }
+    return a->override_mode == APP_OVERRIDE_RUN || !app_monitor_neutral(a, index);
+}
+
+int app_any_active(const ff_app *a)
+{
+    int i;
+
+    for (i = 0; i < a->nmon && i < FF_MAX_MONITORS; i++) {
+        if (app_monitor_active(a, i)) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 void app_shutdown(ff_app *a)
@@ -151,12 +174,9 @@ void app_apply(ff_app *a)
     wake_all(a);
 }
 
-void app_set_enabled(ff_app *a, int on)
+void app_set_override(ff_app *a, int mode)
 {
-    ff_log(-1, "global switch %s", on ? "on" : "off");
-    InterlockedExchange(&a->fail_mask, 0);
-    InterlockedExchange(&a->enabled, on ? 1 : 0);
-    publish(a);
+    InterlockedExchange(&a->override_mode, mode);
     wake_all(a);
 }
 

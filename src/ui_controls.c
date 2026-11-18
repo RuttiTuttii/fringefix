@@ -41,7 +41,10 @@ static int g_nout;
 /* поворот выбранного монитора, при котором в поля положены значения: в режиме Б при смене поворота набор другой */
 static int g_rot_seen = -1;
 
-/* что на самом деле происходит с фильтром монитора: выключатель монитора, ошибка запуска, общий выключатель, пауза игры */
+/* нейтральность выбранного монитора на момент последней сверки окна: пересверка нужна, только когда она меняется */
+static int g_neutral_seen = -1;
+
+/* что на самом деле происходит с фильтром монитора: выключатель монитора, ошибка запуска, нулевой вид, пауза игры */
 static str_id monitor_tag(int i)
 {
     if (!ui.app->cfg.view[i].enabled) {
@@ -50,8 +53,8 @@ static str_id monitor_tag(int i)
     if (app_monitor_failed(ui.app, i)) {
         return S_MON_TAG_FAILED;
     }
-    if (!ui.app->enabled) {
-        return S_MON_TAG_MASTER;
+    if (app_monitor_neutral(ui.app, i)) {
+        return S_MON_TAG_NEUTRAL;
     }
     return (ui.app->susp_mask & (1L << i)) ? S_MON_TAG_PAUSED : S_MON_TAG_ON;
 }
@@ -116,23 +119,26 @@ void ctl_sync(void)
     ctl_sync_power();
 }
 
-/* выключатель и список мониторов по настройкам; общий выключатель (хоткей, трей) гасит подпись, но не ползунок:
- * ползунок хранит выбор этого монитора, а общий выключатель действует поверх всех */
+/* выключатель и список мониторов по настройкам. выключатель хранит выбор этого монитора; пока все сдвиги и резкость в нуле,
+ * фильтру нечего применять: выключатель неактивен, сочетание включения монитор не трогает, а подпись говорит почему */
 void ctl_sync_power(void)
 {
     int on = power_view()->enabled != 0;
+    const int neutral = app_monitor_neutral(ui.app, ui.app->cfg.monitor);
     const wchar_t *state = ff_tr(on ? S_STATE_ON : S_STATE_OFF);
     wchar_t label[96];
 
+    g_neutral_seen = neutral;
     /* поток захвата увидел другой поворот монитора: значения в режиме Б теперь из другого набора */
     if ((int)ui.app->rot[ui.app->cfg.monitor] != g_rot_seen) {
         sync_values();
     }
     SendMessageW(ui.power, FFS_SETPOS, (WPARAM)on, 0);
-    if (on && app_monitor_failed(ui.app, ui.app->cfg.monitor)) {
+    EnableWindow(ui.power, !neutral);
+    if (neutral) {
+        state = ff_tr(S_FILTER_NEUTRAL);
+    } else if (on && app_monitor_failed(ui.app, ui.app->cfg.monitor)) {
         state = ff_tr(S_STATE_FAILED);
-    } else if (on && !ui.app->enabled) {
-        state = ff_tr(S_FILTER_MASTER_OFF);
     } else if (on && (ui.app->susp_mask & (1L << ui.app->cfg.monitor))) {
         state = ff_tr(S_STATE_PAUSED);
     }
@@ -141,12 +147,22 @@ void ctl_sync_power(void)
     fill_monitors();
 }
 
+/* значения поменялись: подпись и выключатель обновляются, только если вид стал нейтральным или перестал им быть,
+ * иначе каждый шаг ползунка перестраивал бы список мониторов */
+static void check_neutral(void)
+{
+    if (app_monitor_neutral(ui.app, ui.app->cfg.monitor) != g_neutral_seen) {
+        ctl_sync_power();
+    }
+}
+
 void ctl_slider_changed(int idx)
 {
     int pos = (int)SendMessageW(ui.slider[idx], FFS_GETPOS, 0, 0);
 
     *row_value(idx) = (float)pos / 100.0f;
     ctl_edit_show(idx);
+    check_neutral();
     app_apply(ui.app);
 }
 
@@ -172,6 +188,7 @@ void ctl_edit_changed(int idx)
     d = d < -lim ? -lim : (d > lim ? lim : d);
     *row_value(idx) = (float)d;
     SendMessageW(ui.slider[idx], FFS_SETPOS, (WPARAM)to_pos((float)d), 0);
+    check_neutral();
     app_apply(ui.app);
 }
 

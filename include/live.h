@@ -30,7 +30,7 @@ typedef struct {
     volatile LONG seq;
     /* процесс приложения: по нему аддон отличает живое приложение от устаревшей памяти */
     unsigned pid;
-    /* общий выключатель приложения (хоткей, трей): фильтр работает, если включены он и монитор */
+    /* устарело: общего выключателя в приложении больше нет, поле всегда 1 и осталось ради аддонов прежних версий */
     LONG master;
     /* монитор, показанный в окне приложения: запасной вариант, когда аддон не нашёл монитор своего окна */
     LONG selected;
@@ -42,7 +42,7 @@ typedef struct {
 int live_publish_open(void);
 
 /* devices это имена выходов по порядку номеров (n штук), nullptr значит неизвестны: аддон тогда берёт выбранный монитор */
-void live_publish(const ff_config *cfg, int master, const wchar_t (*devices)[FF_LIVE_DEV_LEN], int n);
+void live_publish(const ff_config *cfg, const wchar_t (*devices)[FF_LIVE_DEV_LEN], int n);
 void live_publish_close(void);
 
 /* аддон: читает снимок; 1, если приложение запущено и значения получены, 0 иначе.
@@ -53,14 +53,6 @@ void live_read_close(void);
 /* вид монитора, для которого работает аддон: по имени выхода окна игры, иначе выбранный в приложении.
  * имя может быть пустым или nullptr; результат всегда указывает внутрь снимка */
 const ff_live_view *live_pick_view(const ff_live *snap, const wchar_t *device);
-
-/* аддон просит приложение включить или выключить общий выключатель (ползунок в окне аддона): отдельная память
- * с записью для всех процессов пользователя, потому что основная читается аддоном только на чтение.
- * live_cmd_send: аддон, 1 если команда ушла; live_cmd_poll: приложение, 1 если с прошлого опроса пришла новая
- * команда, её значение в *enabled */
-#define FF_CMD_NAME L"Local\\fringefix_cmd_v2"
-int live_cmd_send(int enabled);
-int live_cmd_poll(int *enabled);
 
 /* аддон: ставит и снимает маркер своего процесса */
 void live_addon_announce(void);

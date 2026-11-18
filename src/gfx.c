@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "bench.h"
+#include "crash.h"
 #include "gfx.h"
 #include "com.h"
 #include "output.h"
@@ -104,12 +105,15 @@ static int open_capture(ff_gfx *g, int monitor, RECT *rect, char *err)
     g->hdr = od.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
     *rect = od.DesktopCoordinates;
 
+    /* этапы запуска отмечаются: зависший вызов драйвера виден в журнале по последней отметке */
+    crash_mark(monitor, "init: d3d device");
     TRY(D3D11CreateDevice((IDXGIAdapter *)ad, D3D_DRIVER_TYPE_UNKNOWN, NULL,
                           D3D11_CREATE_DEVICE_BGRA_SUPPORT, NULL, 0, D3D11_SDK_VERSION,
                           &g->dev, NULL, &g->ctx), "D3D11CreateDevice");
 
     /* формат кадра выбирает режим рабочего стола: FP16 scRGB в HDR, 8 бит в SDR */
     want = g->hdr ? DXGI_FORMAT_R16G16B16A16_FLOAT : DXGI_FORMAT_B8G8R8A8_UNORM;
+    crash_mark(monitor, "init: duplicate output");
     TRY(IDXGIOutput6_DuplicateOutput1(out, (IUnknown *)g->dev, 0, 1, &want, &g->dup),
         "DuplicateOutput1");
     IDXGIOutputDuplication_GetDesc(g->dup, &dd);
@@ -396,13 +400,27 @@ int gfx_init(ff_gfx *g, const ff_config *cfg, char *err)
     memset(g, 0, sizeof *g);
     err[0] = '\0';
     g->mon = cfg->monitor;
-    if (open_capture(g, cfg->monitor, &rect, err) != 0 || open_window(g, &rect, err) != 0
-        || open_swapchain(g, cfg, err) != 0 || open_pipeline(g, err) != 0
-        || gfx_sig_open(g, err) != 0) {
-        gfx_shutdown(g);
-        return -1;
+    crash_mark(g->mon, "init: capture");
+    if (open_capture(g, cfg->monitor, &rect, err) != 0) {
+        goto fail;
+    }
+    crash_mark(g->mon, "init: window");
+    if (open_window(g, &rect, err) != 0) {
+        goto fail;
+    }
+    crash_mark(g->mon, "init: swap chain");
+    if (open_swapchain(g, cfg, err) != 0) {
+        goto fail;
+    }
+    crash_mark(g->mon, "init: shaders");
+    if (open_pipeline(g, err) != 0 || gfx_sig_open(g, err) != 0) {
+        goto fail;
     }
     gfx_prof_open(g);
     g->alive = 1;
     return 0;
+
+fail:
+    gfx_shutdown(g);
+    return -1;
 }

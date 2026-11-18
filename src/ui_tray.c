@@ -16,9 +16,6 @@
 #define HK_TOGGLE 1
 #define HK_QUIT 2
 #define MAX_PROFILES 24
-/* опрос команд аддона ReShade: ползунок в игре просит включить или выключить общий выключатель */
-#define TIMER_CMD 1
-#define CMD_POLL_MS 250
 
 enum { IDM_SETTINGS = 1, IDM_TOGGLE, IDM_PATTERN, IDM_UPDATE, IDM_QUIT, IDM_PROFILE = 100 };
 
@@ -46,6 +43,8 @@ static HICON load_icon(HINSTANCE inst, int id)
 static void tray_notify(ff_app *a, DWORD msg)
 {
     NOTIFYICONDATAW nid;
+    /* значок и подсказка по тому, работает ли фильтр хоть на одном мониторе: общего выключателя нет */
+    const int on = app_any_active(a);
 
     memset(&nid, 0, sizeof nid);
     nid.cbSize = sizeof nid;
@@ -53,9 +52,9 @@ static void tray_notify(ff_app *a, DWORD msg)
     nid.uID = 1;
     nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     nid.uCallbackMessage = WM_APP_TRAY;
-    nid.hIcon = a->enabled && !a->suspended ? g_icon_on : g_icon_off;
+    nid.hIcon = on && !a->suspended ? g_icon_on : g_icon_off;
     _snwprintf(nid.szTip, 128, L"fringefix %ls: %ls", L"" FF_VERSION,
-               ff_tr(!a->enabled ? S_TIP_OFF
+               ff_tr(!on ? S_TIP_OFF
                      : (a->suspended ? (a->pause_addon ? S_TIP_ADDON : S_TIP_PAUSED) : S_TIP_ON)));
     nid.szTip[127] = L'\0';
     Shell_NotifyIconW(msg, &nid);
@@ -125,10 +124,15 @@ static void show_menu(ff_app *a)
 {
     HMENU m = CreatePopupMenu();
     POINT pt;
+    const int sel = a->cfg.monitor;
 
     AppendMenuW(m, MF_STRING, IDM_SETTINGS, ff_tr(S_MENU_SETTINGS));
-    append_with_key(m, IDM_TOGGLE, ff_tr(a->enabled ? S_MENU_DISABLE : S_MENU_ENABLE),
+    /* пункт делает то же, что сочетание: переключает фильтр монитора, выбранного в окне настроек; у нулевого вида он серый */
+    append_with_key(m, IDM_TOGGLE, ff_tr(ff_config_view_const(&a->cfg, sel)->enabled ? S_MENU_DISABLE : S_MENU_ENABLE),
                     &a->cfg.hotkey_toggle);
+    if (app_monitor_neutral(a, sel)) {
+        EnableMenuItem(m, IDM_TOGGLE, MF_BYCOMMAND | MF_GRAYED);
+    }
     AppendMenuW(m, MF_POPUP, (UINT_PTR)profiles_menu(a), ff_tr(S_MENU_PROFILES));
     AppendMenuW(m, MF_STRING, IDM_PATTERN, ff_tr(S_MENU_PATTERN));
     AppendMenuW(m, MF_STRING, IDM_UPDATE, ff_tr(S_MENU_UPDATES));
@@ -143,30 +147,31 @@ static void show_menu(ff_app *a)
     DestroyMenu(m);
 }
 
-static void toggle(ff_app *a)
+/* активное окно принадлежит процессу с ReShade-аддоном: в нём сочетание обрабатывает сам аддон */
+static int foreground_has_addon(void)
 {
-    app_set_enabled(a, !a->enabled);
-    tray_notify(a, NIM_MODIFY);
-    ui_settings_refresh_power();
+    DWORD pid = 0;
+    HWND fg = GetForegroundWindow();
+
+    if (fg) {
+        GetWindowThreadProcessId(fg, &pid);
+    }
+    return pid != 0 && live_addon_present(pid);
 }
 
-/* сочетание включения: фильтр выбранного в окне монитора, остальные мониторы не трогаются. пока в игре работает
- * ReShade-аддон, клавиша принадлежит ему, и действие остаётся общим, как у самого аддона */
+/* сочетание включения и пункт меню: фильтр выбранного в окне монитора, остальные мониторы не трогаются. поверх игры с
+ * ReShade-аддоном сочетание принадлежит аддону: он сам включает и выключает фильтр внутри игры (клавишу он читает
+ * независимо от этой регистрации), а рабочий стол остаётся как был. нейтральному виду переключать нечего */
 static void toggle_selected(ff_app *a)
 {
     ff_view *v;
 
-    if (a->suspended && a->pause_addon) {
-        toggle(a);
+    if (foreground_has_addon() || app_monitor_neutral(a, a->cfg.monitor)) {
         return;
     }
     v = ff_config_view(&a->cfg, a->cfg.monitor);
     v->enabled = !v->enabled;
     app_save_toggle(a);
-    /* включение при выключенном общем выключателе (трей, аддон) иначе осталось бы незаметным */
-    if (v->enabled && !a->enabled) {
-        app_set_enabled(a, 1);
-    }
     app_retry(a);
     app_apply(a);
     tray_notify(a, NIM_MODIFY);
@@ -212,7 +217,7 @@ static void on_command(ff_app *a, int id)
         ui_settings_show(a);
         break;
     case IDM_TOGGLE:
-        toggle(a);
+        toggle_selected(a);
         break;
     case IDM_PATTERN:
         ui_pattern_show(a);
@@ -245,17 +250,6 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
     switch (m) {
     case WM_CREATE:
         SetWindowLongPtrW(h, GWLP_USERDATA, (LONG_PTR)((CREATESTRUCTW *)l)->lpCreateParams);
-        return 0;
-    case WM_TIMER:
-        if (w == TIMER_CMD) {
-            int on;
-
-            if (live_cmd_poll(&on) && on != (a->enabled != 0)) {
-                app_set_enabled(a, on);
-                tray_notify(a, NIM_MODIFY);
-                ui_settings_refresh_power();
-            }
-        }
         return 0;
     case WM_HOTKEY:
         if (w == HK_TOGGLE) {
@@ -312,7 +306,6 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
         nid.hWnd = h;
         nid.uID = 1;
         Shell_NotifyIconW(NIM_DELETE, &nid);
-        KillTimer(h, TIMER_CMD);
         UnregisterHotKey(h, HK_TOGGLE);
         UnregisterHotKey(h, HK_QUIT);
         PostQuitMessage(0);
@@ -362,7 +355,6 @@ int ui_tray_create(ff_app *a)
     }
     ui_tray_bind_hotkeys(a);
     tray_notify(a, NIM_ADD);
-    SetTimer(a->hwnd, TIMER_CMD, CMD_POLL_MS, NULL);
     return 0;
 }
 

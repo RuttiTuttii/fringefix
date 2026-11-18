@@ -45,8 +45,6 @@ constexpr int QPF = 16;
 constexpr int QFRAMES = 4;
 constexpr ULONGLONG POLL_MS = 500;
 constexpr ULONGLONG POWER_MS = 250;
-/* после команды приложению ползунок показывает заказанное состояние, пока приложение не успело обновить живые значения */
-constexpr ULONGLONG CMD_HOLD_MS = 1500;
 /* замеры идут, только пока вкладка открыта: так аддон ничего не стоит в обычной игре */
 constexpr unsigned OVERLAY_GRACE = 3;
 constexpr const char *EFFECT_FILE = "fringefix.fx";
@@ -80,6 +78,17 @@ struct settings {
     bool same(const settings &o) const
     {
         return memcmp(shift, o.shift, sizeof shift) == 0 && sharpen == o.sharpen && enabled == o.enabled;
+    }
+
+    /* ноль с запасом на запись в ini с тремя знаками, как в ff_view_is_neutral */
+    bool neutral() const
+    {
+        for (float v : shift) {
+            if (v >= 0.0005f || v <= -0.0005f) {
+                return false;
+            }
+        }
+        return sharpen < 0.0005f && sharpen > -0.0005f;
     }
 };
 
@@ -126,17 +135,17 @@ struct globals {
     bool power_tried = false;
     bool power_ok = false;
     ULONGLONG next_power = 0;
-    /* локальный выключатель фильтра: действует, когда живых значений приложения нет (ini или свои значения) */
+    /* выключатель фильтра в этой игре: ползунок вкладки и сочетание клавиш из ini приложения (F10 по умолчанию) переключают
+     * его при любом источнике значений. на рабочий стол и остальные окна он не влияет, приложению ничего не отправляется */
     bool local_on = true;
+    /* все сдвиги и резкость в нуле: применять нечего, выключатель неактивен, а сочетание его не трогает */
+    bool neutral = false;
     /* замеры вкладки: выключенные не собирают метки времени видеокарты и не опрашивают NVML */
     bool monitoring = true;
-    /* общий выключатель и флаг монитора окна игры из последних живых значений: нужны ползунку и подсказке */
-    bool app_master = true;
+    /* флаг монитора окна игры из последних живых значений: нужен подсказке под выключателем */
     bool app_view = true;
-    /* заказанное ползунком состояние и до какого момента его показывать вместо живого */
-    bool cmd_value = false;
-    ULONGLONG cmd_until = 0;
-    /* хоткей включения из ini приложения, по умолчанию F10; опрашивается, только пока приложение не отвечает */
+    /* сочетание включения из ini приложения, по умолчанию F10; опрашивается всегда: пока игра на переднем плане, приложение
+     * свою регистрацию клавиши не обрабатывает, фильтр в игре переключает аддон */
     ff_hotkey hotkey = {};
     bool key_prev = false;
     /* имя выхода, на котором окно игры */
@@ -228,8 +237,8 @@ void ensure_init()
 }
 
 /* ini приложения: перечитывается только при смене времени записи; запись в приложении атомарная,
- * поэтому полуфайла здесь не бывает */
-bool read_ini(settings &out)
+ * поэтому полуфайла здесь не бывает. нужен и при живом приложении: из него берётся сочетание включения */
+bool load_ini()
 {
     WIN32_FILE_ATTRIBUTE_DATA fa;
 
@@ -256,6 +265,15 @@ bool read_ini(settings &out)
         G.hotkey = G.ini_cfg.hotkey_toggle;
         G.ini_time = fa.ftLastWriteTime;
         G.ini_valid = true;
+    }
+    return true;
+}
+
+/* значения монитора окна игры из ini приложения */
+bool read_ini(settings &out)
+{
+    if (!load_ini()) {
+        return false;
     }
     /* монитор окна игры по имени выхода из ini; без имён (старый ini) остаётся выбранный в окне приложения */
     char dev[FF_DEVICE_LEN] = {};
@@ -355,6 +373,7 @@ void poll_config(effect_runtime *rt)
         return;
     }
     G.next_poll = now + POLL_MS;
+    load_ini();
     if (G.follow_app) {
         ff_live snap;
 
@@ -364,18 +383,17 @@ void poll_config(effect_runtime *rt)
 
             memcpy(n.shift, v->shift, sizeof n.shift);
             n.sharpen = v->sharpen;
-            G.app_master = snap.master != 0;
             G.app_view = v->enabled != 0;
-            n.enabled = G.app_master && G.app_view;
+            n.enabled = G.app_view;
             src = SRC_APP;
         } else if (read_ini(n)) {
             src = SRC_INI;
         }
     }
     G.source = src;
-    if (src != SRC_APP) {
-        n.enabled = n.enabled && G.local_on;
-    }
+    /* нулевые значения фильтру нечего применять; выключатель игры действует при любом источнике значений */
+    G.neutral = n.neutral();
+    n.enabled = n.enabled && G.local_on && !G.neutral;
     if (!n.same(G.eff)) {
         G.eff = n;
         G.version++;
@@ -615,15 +633,17 @@ void collect_timing(effect_runtime *rt, rt_state &s)
     }
 }
 
-/* хоткей включения, пока приложение не запущено: оно ловит его само и обновляет общий выключатель.
- * срабатывает по фронту нажатия и только когда игра на переднем плане */
+/* сочетание включения: переключает фильтр в этой игре, при запущенном приложении тоже. приложение, когда игра с аддоном на
+ * переднем плане, своё сочетание не обрабатывает, поэтому рабочий стол от клавиши не меняется. клавиша читается по
+ * физическому состоянию и доходит до аддона, даже когда приложение держит её как глобальное сочетание.
+ * срабатывает по фронту нажатия, только когда игра на переднем плане и значения не нулевые */
 void poll_hotkey()
 {
     const ff_hotkey &h = G.hotkey;
     DWORD pid = 0;
     bool down;
 
-    if (G.source == SRC_APP || h.vk == 0) {
+    if (h.vk == 0) {
         G.key_prev = false;
         return;
     }
@@ -633,7 +653,7 @@ void poll_hotkey()
            && (!(h.mods & FF_MOD_ALT) || (GetAsyncKeyState(VK_MENU) & 0x8000))
            && (!(h.mods & FF_MOD_SHIFT) || (GetAsyncKeyState(VK_SHIFT) & 0x8000))
            && (!(h.mods & FF_MOD_WIN) || (GetAsyncKeyState(VK_LWIN) & 0x8000) || (GetAsyncKeyState(VK_RWIN) & 0x8000));
-    if (down && !G.key_prev) {
+    if (down && !G.key_prev && !G.neutral) {
         G.local_on = !G.local_on;
         G.next_poll = 0;
     }
@@ -769,28 +789,24 @@ bool toggle(const char *id, bool *on, const char *tip)
     return clicked;
 }
 
-/* ползунок «Filter»: с приложением шлёт ему команду, без него переключает локальный флаг */
+/* ползунок «Filter»: включает и выключает фильтр в этой игре, как сочетание клавиш (F10 по умолчанию). приложению ничего
+ * не отправляется, рабочий стол и остальные мониторы не меняются; у нулевых значений он неактивен */
 void draw_filter_toggle()
 {
-    ULONGLONG now = GetTickCount64();
-    bool on = G.eff.enabled != 0;
+    bool on = G.local_on;
 
-    if (G.source == SRC_APP && now < G.cmd_until) {
-        on = G.cmd_value;
+    ImGui::BeginDisabled(G.neutral);
+    if (toggle("##filter", &on, "Turns the filter on and off in this game, the same as the hotkey (F10 by default). "
+                                "The desktop and other windows are not affected.")) {
+        G.local_on = on;
+        G.next_poll = 0;
     }
-    if (toggle("##filter", &on, "Same as the hotkey of the fringefix app (F10 by default).")) {
-        if (G.source == SRC_APP) {
-            G.cmd_value = on;
-            G.cmd_until = now + CMD_HOLD_MS;
-            live_cmd_send(on ? 1 : 0);
-        } else {
-            G.local_on = on;
-            G.next_poll = 0;
-        }
-    }
+    ImGui::EndDisabled();
     ImGui::SameLine();
     ImGui::TextUnformatted("Filter");
-    if (G.source == SRC_APP && G.app_master && !G.app_view) {
+    if (G.neutral) {
+        ImGui::TextDisabled("Not applied: all values are zero.");
+    } else if (G.source == SRC_APP && !G.app_view) {
         ImGui::TextDisabled("Off for this monitor in the fringefix app.");
     }
     if (G.span > 1) {

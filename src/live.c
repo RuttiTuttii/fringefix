@@ -11,8 +11,6 @@
 #define SDDL_READ_ALL_FMT L"D:(A;;GR;;;WD)(A;;GA;;;%ls)"
 #define SDDL_SYNC_ALL L"D:(A;;0x100000;;;WD)"
 #define READ_RETRIES 64
-/* команды от аддона: писать и читать может любой процесс пользователя, данные это одно значение выключателя */
-#define SDDL_CMD_ALL L"D:(A;;GRGW;;;WD)"
 
 static HANDLE g_map_w;
 static ff_live *g_live_w;
@@ -21,15 +19,6 @@ static const ff_live *g_live_r;
 static HANDLE g_app_proc;
 static unsigned g_app_pid;
 static HANDLE g_mark;
-
-typedef struct {
-    volatile LONG seq;
-    volatile LONG enabled;
-} ff_cmd;
-
-static HANDLE g_cmd_map;
-static ff_cmd *g_cmd;
-static LONG g_cmd_seen;
 
 /* атрибуты с заданным списком доступа; sd освобождает вызывающий через LocalFree */
 static int make_attrs(const wchar_t *sddl, SECURITY_ATTRIBUTES *sa, PSECURITY_DESCRIPTOR *sd)
@@ -90,19 +79,10 @@ int live_publish_open(void)
     }
     g_live_w->pid = GetCurrentProcessId();
     g_live_w->magic = FF_LIVE_MAGIC;
-    /* память команд необязательна: без неё ползунок аддона просто не достаёт до приложения */
-    if (!g_cmd && make_attrs(SDDL_CMD_ALL, &sa, &sd) == 0) {
-        g_cmd_map = CreateFileMappingW(INVALID_HANDLE_VALUE, &sa, PAGE_READWRITE, 0, sizeof(ff_cmd), FF_CMD_NAME);
-        LocalFree(sd);
-        g_cmd = g_cmd_map ? MapViewOfFile(g_cmd_map, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(ff_cmd)) : NULL;
-        if (g_cmd) {
-            g_cmd_seen = g_cmd->seq;
-        }
-    }
     return 0;
 }
 
-void live_publish(const ff_config *cfg, int master, const wchar_t (*devices)[FF_LIVE_DEV_LEN], int n)
+void live_publish(const ff_config *cfg, const wchar_t (*devices)[FF_LIVE_DEV_LEN], int n)
 {
     int m;
 
@@ -113,7 +93,8 @@ void live_publish(const ff_config *cfg, int master, const wchar_t (*devices)[FF_
     /* нечётное значение на время записи, чётное после: читатель повторяет чтение, если увидел нечётное
      * или разное значение до и после */
     InterlockedIncrement(&g_live_w->seq);
-    g_live_w->master = master ? 1 : 0;
+    /* общего выключателя больше нет; поле осталось, чтобы аддоны прежних версий не читали ноль и не гасили фильтр */
+    g_live_w->master = 1;
     g_live_w->selected = cfg->monitor;
     g_live_w->count = n < 0 ? 0 : (n > FF_MAX_MONITORS ? FF_MAX_MONITORS : n);
     for (m = 0; m < FF_MAX_MONITORS; m++) {
@@ -137,14 +118,6 @@ void live_publish(const ff_config *cfg, int master, const wchar_t (*devices)[FF_
 
 void live_publish_close(void)
 {
-    if (g_cmd) {
-        UnmapViewOfFile(g_cmd);
-        g_cmd = NULL;
-    }
-    if (g_cmd_map) {
-        CloseHandle(g_cmd_map);
-        g_cmd_map = NULL;
-    }
     if (g_live_w) {
         UnmapViewOfFile(g_live_w);
         g_live_w = NULL;
@@ -224,45 +197,6 @@ int live_read(ff_live *out)
         return 1;
     }
     return 0;
-}
-
-int live_cmd_poll(int *enabled)
-{
-    LONG seq;
-
-    if (!g_cmd) {
-        return 0;
-    }
-    seq = g_cmd->seq;
-    if (seq == g_cmd_seen) {
-        return 0;
-    }
-    g_cmd_seen = seq;
-    *enabled = g_cmd->enabled != 0;
-    return 1;
-}
-
-int live_cmd_send(int enabled)
-{
-    static HANDLE map;
-    static ff_cmd *cmd;
-
-    if (!cmd) {
-        map = OpenFileMappingW(FILE_MAP_READ | FILE_MAP_WRITE, FALSE, FF_CMD_NAME);
-        cmd = map ? MapViewOfFile(map, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, sizeof(ff_cmd)) : NULL;
-        if (!cmd) {
-            if (map) {
-                CloseHandle(map);
-                map = NULL;
-            }
-            return 0;
-        }
-    }
-    /* значение раньше счётчика: опрос по новому счётчику уже видит новое значение */
-    cmd->enabled = enabled ? 1 : 0;
-    MemoryBarrier();
-    InterlockedIncrement(&cmd->seq);
-    return 1;
 }
 
 const ff_live_view *live_pick_view(const ff_live *snap, const wchar_t *device)

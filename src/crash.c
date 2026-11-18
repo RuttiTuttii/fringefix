@@ -17,9 +17,17 @@
 #define FIRST_CHANCE_BUDGET 64
 /* сколько раз подряд программа сама поднимается после сбоя; ручной запуск обнуляет счёт */
 #define MAX_RELAUNCH 3
+/* сторож: проверка раз в секунду; поток без новых отметок этапа дольше HANG_MS считается зависшим. устройство обычно
+ * поднимается за треть секунды, первая сборка шейдеров занимает секунды, пятнадцати хватает с большим запасом */
+#define WATCH_MS 1000
+#define HANG_MS 15000
+/* сколько сторож ждёт отчёт о зависании: стек зависшего потока может лежать в коде, держащем замок загрузчика */
+#define REPORT_WAIT_MS 5000
 
 static const char *volatile g_stage[FF_MAX_MONITORS];
 static volatile DWORD g_tid[FF_MAX_MONITORS];
+/* время последней отметки этапа каждого потока: по нему сторож видит, что поток замолчал */
+static volatile ULONGLONG g_beat[FF_MAX_MONITORS];
 static wchar_t g_path[MAX_PATH];
 static wchar_t g_dump[MAX_PATH];
 static volatile LONG g_budget = FIRST_CHANCE_BUDGET;
@@ -31,6 +39,7 @@ void crash_mark(int worker, const char *stage)
     if (worker >= 0 && worker < FF_MAX_MONITORS) {
         g_stage[worker] = stage;
         g_tid[worker] = GetCurrentThreadId();
+        g_beat[worker] = GetTickCount64();
     }
 }
 
@@ -150,8 +159,9 @@ static void scan_stack(HANDLE f, const char *label, ULONG_PTR rsp)
 }
 
 /* где сейчас остальные потоки захвата: упавший монитор часто виноват не один, второй стоит в драйвере на том же вызове.
- * потоки замораживаются и не возобновляются, процесс всё равно умирает */
-static void other_workers(HANDLE f)
+ * потоки замораживаются; при сбое они не возобновляются, процесс всё равно умирает, а при зависании без перезапуска
+ * (resume) возвращаются к работе. what это подпись строки в журнале: "crash" или "hang" */
+static void other_workers(HANDLE f, const char *what, int resume)
 {
     int i;
 
@@ -174,9 +184,12 @@ static void other_workers(HANDLE f)
         if (SuspendThread(t) != (DWORD)-1 && GetThreadContext(t, &c)) {
             where((ULONG_PTR)c.Rip, at, sizeof at);
             put(f, "worker %d thread %lu stage %s rip %s\r\n", i, tid, crash_stage(i), at);
-            ff_log(i, "at crash: thread %lu stage %s rip %s", tid, crash_stage(i), at);
+            ff_log(i, "at %s: thread %lu stage %s rip %s", what, tid, crash_stage(i), at);
             snprintf(label, sizeof label, "worker %d", i);
             scan_stack(f, label, (ULONG_PTR)c.Rsp);
+            if (resume) {
+                ResumeThread(t);
+            }
         }
         CloseHandle(t);
     }
@@ -208,8 +221,9 @@ static void write_dump(EXCEPTION_POINTERS *ep)
     mei.ThreadId = GetCurrentThreadId();
     mei.ExceptionPointers = ep;
     mei.ClientPointers = FALSE;
+    /* без исключения (зависание) в дамп идут только стеки потоков */
     ok = fn(GetCurrentProcess(), GetCurrentProcessId(), h,
-            (MINIDUMP_TYPE)(MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules), &mei, NULL, NULL);
+            (MINIDUMP_TYPE)(MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules), ep ? &mei : NULL, NULL, NULL);
     CloseHandle(h);
     ff_log(-1, "minidump %s, last error %lu", ok ? "written to crash.dmp" : "failed", ok ? 0UL : GetLastError());
 }
@@ -344,7 +358,7 @@ static LONG WINAPI filter(EXCEPTION_POINTERS *ep)
             }
         }
         scan_stack(f, "crashed", (ULONG_PTR)c->Rsp);
-        other_workers(f);
+        other_workers(f, "crash", 0);
         CloseHandle(f);
     }
     write_dump(ep);
@@ -353,6 +367,97 @@ static LONG WINAPI filter(EXCEPTION_POINTERS *ep)
         TerminateProcess(GetCurrentProcess(), er->ExceptionCode);
     }
     return EXCEPTION_CONTINUE_SEARCH;
+}
+
+/* отчёт о зависании в отдельном потоке: чтение стека зависшего потока может упереться в замок, который тот держит
+ * (загрузчик модулей), и тогда сторож не вправе встать вместе с ним */
+static DWORD WINAPI hang_report(LPVOID arg)
+{
+    HANDLE f = CreateFileW(g_path, FILE_APPEND_DATA, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    SYSTEMTIME st;
+    int worker = (int)(INT_PTR)arg;
+
+    if (f != INVALID_HANDLE_VALUE) {
+        GetLocalTime(&st);
+        put(f, "\r\nfringefix %s, %04u-%02u-%02u %02u:%02u:%02u, hang\r\n", FF_VERSION, st.wYear, st.wMonth, st.wDay,
+            st.wHour, st.wMinute, st.wSecond);
+        put(f, "worker %d made no progress, last stage: %s\r\n", worker, crash_stage(worker));
+        other_workers(f, "hang", 1);
+        CloseHandle(f);
+    }
+    write_dump(NULL);
+    return 0;
+}
+
+static void on_hang(int worker, ULONGLONG silent_ms)
+{
+    HANDLE t;
+    int i;
+
+    ff_log(-1, "HANG worker %d made no progress for %llu s, last stage: %s", worker,
+           (unsigned long long)(silent_ms / 1000), crash_stage(worker));
+    for (i = 0; i < FF_MAX_MONITORS; i++) {
+        if (g_stage[i]) {
+            ff_log(i, "last stage: %s", g_stage[i]);
+        }
+    }
+    t = CreateThread(NULL, 0, hang_report, (LPVOID)(INT_PTR)worker, 0, NULL);
+    if (t) {
+        if (WaitForSingleObject(t, REPORT_WAIT_MS) == WAIT_TIMEOUT) {
+            ff_log(-1, "hang report did not finish in %d s, going on", REPORT_WAIT_MS / 1000);
+        }
+        CloseHandle(t);
+    }
+    /* замёрзший захват держит на экране последний кадр поверх всего; остаётся только запустить программу заново */
+    if (relaunch()) {
+        TerminateProcess(GetCurrentProcess(), 0xDEAD0001u);
+    }
+}
+
+static DWORD WINAPI watch_main(LPVOID arg)
+{
+    ULONGLONG last = GetTickCount64();
+
+    (void)arg;
+    for (;;) {
+        ULONGLONG now;
+        int i;
+
+        Sleep(WATCH_MS);
+        now = GetTickCount64();
+        /* сам сторож не получал времени дольше четырёх периодов: система спала или процесс стоял на отладчике,
+         * это не зависание потоков захвата; отсчёт начинается заново */
+        if (now - last > 4 * WATCH_MS) {
+            for (i = 0; i < FF_MAX_MONITORS; i++) {
+                g_beat[i] = now;
+            }
+            last = now;
+            continue;
+        }
+        last = now;
+        for (i = 0; i < FF_MAX_MONITORS; i++) {
+            const char *st = g_stage[i];
+
+            /* смотрятся только запуск и закрытие устройства: кадровые стадии (present, acquire, copy, compare, draw) могут
+             * законно ждать, например пока монитор спит, а вызов запуска без ответа это ровно то, что видно в журнале */
+            if (!g_tid[i] || !st || now - g_beat[i] < HANG_MS
+                || !(strncmp(st, "init", 4) == 0 || strcmp(st, "shutdown") == 0 || strcmp(st, "upload") == 0)) {
+                continue;
+            }
+            on_hang(i, now - g_beat[i]);
+            /* перезапуск не вышел (три сбоя подряд): отчёт один на программу, дальше сторож молчит */
+            return 0;
+        }
+    }
+}
+
+void crash_watch_start(void)
+{
+    HANDLE t = CreateThread(NULL, 0, watch_main, NULL, 0, NULL);
+
+    if (t) {
+        CloseHandle(t);
+    }
 }
 
 void crash_install(void)

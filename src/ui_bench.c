@@ -60,7 +60,6 @@ static struct {
     double phase_t0;
     double meas_t0;
     int saved_engine;
-    int saved_enabled;
     int saved_force;
     ff_run_row rows[NSTEPS];
     int nrows;
@@ -303,13 +302,13 @@ static void update_trial_text(double now)
     }
 }
 
-/* откат к значениям до пробы; reenable включает оверлей, если ошибка запуска его выключила.
+/* откат к значениям до пробы; reenable даёт мониторам, на которых оверлей не поднялся, новую попытку.
  * файл настроек тоже перезаписывается: другое окно могло сохранить его вместе с пробными значениями */
 static void revert_to(const ff_variant *back, str_id msg, int reenable)
 {
     apply_variant(back);
     if (reenable) {
-        app_set_enabled(ui.app, 1);
+        app_retry(ui.app);
     }
     app_save(ui.app);
     bench_set_trial_left(-1);
@@ -361,12 +360,14 @@ static void begin_step(void)
 {
     int e = STEP_ENGINE[T.step];
 
+    /* базовый замер гасит фильтр на всех мониторах, остальные шаги держат его и на нейтральном виде: нулевые настройки
+     * тоже надо уметь мерить */
     if (e == FF_ENGINE_OFF) {
         bench_set_force(0);
-        app_set_enabled(ui.app, 0);
+        app_set_override(ui.app, APP_OVERRIDE_OFF);
     } else {
         apply_engine(e);
-        app_set_enabled(ui.app, 1);
+        app_set_override(ui.app, APP_OVERRIDE_RUN);
         bench_set_force(1);
     }
     T.measuring = 0;
@@ -381,7 +382,7 @@ static void end_test(int finished)
     T.running = 0;
     bench_set_force(T.saved_force);
     apply_engine(T.saved_engine);
-    app_set_enabled(ui.app, T.saved_enabled);
+    app_set_override(ui.app, APP_OVERRIDE_NONE);
     PostMessageW(ui.app->hwnd, WM_APP_STATE, 0, 0);
     if (g_win) {
         SendMessageW(g_engine, CB_SETCURSEL, (WPARAM)T.saved_engine, 0);
@@ -403,7 +404,6 @@ static void start_test(void)
     T.step = 0;
     T.running = 1;
     T.saved_engine = ui.app->cfg.engine;
-    T.saved_enabled = ui.app->enabled != 0;
     T.saved_force = bench_force();
     bench_clear();
     SetWindowTextW(GetDlgItem(g_win, ID_D_RUN), ff_tr(S_DIAG_STOP));

@@ -105,7 +105,7 @@ static void on_command(int id, int code)
     } else if (id == ID_MONITOR && code == CBN_SELCHANGE) {
         ctl_monitor_changed();
     } else if (id == ID_POWER && code == FFN_CHANGED) {
-        /* выключатель монитора; значку в трее сообщаем сообщением, потому что общий выключатель мог поменять подпись */
+        /* выключатель монитора; значку в трее сообщаем сообщением, потому что от выключателя зависит, работает ли фильтр хоть где-то */
         ctl_power_changed();
         PostMessageW(ui.app->hwnd, WM_APP_STATE, 0, 0);
     } else if (id == ID_PROGRAM) {

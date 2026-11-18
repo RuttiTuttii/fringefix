@@ -15,6 +15,37 @@ static void test_defaults(void)
     CHECK(c.gpu_priority == 0 && c.language == 0 && c.theme == 0 && c.stats == 0 && c.pause_apps[0] == '\0' && c.ignore_apps[0] == '\0');
 }
 
+static void test_neutral(void)
+{
+    ff_view v;
+    ff_config c;
+
+    /* нулевой вид нейтрален, любой ненулевой сдвиг или резкость нет, флаг включения не важен */
+    memset(&v, 0, sizeof v);
+    CHECK(ff_view_is_neutral(&v));
+    v.enabled = 1;
+    CHECK(ff_view_is_neutral(&v));
+    v.shift[2][1] = 0.01f;
+    CHECK(!ff_view_is_neutral(&v));
+    v.shift[2][1] = -0.01f;
+    CHECK(!ff_view_is_neutral(&v));
+    ff_view_reset(&v);
+    CHECK(ff_view_is_neutral(&v));
+    v.sharpen = -0.05f;
+    CHECK(!ff_view_is_neutral(&v));
+    /* остаток короче половины тысячной в ini пишется как 0.000, такой вид тоже нейтрален */
+    ff_view_reset(&v);
+    v.shift[0][0] = 0.0004f;
+    v.sharpen = -0.0004f;
+    CHECK(ff_view_is_neutral(&v));
+    v.shift[0][0] = 0.001f;
+    CHECK(!ff_view_is_neutral(&v));
+
+    /* круг запись-чтение не меняет нейтральность */
+    ff_config_defaults(&c);
+    CHECK(ff_view_is_neutral(&c.view[0]) && c.view[0].enabled == 1);
+}
+
 static void test_engine(void)
 {
     ff_config c;
@@ -365,6 +396,7 @@ int main(void)
     test_game_keys();
     test_legacy();
     test_views();
+    test_neutral();
     test_rotation_sets();
     test_junk();
     test_bom();

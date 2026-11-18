@@ -2,7 +2,7 @@
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow the `vX.Y.Z` tags. Betas carry `-beta.N`.
 
-## Unreleased
+## v0.8.0-beta.7 (2026-11-19)
 
 ### Added
 
@@ -11,10 +11,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 - the "alive" line of a monitor thread is now written also while the thread retries the device start or sits on pause, and it shows whether the monitor is on
 - a "Pause on all monitors when the app is open on any of them" checkbox in the Program window (key `pause_all_monitors`): a fullscreen or 3D app on one monitor pauses the filter on the other ones too; without it the pause stays as before, on the monitor with the app only
 - `fringefix.ini` holds the output names (`mon0_device`, `mon1_device`): the ReShade add-on without a running program takes the settings of the monitor the game runs on, not the one selected in the program window
+- a watchdog for hangs: a capture thread that stays 15 seconds in the start or the closing of a device (a driver or an overlay hook did not return from a call) is written to `fringefix.log` and `crash.log` with the place where each thread stands, `crash.dmp` is written, and the program starts again the same way as after a crash; before, a hang stayed until the process was killed by hand. The frame steps (acquire, copy, compare, draw, present) are not watched: they can wait for a good reason, for example while a monitor sleeps
+- the start of a device marks its steps (device, output duplication, window, swap chain, shaders): after a hang the log shows the call it stood in
+- when auto-pause starts on a fullscreen window, the log line carries the class, the styles and the rectangle of that window
 
 ### Changed
 
 - ReShade add-on: a game window stretched over several monitors gets the settings of the monitor that holds most of it, and the add-on window shows a line about it; the add-on cannot apply different settings to parts of one picture
+- the master switch of the old versions is gone from the program: no "master switch off" in the monitor list and under the filter switch, no command from the add-on slider to the program. What is left works per monitor: the switch at the bottom of the settings window, `F10` and the tray item, which now reads "Turn on the filter of the selected monitor" and acts like `F10`
+- the tray icon and tip show whether the filter works on at least one monitor
+- a monitor with all shifts and sharpness at zero is not processed: no device and no overlay window are created for it, its filter switch is inactive and the line under it says "not applied, all values are zero", the monitor list marks it "values are zero", `F10` and the tray item leave it alone. The switch keeps its position, so moving any slider brings the filter back as it was. On the first start, with default settings, the overlay therefore does not start until a value changes; the "Run" test of the diagnostics window still measures with zero values
+- `F10` in a game with the ReShade add-on now belongs to the add-on alone: it turns the filter in that game on and off (the add-on reads the key itself, also while the program runs, and also with a hotkey changed in the ini), and the program leaves the desktop as it was. The add-on slider "Filter" does the same and is inactive at zero values. Install the add-on again from the program: the slider of the old add-on no longer reaches the program
+- a pause that `NVIDIA Overlay.exe` (the overlay on Alt+Z) caused holds for 8 seconds after the last time its window was active
+- a device start that failed is retried with growing pauses of 0.5, 1, 2 and 4 seconds instead of every 0.5 seconds; a settings change no longer cuts the pause short
+
+### Fixed
+
+- `F10` in a game with the add-on switched the filter off on all monitors including the desktop and left the monitor list with "master switch off"
+- in the log of `v0.8.0-beta.6` the pause caused by `NVIDIA Overlay.exe` ended 1 to 4 seconds after it began, as soon as its window stopped being the active one, so the filter could come back over the overlay; the pause now holds for 8 seconds after the last activity (see the known issues)
+
+### Known issues
+
+- the NVIDIA overlay: the hold above is built from the log and has not been checked with the real overlay. In the same log both capture threads lost the capture at the same instant after Alt+Z, the device start then failed several times with `E_ACCESSDENIED` (`0x80070005`) and once did not return at all; the call that hangs is not found. The watchdog restarts the program in that case, `crash.log` will show the place. Send `fringefix.log`, `crash.log` and `crash.dmp` if it happens again
+- RivaTuner Statistics Server hooks the process and crashes it in `dxgi.dll` with two monitors filtered; adding `fringefix.exe` to the RTSS exclusions removes the crash (confirmed for `v0.8.0-beta.6`)
 
 ## v0.8.0-beta.6 (2026-11-17)
 

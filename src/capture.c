@@ -16,6 +16,12 @@
 #define FRAME_WAIT_MS 100
 #define FRAME_WAIT_UI_MS 16
 #define RETRY_MS 500
+/* повторы запуска устройства идут с удвоением паузы до потолка: пока рабочий стол недоступен (оверлей драйвера, UAC, смена режима),
+ * частые попытки только дёргают DXGI и сами могут ему мешать */
+#define RETRY_MAX_MS 4000
+/* пауза от оверлея с интерфейсом (NVIDIA по Alt+Z) держится столько после последней вспышки активности его окна:
+ * окно то получает фокус, то отдаёт, а интерфейс всё это время на экране, и без удержания оверлей возвращался поверх него */
+#define OVERLAY_HOLD_MS 8000
 #define STOP_WAIT_MS 5000
 #define REASSERT_MS 2000
 #define DETECT_MS 500
@@ -40,6 +46,8 @@ typedef struct {
     int in_game;
     /* пауза держится игрой на другом мониторе (режим паузы на всех мониторах), своей игры тут нет */
     int paused_elsewhere;
+    /* до какого момента пауза держится после оверлея с интерфейсом, даже если окно уже не активно */
+    ULONGLONG hold_until;
 } game_state;
 
 /* поток одного монитора: свой захват, оверлей и автопауза; число потоков равно числу выходов на запуске */
@@ -223,13 +231,28 @@ static void update_game_state(worker *w, game_state *s)
             end_session(s);
         } else if (!s->in_game || strcmp(exe, s->exe) != 0) {
             snprintf(s->exe, sizeof s->exe, "%s", exe[0] ? exe : "unknown");
-            ff_log(w->index, "pause by %s: %s", HOW[how], s->exe);
+            if (how == GAME_FULLSCREEN) {
+                /* что именно сошло за полноэкранную программу: нужно, чтобы отличить оверлеи от игр */
+                char what[128];
+
+                game_describe_foreground(what);
+                ff_log(w->index, "pause by %s: %s (%s)", HOW[how], s->exe, what);
+            } else {
+                ff_log(w->index, "pause by %s: %s", HOW[how], s->exe);
+            }
             stats_store_game_begin(s->exe, HOW[how], "pause");
             s->in_game = 1;
         }
+        if (how == GAME_FULLSCREEN && game_is_overlay_ui(exe)) {
+            s->hold_until = now + OVERLAY_HOLD_MS;
+        }
         s->paused_elsewhere = elsewhere;
+    } else if (s->paused && now < s->hold_until) {
+        /* интерфейс оверлея ещё на экране, хотя окно уже не активно: пауза не снимается, иначе фильтр ляжет поверх него */
+        s->clear = 0;
     } else if (s->paused && ++s->clear >= RESUME_CHECKS) {
         s->paused_elsewhere = 0;
+        s->hold_until = 0;
         set_state(a, s, w->index, 0);
         end_session(s);
     }
@@ -248,6 +271,9 @@ static DWORD WINAPI capture_main(LPVOID arg)
     int ret;
     int lost = 0;
     int force = 0;
+    /* следующая попытка запуска устройства не раньше этого момента, и текущая пауза между попытками */
+    ULONGLONG next_try = 0;
+    DWORD retry_ms = RETRY_MS;
     ULONGLONG last_assert = 0;
     ULONGLONG next_flush = 0;
     ULONGLONG next_save = GetTickCount64() + SAVE_MS;
@@ -279,8 +305,15 @@ static DWORD WINAPI capture_main(LPVOID arg)
         }
 
         if (active != was_active) {
-            ff_log(idx, "filter %s", active ? "on" : "off");
+            /* выключатель включён, а фильтра нет: все сдвиги и резкость в нуле, обрабатывать нечего */
+            const int neutral = !active && a->cfg.view[idx].enabled && app_monitor_neutral(a, idx);
+
+            ff_log(idx, "filter %s", active ? "on" : (neutral ? "off (neutral settings)" : "off"));
             was_active = active;
+            next_try = 0;
+            retry_ms = RETRY_MS;
+            /* значок в трее и список мониторов узнают, что фильтр где-то включился или погас сам (нулевой вид) */
+            PostMessageW(a->hwnd, WM_APP_STATE, 0, 0);
         }
         if (!active || (InterlockedAnd(&a->reinit_mask, ~bit) & bit)) {
             shutdown_gfx(w, &g, active ? "reinit requested" : "filter off");
@@ -292,6 +325,8 @@ static DWORD WINAPI capture_main(LPVOID arg)
                 set_state(a, &gs, idx, 0);
                 end_session(&gs);
             }
+            /* законный сон без срока: сторож зависаний его не считает */
+            crash_mark(idx, "idle");
             WaitForSingleObject(a->wake[idx], INFINITE);
             continue;
         }
@@ -303,6 +338,17 @@ static DWORD WINAPI capture_main(LPVOID arg)
             shutdown_gfx(w, &g, "autopause");
             WaitForSingleObject(a->wake[idx], DETECT_MS);
             continue;
+        }
+
+        /* после сбоя запуска устройство не поднимается чаще, чем позволяет пауза: пробуждение по правке настроек её не сокращает */
+        if (!g.alive) {
+            const ULONGLONG t = GetTickCount64();
+
+            if (t < next_try) {
+                crash_mark(idx, "retry wait");
+                WaitForSingleObject(a->wake[idx], (DWORD)(next_try - t));
+                continue;
+            }
         }
 
         if (!g.alive) {
@@ -327,10 +373,13 @@ static DWORD WINAPI capture_main(LPVOID arg)
                     InterlockedOr(&a->fail_mask, bit);
                     PostMessageW(a->hwnd, WM_APP_STATE, 0, 0);
                 } else {
-                    WaitForSingleObject(a->wake[idx], RETRY_MS);
+                    next_try = GetTickCount64() + retry_ms;
+                    retry_ms = retry_ms * 2 > RETRY_MAX_MS ? RETRY_MAX_MS : retry_ms * 2;
                 }
                 continue;
             }
+            next_try = 0;
+            retry_ms = RETRY_MS;
             if (lost) {
                 stats_store_device_reset();
                 lost = 0;

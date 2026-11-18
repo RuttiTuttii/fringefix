@@ -84,6 +84,8 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE prev, LPSTR cmd, int show)
         MessageBoxW(NULL, ff_tr(S_START_FAILED), L"fringefix", MB_ICONERROR);
         return 1;
     }
+    /* сторож зависаний следит за потоками захвата: запускается, когда они уже отмечают этапы */
+    crash_watch_start();
     /* после обновления или отката открываются те же окна на тех же местах */
     ui_windows_restore(&app, cmd);
     if (app.cfg.check_updates && FF_REPO[0]) {

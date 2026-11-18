@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <psapi.h>
+#include <stdio.h>
 #include <wchar.h>
 
 #include "applist.h"
@@ -18,6 +19,9 @@ static const wchar_t *const SHELL_CLASSES[] = {
  * но играми не являются; список в формате ff_app_list_has */
 static const char SHELL_APPS[] = "explorer.exe;lockapp.exe;screenclippinghost.exe;searchhost.exe;"
                                  "startmenuexperiencehost.exe;shellexperiencehost.exe";
+
+/* оверлеи с интерфейсом поверх экрана, активные короткими вспышками: пауза держится дольше самой вспышки */
+static const char *const OVERLAY_UI_APPS[] = { "NVIDIA Overlay.exe" };
 
 static const wchar_t *const GFX_MODULES[] = {
     L"d3d9.dll", L"d3d11.dll", L"d3d12.dll", L"vulkan-1.dll", L"opengl32.dll",
@@ -211,4 +215,35 @@ int game_detect(const ff_config *cfg, const RECT *monitor, char exe[64])
         return GAME_3D;
     }
     return GAME_NONE;
+}
+
+int game_is_overlay_ui(const char *exe)
+{
+    size_t i;
+
+    for (i = 0; i < sizeof OVERLAY_UI_APPS / sizeof OVERLAY_UI_APPS[0]; i++) {
+        if (_stricmp(exe, OVERLAY_UI_APPS[i]) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+void game_describe_foreground(char out[128])
+{
+    HWND fg = GetForegroundWindow();
+    wchar_t cls[48] = L"";
+    char cls8[96] = "";
+    RECT r = { 0, 0, 0, 0 };
+
+    if (!fg) {
+        snprintf(out, 128, "no foreground window");
+        return;
+    }
+    GetClassNameW(fg, cls, 48);
+    WideCharToMultiByte(CP_UTF8, 0, cls, -1, cls8, sizeof cls8 - 1, NULL, NULL);
+    GetWindowRect(fg, &r);
+    snprintf(out, 128, "class %s, style 0x%lx, ex 0x%lx, rect %ld,%ld %ldx%ld", cls8,
+             (unsigned long)GetWindowLongW(fg, GWL_STYLE), (unsigned long)GetWindowLongW(fg, GWL_EXSTYLE),
+             (long)r.left, (long)r.top, (long)(r.right - r.left), (long)(r.bottom - r.top));
 }

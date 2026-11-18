@@ -89,7 +89,7 @@ static void fill_round(HDC dc, COLORREF color, int x0, int y0, int x1, int y1)
 
 /* переключатель как в системных настройках Windows: капсула и круглый бегунок; включённый залит цветом акцента
  * с белым бегунком, выключенный это контур и бегунок цвета текста */
-static void paint_switch(HDC dc, const RECT *r, const slider_t *s, const ff_palette *p, int focused)
+static void paint_switch(HDC dc, const RECT *r, const slider_t *s, const ff_palette *p, int focused, int enabled)
 {
     int th = r->bottom * 20 / 28;
     int tw = th * 2;
@@ -99,9 +99,10 @@ static void paint_switch(HDC dc, const RECT *r, const slider_t *s, const ff_pale
     int gap = (th - d) / 2;
     int kx = s->pos == s->hi ? x0 + tw - gap - d : x0 + gap;
     int on = s->pos == s->hi;
-    HBRUSH track = on ? CreateSolidBrush(p->accent) : (HBRUSH)GetStockObject(NULL_BRUSH);
+    /* неактивный выключатель серый в любом положении: заливка и бегунок цвета подписей, а не акцента */
+    HBRUSH track = on ? CreateSolidBrush(enabled ? p->accent : p->border) : (HBRUSH)GetStockObject(NULL_BRUSH);
     HPEN edge = on ? (HPEN)GetStockObject(NULL_PEN) : CreatePen(PS_SOLID, 1, p->muted);
-    HBRUSH knob = CreateSolidBrush(on ? RGB(255, 255, 255) : p->fg);
+    HBRUSH knob = CreateSolidBrush(!enabled ? p->muted : (on ? RGB(255, 255, 255) : p->fg));
     HGDIOBJ ob = SelectObject(dc, track);
     HGDIOBJ op = SelectObject(dc, edge);
 
@@ -163,7 +164,7 @@ static void paint(HWND h, const slider_t *s)
     FillRect(mem, &r, bg);
     DeleteObject(bg);
     if (is_switch(s)) {
-        paint_switch(mem, &r, s, p, GetFocus() == h);
+        paint_switch(mem, &r, s, p, GetFocus() == h, IsWindowEnabled(h));
         goto blit;
     }
 
@@ -250,6 +251,10 @@ static LRESULT CALLBACK proc(HWND h, UINT m, WPARAM w, LPARAM l)
         free(s);
         SetWindowLongPtrW(h, GWLP_USERDATA, 0);
         break;
+    case WM_ENABLE:
+        /* смена доступности меняет вид выключателя */
+        InvalidateRect(h, NULL, FALSE);
+        return 0;
     case FFS_SETRANGE:
         s->lo = (int)w;
         s->hi = (int)l;

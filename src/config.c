@@ -61,6 +61,26 @@ void ff_view_reset(ff_view *v)
     v->sharpen = 0.0f;
 }
 
+/* ноль с запасом на запись в ini: три знака после запятой, половина тысячной уже округляется в ноль */
+#define NEUTRAL_EPS 0.0005f
+
+static int near_zero(float x)
+{
+    return x < NEUTRAL_EPS && x > -NEUTRAL_EPS;
+}
+
+int ff_view_is_neutral(const ff_view *v)
+{
+    int ch;
+
+    for (ch = 0; ch < 6; ch++) {
+        if (!near_zero(v->shift[ch / 2][ch % 2])) {
+            return 0;
+        }
+    }
+    return near_zero(v->sharpen);
+}
+
 /* срезает пробелы с обеих сторон прямо в буфере */
 static char *trim(char *s)
 {
